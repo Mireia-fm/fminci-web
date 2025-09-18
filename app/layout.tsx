@@ -16,7 +16,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       {/* clases globales del body aquí */}
-      <body className="min-h-screen">{children}</body>
+      <body className="min-h-screen" suppressHydrationWarning={true}>{children}</body>
     </html>
   );
 }

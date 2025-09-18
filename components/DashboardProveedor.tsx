@@ -44,8 +44,12 @@ export default function DashboardProveedor() {
       // Obtener email del usuario actual
       const { data: userData } = await supabase.auth.getUser();
       const userEmail = userData.user?.email;
-      
+
+      console.log("🔍 Debug Dashboard Proveedor:");
+      console.log("Email del usuario:", userEmail);
+
       if (!userEmail) {
+        console.log("❌ No hay usuario logueado");
         setLoading(false);
         return;
       }
@@ -53,11 +57,14 @@ export default function DashboardProveedor() {
       // Obtener persona_id del usuario
       const { data: persona } = await supabase
         .from("personas")
-        .select("id")
+        .select("id, rol")
         .eq("email", userEmail)
         .maybeSingle();
 
+      console.log("👤 Persona encontrada:", persona);
+
       if (!persona) {
+        console.log("❌ No se encontró persona para el email");
         setLoading(false);
         return;
       }
@@ -69,17 +76,23 @@ export default function DashboardProveedor() {
         .eq("persona_id", persona.id)
         .maybeSingle();
 
+      console.log("🏢 Institución encontrada:", personaInst);
+
       if (!personaInst) {
+        console.log("❌ No se encontró institución para la persona");
         setLoading(false);
         return;
       }
 
       // Cargar resumen de casos para este proveedor específico
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("proveedor_casos")
         .select("estado_proveedor")
         .eq("proveedor_id", personaInst.institucion_id)
         .eq("activo", true);
+
+      console.log("📊 Casos encontrados:", data);
+      console.log("❓ Error en consulta:", error);
 
       // Contar casos por estado
       const conteoEstados = (data || []).reduce((acc: Record<string, number>, caso) => {

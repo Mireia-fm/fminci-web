@@ -1034,14 +1034,43 @@ export default function ChatProveedor() {
               </div>
               
               {tipoUsuario === 'Proveedor' && (
-                <button
-                  type="button"
-                  onClick={() => setMostrarModalVisita(true)}
-                  className="px-4 py-2 text-white rounded hover:opacity-90 transition-opacity"
-                  style={{ backgroundColor: PALETA.verdeClaro }}
-                >
-                  📅 Calendarizar Visita
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setMostrarModalVisita(true)}
+                    className="px-4 py-2 text-white rounded hover:opacity-90 transition-opacity"
+                    style={{ backgroundColor: PALETA.verdeClaro }}
+                  >
+                    📅 Calendarizar Visita
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setMostrarModalPresupuesto(true)}
+                    className="px-4 py-2 text-white rounded hover:opacity-90 transition-opacity"
+                    style={{ backgroundColor: PALETA.filtros }}
+                  >
+                    💰 Ofertar Presupuesto
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setMostrarModalResolver(true)}
+                    className="px-4 py-2 text-white rounded hover:opacity-90 transition-opacity"
+                    style={{ backgroundColor: PALETA.headerTable }}
+                  >
+                    ✅ Resolver Incidencia
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setMostrarModalValorar(true)}
+                    className="px-4 py-2 text-white rounded hover:opacity-90 transition-opacity"
+                    style={{ backgroundColor: PALETA.fondo }}
+                  >
+                    ⭐ Valorar
+                  </button>
+                </>
               )}
 
               <button
@@ -1125,6 +1154,221 @@ export default function ChatProveedor() {
                 }}
               >
                 {enviando ? 'Calendarizando...' : 'Calendarizar Visita'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal para ofertar presupuesto */}
+      {mostrarModalPresupuesto && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div
+            className="rounded-lg p-8 max-w-md w-full mx-4 shadow"
+            style={{ backgroundColor: PALETA.card }}
+          >
+            <h3 className="text-xl font-semibold mb-6" style={{ color: PALETA.textoOscuro }}>
+              Ofertar Presupuesto
+            </h3>
+
+            <div className="space-y-6">
+              {/* Presupuesto */}
+              <div>
+                <label className="block text-sm font-medium mb-2" style={{ color: PALETA.textoOscuro }}>
+                  Importe del presupuesto (€) *
+                </label>
+                <input
+                  type="number"
+                  value={presupuesto}
+                  onChange={(e) => setPresupuesto(e.target.value)}
+                  min="0"
+                  step="0.01"
+                  placeholder="0.00"
+                  className="w-full h-9 rounded border px-3 text-sm outline-none focus:ring-2 focus:ring-orange-300"
+                  required
+                />
+              </div>
+
+              {/* Descripción */}
+              <div>
+                <label className="block text-sm font-medium mb-2" style={{ color: PALETA.textoOscuro }}>
+                  Descripción del presupuesto *
+                </label>
+                <textarea
+                  value={descripcionPresupuesto}
+                  onChange={(e) => setDescripcionPresupuesto(e.target.value)}
+                  placeholder="Describe los trabajos y materiales incluidos..."
+                  className="min-h-[80px] w-full rounded border p-3 text-sm outline-none focus:ring-2 focus:ring-orange-300"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 mt-8">
+              <button
+                type="button"
+                onClick={() => {
+                  setMostrarModalPresupuesto(false);
+                  setPresupuesto('');
+                  setDescripcionPresupuesto('');
+                }}
+                className="px-4 py-2 text-sm rounded border hover:bg-gray-50 transition-colors"
+                style={{ color: PALETA.textoOscuro, borderColor: '#d1d5db' }}
+                disabled={enviando}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={ofertarPresupuesto}
+                disabled={!presupuesto || !descripcionPresupuesto || enviando}
+                className="px-6 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity disabled:opacity-50"
+                style={{
+                  backgroundColor: PALETA.filtros,
+                  opacity: (!presupuesto || !descripcionPresupuesto || enviando) ? 0.5 : 1
+                }}
+              >
+                {enviando ? 'Enviando...' : 'Enviar Presupuesto'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal para resolver incidencia */}
+      {mostrarModalResolver && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div
+            className="rounded-lg p-8 max-w-md w-full mx-4 shadow"
+            style={{ backgroundColor: PALETA.card }}
+          >
+            <h3 className="text-xl font-semibold mb-6" style={{ color: PALETA.textoOscuro }}>
+              Resolver Incidencia
+            </h3>
+
+            <div className="space-y-6">
+              {/* Solución aplicada */}
+              <div>
+                <label className="block text-sm font-medium mb-2" style={{ color: PALETA.textoOscuro }}>
+                  Describe la solución aplicada *
+                </label>
+                <textarea
+                  value={solucionAplicada}
+                  onChange={(e) => setSolucionAplicada(e.target.value)}
+                  placeholder="Explica detalladamente qué se ha hecho para resolver la incidencia..."
+                  className="min-h-[120px] w-full rounded border p-3 text-sm outline-none focus:ring-2 focus:ring-green-300"
+                  required
+                />
+              </div>
+
+              <div className="bg-yellow-50 border border-yellow-200 rounded p-3">
+                <p className="text-sm text-yellow-800">
+                  <strong>Nota:</strong> Al marcar como resuelta, la incidencia quedará pendiente de valoración por parte del cliente.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 mt-8">
+              <button
+                type="button"
+                onClick={() => {
+                  setMostrarModalResolver(false);
+                  setSolucionAplicada('');
+                }}
+                className="px-4 py-2 text-sm rounded border hover:bg-gray-50 transition-colors"
+                style={{ color: PALETA.textoOscuro, borderColor: '#d1d5db' }}
+                disabled={enviando}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={resolverIncidencia}
+                disabled={!solucionAplicada || enviando}
+                className="px-6 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity disabled:opacity-50"
+                style={{
+                  backgroundColor: PALETA.headerTable,
+                  opacity: (!solucionAplicada || enviando) ? 0.5 : 1
+                }}
+              >
+                {enviando ? 'Resolviendo...' : 'Marcar como Resuelta'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal para valorar incidencia */}
+      {mostrarModalValorar && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div
+            className="rounded-lg p-8 max-w-md w-full mx-4 shadow"
+            style={{ backgroundColor: PALETA.card }}
+          >
+            <h3 className="text-xl font-semibold mb-6" style={{ color: PALETA.textoOscuro }}>
+              Valorar Incidencia
+            </h3>
+
+            <div className="space-y-6">
+              {/* Valoración */}
+              <div>
+                <label className="block text-sm font-medium mb-2" style={{ color: PALETA.textoOscuro }}>
+                  Valoración (1-5 estrellas) *
+                </label>
+                <select
+                  value={valoracion}
+                  onChange={(e) => setValoracion(e.target.value)}
+                  className="w-full h-9 rounded border px-3 text-sm outline-none focus:ring-2 focus:ring-yellow-300"
+                  required
+                >
+                  <option value="">Selecciona una valoración...</option>
+                  <option value="1">⭐ 1 - Muy insatisfecho</option>
+                  <option value="2">⭐⭐ 2 - Insatisfecho</option>
+                  <option value="3">⭐⭐⭐ 3 - Neutral</option>
+                  <option value="4">⭐⭐⭐⭐ 4 - Satisfecho</option>
+                  <option value="5">⭐⭐⭐⭐⭐ 5 - Muy satisfecho</option>
+                </select>
+              </div>
+
+              {/* Comentarios adicionales */}
+              <div>
+                <label className="block text-sm font-medium mb-2" style={{ color: PALETA.textoOscuro }}>
+                  Comentarios adicionales (opcional)
+                </label>
+                <textarea
+                  value={comentariosValoracion}
+                  onChange={(e) => setComentariosValoracion(e.target.value)}
+                  placeholder="Añade cualquier comentario sobre el servicio recibido..."
+                  className="min-h-[80px] w-full rounded border p-3 text-sm outline-none focus:ring-2 focus:ring-yellow-300"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 mt-8">
+              <button
+                type="button"
+                onClick={() => {
+                  setMostrarModalValorar(false);
+                  setValoracion('');
+                  setComentariosValoracion('');
+                }}
+                className="px-4 py-2 text-sm rounded border hover:bg-gray-50 transition-colors"
+                style={{ color: PALETA.textoOscuro, borderColor: '#d1d5db' }}
+                disabled={enviando}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={valorarIncidencia}
+                disabled={!valoracion || enviando}
+                className="px-6 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity disabled:opacity-50"
+                style={{
+                  backgroundColor: PALETA.fondo,
+                  opacity: (!valoracion || enviando) ? 0.5 : 1
+                }}
+              >
+                {enviando ? 'Enviando...' : 'Enviar Valoración'}
               </button>
             </div>
           </div>
