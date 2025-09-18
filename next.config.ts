@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  output: 'standalone',
+  outputFileTracingRoot: '/Users/mireia/Desktop/fminci-web',
 };
 
 export default nextConfig;

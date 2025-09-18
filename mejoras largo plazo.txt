@@ -1,0 +1,49 @@
+
+- Arreglo de los any en el codigo. La opción que he implementado consiste en definir mis propios tipos y costear la respuesta. 
+Opción B (más pro): Tipar todo Supabase con el esquema
+	•	Generas los tipos de tu BD y tipas el cliente createClient<Database>().
+	•	Así data ya viene tipado y casi no necesitas casts.
+
+Pasos rápidos:
+	1.	En Supabase (Studio) → Settings → API → Generate types (o con CLI). Copias el JSON/TS de tipos.
+	2.	Guarda eso en src/types/supabase.ts:
+export type Database = {
+  public: {
+    Tables: {
+      instituciones: {
+        Row: { id: string; nombre: string; tipo: "Centro" | "Proveedor" };
+        Insert: { id?: string; nombre: string; tipo: "Centro" | "Proveedor" };
+        Update: { id?: string; nombre?: string; tipo?: "Centro" | "Proveedor" };
+      };
+      incidencias: {
+        Row: { id: string; num_solicitud: string; institucion_id: string | null; /* ... */ };
+        Insert: { num_solicitud?: string | null; institucion_id?: string | null; /* ... */ };
+        Update: { /* ... */ };
+      };
+      // ...resto tablas que uses
+    };
+  };
+};
+	3.	En lib/supabaseClient.ts:
+import { createClient } from "@supabase/supabase-js";
+import type { Database } from "@/types/supabase";
+
+export const supabase = createClient<Database>(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+	4.	Ahora tu fetch ya viene tipado:
+const { data: centrosData, error: centrosErr } = await supabase
+  .from("instituciones")
+  .select("id,nombre")
+  .eq("tipo", "Centro");
+
+if (!centrosErr && centrosData) {
+  setCentros(centrosData); // ✅ ya es Centro[]
+}
+
+
+
+
+
+
