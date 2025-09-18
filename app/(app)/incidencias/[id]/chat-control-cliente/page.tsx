@@ -512,14 +512,12 @@ export default function ChatControlCliente() {
         >
           ← Volver a incidencias
         </button>
-        
-        {tipoUsuario === 'Control' && (
-          <div className="text-white text-center absolute left-1/2 transform -translate-x-1/2">
-            <h1 className="text-lg font-semibold tracking-wider">CHAT CLIENTE</h1>
-            <p className="text-sm opacity-80">#{incidencia.num_solicitud}</p>
-          </div>
-        )}
-        
+
+        <div className="text-white text-center">
+          <h1 className="text-lg font-semibold tracking-wider">CHAT CLIENTE</h1>
+          <p className="text-sm opacity-80">#{incidencia.num_solicitud}</p>
+        </div>
+
         <div></div>
       </div>
 

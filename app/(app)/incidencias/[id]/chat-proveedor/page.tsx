@@ -72,6 +72,14 @@ export default function ChatProveedor() {
   const [mostrarModalVisita, setMostrarModalVisita] = useState(false);
   const [fechaVisita, setFechaVisita] = useState('');
   const [horarioVisita, setHorarioVisita] = useState('mañana');
+  const [mostrarModalPresupuesto, setMostrarModalPresupuesto] = useState(false);
+  const [presupuesto, setPresupuesto] = useState('');
+  const [descripcionPresupuesto, setDescripcionPresupuesto] = useState('');
+  const [mostrarModalResolver, setMostrarModalResolver] = useState(false);
+  const [solucionAplicada, setSolucionAplicada] = useState('');
+  const [mostrarModalValorar, setMostrarModalValorar] = useState(false);
+  const [valoracion, setValoracion] = useState('');
+  const [comentariosValoracion, setComentariosValoracion] = useState('');
 
   const incidenciaId = params.id as string;
 
@@ -145,20 +153,25 @@ export default function ChatProveedor() {
         setAutorId(persona.id);
       }
 
-      // Obtener institución del proveedor para la consulta
-      const { data: personaInst } = await supabase
-        .from("personas_instituciones")
-        .select("institucion_id")
-        .eq("persona_id", persona?.id)
-        .maybeSingle();
+      // Obtener institución del proveedor (solo si es necesario)
+      let personaInst = null;
+      if (persona?.rol === 'Proveedor') {
+        const { data: instData } = await supabase
+          .from("personas_instituciones")
+          .select("institucion_id")
+          .eq("persona_id", persona.id)
+          .maybeSingle();
 
-      if (!personaInst?.institucion_id) {
-        console.error("No se encontró institución para el proveedor");
-        setLoading(false);
-        return;
+        personaInst = instData;
+
+        if (!personaInst?.institucion_id) {
+          console.error("No se encontró institución para el proveedor");
+          setLoading(false);
+          return;
+        }
       }
 
-      // Cargar incidencia con adjuntos principales y estado_proveedor
+      // Cargar incidencia con adjuntos principales
       const { data: incidenciaData, error: incidenciaError } = await supabase
         .from("incidencias")
         .select(`
@@ -170,15 +183,24 @@ export default function ChatProveedor() {
           fecha,
           hora,
           imagen_url,
-          instituciones(nombre),
-          proveedor_casos!inner(
-            estado_proveedor
-          )
+          instituciones(nombre)
         `)
         .eq("id", incidenciaId)
-        .eq("proveedor_casos.proveedor_id", personaInst.institucion_id)
-        .eq("proveedor_casos.activo", true)
         .single();
+
+      // Cargar estado_proveedor por separado
+      let estadoProveedor = null;
+      if (incidenciaData && personaInst?.institucion_id) {
+        const { data: proveedorCaso } = await supabase
+          .from("proveedor_casos")
+          .select("estado_proveedor")
+          .eq("incidencia_id", incidenciaId)
+          .eq("proveedor_id", personaInst.institucion_id)
+          .eq("activo", true)
+          .maybeSingle();
+
+        estadoProveedor = proveedorCaso?.estado_proveedor;
+      }
 
       // Cargar adjuntos principales (imágenes de la incidencia)
       let adjuntosPrincipales = [];
@@ -195,8 +217,6 @@ export default function ChatProveedor() {
       if (incidenciaError) {
         console.error("Error cargando incidencia:", incidenciaError);
       } else {
-        // Extraer estado_proveedor del array proveedor_casos
-        const estadoProveedor = incidenciaData.proveedor_casos?.[0]?.estado_proveedor;
         setIncidencia({
           ...incidenciaData,
           estado_proveedor: estadoProveedor,
@@ -537,6 +557,167 @@ export default function ChatProveedor() {
     }
   };
 
+  const ofertarPresupuesto = async () => {
+    if (!presupuesto || !descripcionPresupuesto || !autorId) return;
+
+    try {
+      setEnviando(true);
+
+      const { data: userData } = await supabase.auth.getUser();
+      const userEmail = userData.user?.email;
+
+      // 1. Cambiar estado_proveedor a "Ofertada"
+      await supabase
+        .from("proveedor_casos")
+        .update({ estado_proveedor: "Ofertada" })
+        .eq("incidencia_id", incidenciaId)
+        .eq("activo", true);
+
+      // 2. Comentarios para ambos chats
+      const mensajePresupuesto = `Presupuesto ofertado: ${presupuesto}€\nDescripción: ${descripcionPresupuesto}`;
+
+      await supabase
+        .from("comentarios")
+        .insert([
+          {
+            incidencia_id: incidenciaId,
+            ambito: 'proveedor',
+            autor_id: autorId,
+            autor_email: userEmail,
+            autor_rol: 'Proveedor',
+            cuerpo: mensajePresupuesto,
+            es_sistema: true
+          },
+          {
+            incidencia_id: incidenciaId,
+            ambito: 'cliente',
+            autor_id: autorId,
+            autor_email: userEmail,
+            autor_rol: 'Proveedor',
+            cuerpo: `El proveedor ha enviado un presupuesto:\n${mensajePresupuesto}`,
+            es_sistema: true
+          }
+        ]);
+
+      setMostrarModalPresupuesto(false);
+      setPresupuesto('');
+      setDescripcionPresupuesto('');
+      cargarDatos();
+
+    } catch (error) {
+      console.error("Error ofertando presupuesto:", error);
+    } finally {
+      setEnviando(false);
+    }
+  };
+
+  const resolverIncidencia = async () => {
+    if (!solucionAplicada || !autorId) return;
+
+    try {
+      setEnviando(true);
+
+      const { data: userData } = await supabase.auth.getUser();
+      const userEmail = userData.user?.email;
+
+      // 1. Cambiar estado_proveedor a "Pendiente valoración"
+      await supabase
+        .from("proveedor_casos")
+        .update({ estado_proveedor: "Pendiente valoración" })
+        .eq("incidencia_id", incidenciaId)
+        .eq("activo", true);
+
+      // 2. Comentarios para ambos chats
+      const mensajeSolucion = `Incidencia resuelta. Solución aplicada: ${solucionAplicada}`;
+
+      await supabase
+        .from("comentarios")
+        .insert([
+          {
+            incidencia_id: incidenciaId,
+            ambito: 'proveedor',
+            autor_id: autorId,
+            autor_email: userEmail,
+            autor_rol: 'Proveedor',
+            cuerpo: mensajeSolucion,
+            es_sistema: true
+          },
+          {
+            incidencia_id: incidenciaId,
+            ambito: 'cliente',
+            autor_id: autorId,
+            autor_email: userEmail,
+            autor_rol: 'Proveedor',
+            cuerpo: `${mensajeSolucion}\n\nLa incidencia está pendiente de valoración por parte del cliente.`,
+            es_sistema: true
+          }
+        ]);
+
+      setMostrarModalResolver(false);
+      setSolucionAplicada('');
+      cargarDatos();
+
+    } catch (error) {
+      console.error("Error resolviendo incidencia:", error);
+    } finally {
+      setEnviando(false);
+    }
+  };
+
+  const valorarIncidencia = async () => {
+    if (!valoracion || !autorId) return;
+
+    try {
+      setEnviando(true);
+
+      const { data: userData } = await supabase.auth.getUser();
+      const userEmail = userData.user?.email;
+
+      // 1. Cambiar estado_proveedor a "Valorada"
+      await supabase
+        .from("proveedor_casos")
+        .update({ estado_proveedor: "Valorada" })
+        .eq("incidencia_id", incidenciaId)
+        .eq("activo", true);
+
+      // 2. Comentarios para ambos chats
+      const mensajeValoracion = `Valoración del proveedor: ${valoracion}/5${comentariosValoracion ? `\nComentarios: ${comentariosValoracion}` : ''}`;
+
+      await supabase
+        .from("comentarios")
+        .insert([
+          {
+            incidencia_id: incidenciaId,
+            ambito: 'proveedor',
+            autor_id: autorId,
+            autor_email: userEmail,
+            autor_rol: 'Proveedor',
+            cuerpo: mensajeValoracion,
+            es_sistema: true
+          },
+          {
+            incidencia_id: incidenciaId,
+            ambito: 'cliente',
+            autor_id: autorId,
+            autor_email: userEmail,
+            autor_rol: 'Proveedor',
+            cuerpo: `El proveedor ha completado la valoración de la incidencia:\n${mensajeValoracion}`,
+            es_sistema: true
+          }
+        ]);
+
+      setMostrarModalValorar(false);
+      setValoracion('');
+      setComentariosValoracion('');
+      cargarDatos();
+
+    } catch (error) {
+      console.error("Error valorando incidencia:", error);
+    } finally {
+      setEnviando(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: PALETA.fondo }}>
@@ -563,12 +744,12 @@ export default function ChatProveedor() {
         >
           ← Volver a incidencias
         </button>
-        
+
         <div className="text-white text-center">
-          <h1 className="text-lg font-medium">Chat Proveedor</h1>
+          <h1 className="text-lg font-semibold tracking-wider">CHAT PROVEEDOR</h1>
           <p className="text-sm opacity-80">#{incidencia.num_solicitud}</p>
         </div>
-        
+
         <div></div>
       </div>
 
@@ -852,14 +1033,16 @@ export default function ChatProveedor() {
                 </label>
               </div>
               
-              <button
-                type="button"
-                onClick={() => setMostrarModalVisita(true)}
-                className="px-4 py-2 text-white rounded hover:opacity-90 transition-opacity"
-                style={{ backgroundColor: PALETA.verdeClaro }}
-              >
-                📅 Calendarizar Visita
-              </button>
+              {tipoUsuario === 'Proveedor' && (
+                <button
+                  type="button"
+                  onClick={() => setMostrarModalVisita(true)}
+                  className="px-4 py-2 text-white rounded hover:opacity-90 transition-opacity"
+                  style={{ backgroundColor: PALETA.verdeClaro }}
+                >
+                  📅 Calendarizar Visita
+                </button>
+              )}
 
               <button
                 type="submit"
