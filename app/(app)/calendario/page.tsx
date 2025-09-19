@@ -1,0 +1,222 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabaseClient";
+
+// Paleta de colores consistente
+const PALETA = {
+  fondo: "#5D6D52",
+  headerTable: "#D9B6A9",
+  card: "#F9FAF8",
+  filtros: "#E8B5A8",
+  texto: "#EDF0E9",
+  textoOscuro: "#4b4b4b",
+  verdeClaro: "#A9B88C",
+  verdeSombra: "#7A8A6F",
+};
+
+type Cita = {
+  id: string;
+  fecha: string;
+  hora: string;
+  proveedor_nombre: string;
+  incidencia_num: string;
+  descripcion: string;
+  estado: string;
+};
+
+export default function CalendarioPage() {
+  const [citas, setCitas] = useState<Cita[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [fechaSeleccionada, setFechaSeleccionada] = useState(new Date());
+
+  useEffect(() => {
+    cargarCitas();
+  }, []);
+
+  const cargarCitas = async () => {
+    try {
+      // Obtener datos del usuario actual
+      const { data: userData } = await supabase.auth.getUser();
+      const userEmail = userData.user?.email;
+
+      if (!userEmail) return;
+
+      // Obtener las instituciones del usuario
+      const { data: personaInstituciones } = await supabase
+        .from("personas")
+        .select(`
+          id,
+          personas_instituciones!inner(
+            institucion_id,
+            instituciones!inner(id, nombre, tipo)
+          )
+        `)
+        .eq("email", userEmail);
+
+      if (personaInstituciones && personaInstituciones.length > 0) {
+        const institucionId = personaInstituciones[0].personas_instituciones?.[0]?.institucion_id;
+
+        if (institucionId) {
+          // Obtener citas de proveedores calendarizadas para incidencias del centro
+          const { data: citasData } = await supabase
+            .from("citas_proveedores")
+            .select(`
+              id,
+              fecha_visita,
+              horario,
+              estado,
+              incidencias!inner(
+                num_solicitud,
+                descripcion,
+                institucion_id
+              ),
+              instituciones!proveedor_id(
+                nombre
+              )
+            `)
+            .eq("incidencias.institucion_id", institucionId)
+            .eq("estado", "programada")
+            .order("fecha_visita", { ascending: true });
+
+          if (citasData) {
+            const citasFormateadas: Cita[] = citasData.map((cita: any) => ({
+              id: cita.id,
+              fecha: new Date(cita.fecha_visita).toISOString().split('T')[0],
+              hora: cita.horario === 'mañana' ? 'Horario de mañana' : 'Horario de tarde',
+              proveedor_nombre: cita.instituciones?.nombre || 'Proveedor desconocido',
+              incidencia_num: cita.incidencias?.num_solicitud || '',
+              descripcion: cita.incidencias?.descripcion || '',
+              estado: cita.estado
+            }));
+
+            setCitas(citasFormateadas);
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error cargando citas:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const obtenerDiasDelMes = () => {
+    const año = fechaSeleccionada.getFullYear();
+    const mes = fechaSeleccionada.getMonth();
+
+    const primerDia = new Date(año, mes, 1);
+    const ultimoDia = new Date(año, mes + 1, 0);
+    const diasEnMes = ultimoDia.getDate();
+
+    const dias = [];
+    for (let i = 1; i <= diasEnMes; i++) {
+      dias.push(i);
+    }
+
+    return dias;
+  };
+
+  const obtenerCitasDelDia = (dia: number) => {
+    const año = fechaSeleccionada.getFullYear();
+    const mes = fechaSeleccionada.getMonth();
+    const fechaBuscada = new Date(año, mes, dia).toISOString().split('T')[0];
+
+    return citas.filter(cita => cita.fecha === fechaBuscada);
+  };
+
+  const cambiarMes = (direccion: number) => {
+    const nuevaFecha = new Date(fechaSeleccionada);
+    nuevaFecha.setMonth(nuevaFecha.getMonth() + direccion);
+    setFechaSeleccionada(nuevaFecha);
+  };
+
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: PALETA.fondo }}>
+        <div className="text-white">Cargando calendario...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen" style={{ backgroundColor: PALETA.fondo }}>
+      <div className="px-6 py-6">
+        <h1 className="text-lg tracking-[0.3em] mb-8" style={{ color: PALETA.texto }}>
+          CALENDARIO DE CITAS CON PROVEEDORES:
+        </h1>
+
+        {/* Navegación del mes */}
+        <div className="flex items-center justify-between mb-6 bg-white rounded-lg p-4 shadow">
+          <button
+            onClick={() => cambiarMes(-1)}
+            className="px-4 py-2 rounded transition-colors"
+            style={{ backgroundColor: PALETA.filtros, color: 'white' }}
+          >
+            ← Anterior
+          </button>
+
+          <h2 className="text-xl font-semibold" style={{ color: PALETA.textoOscuro }}>
+            {fechaSeleccionada.toLocaleDateString('es-ES', {
+              month: 'long',
+              year: 'numeric'
+            })}
+          </h2>
+
+          <button
+            onClick={() => cambiarMes(1)}
+            className="px-4 py-2 rounded transition-colors"
+            style={{ backgroundColor: PALETA.filtros, color: 'white' }}
+          >
+            Siguiente →
+          </button>
+        </div>
+
+        {/* Calendario */}
+        <div className="bg-white rounded-lg shadow p-6">
+          {/* Días de la semana */}
+          <div className="grid grid-cols-7 gap-2 mb-4">
+            {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map(dia => (
+              <div key={dia} className="text-center font-semibold py-2" style={{ color: PALETA.textoOscuro }}>
+                {dia}
+              </div>
+            ))}
+          </div>
+
+          {/* Días del mes */}
+          <div className="grid grid-cols-7 gap-2">
+            {obtenerDiasDelMes().map(dia => {
+              const citasDelDia = obtenerCitasDelDia(dia);
+              return (
+                <div
+                  key={dia}
+                  className="min-h-[100px] border rounded p-2 bg-gray-50"
+                  style={{ borderColor: PALETA.verdeSombra }}
+                >
+                  <div className="font-semibold mb-1" style={{ color: PALETA.textoOscuro }}>
+                    {dia}
+                  </div>
+
+                  {citasDelDia.map(cita => (
+                    <div
+                      key={cita.id}
+                      className="text-xs p-1 mb-1 rounded text-white cursor-pointer"
+                      style={{ backgroundColor: '#D4C5A9' }}
+                      title={`${cita.hora} - ${cita.proveedor_nombre}: ${cita.descripcion}`}
+                    >
+                      <div className="font-semibold">{cita.hora}</div>
+                      <div className="truncate">{cita.proveedor_nombre}</div>
+                      <div className="truncate">{cita.incidencia_num}</div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+}

@@ -194,8 +194,8 @@ export default function NuevaIncidenciaPage() {
 
     if (error) throw error;
 
-    const { data: pub } = supabase.storage.from("incidencias").getPublicUrl(data.path);
-    return pub?.publicUrl ?? null;
+    // En lugar de URL pública, devolver solo el path para usar signed URLs después
+    return data.path;
   }
 
   // Envío real: INSERT en incidencias
@@ -273,9 +273,12 @@ export default function NuevaIncidenciaPage() {
           style={{ backgroundColor: PALETA.card }}
         >
           <div className="mb-6">
-            <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
-              <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            <div
+              className="mx-auto w-16 h-16 rounded-full flex items-center justify-center mb-4"
+              style={{ backgroundColor: "#C9D7A7" }}
+            >
+              <svg className="w-8 h-8" fill="none" stroke="#5D6D52" viewBox="0 0 24 24" strokeWidth={3}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
             </div>
             <h1 className="text-3xl font-semibold mb-2" style={{ color: PALETA.titulo }}>
@@ -300,11 +303,11 @@ export default function NuevaIncidenciaPage() {
 
           <div className="space-y-3">
             <button
-              onClick={() => router.push(`/incidencias/${incidenciaCreada.id}`)}
+              onClick={() => router.push(`/incidencias/${incidenciaCreada.id}/chat-control-cliente`)}
               className="w-full rounded px-6 py-3 text-white font-medium"
               style={{ backgroundColor: PALETA.boton }}
             >
-              Ver detalles de la incidencia
+              Ir al chat
             </button>
             <button
               onClick={() => router.push("/incidencias")}
@@ -334,6 +337,18 @@ export default function NuevaIncidenciaPage() {
 
   return (
     <div className="min-h-screen w-full py-12" style={{ backgroundColor: PALETA.fondo }}>
+      {/* Botón volver atrás - arriba a la izquierda */}
+      <div className="px-8 mb-6">
+        <button
+          type="button"
+          onClick={() => router.back()}
+          className="flex items-center gap-1 text-sm text-white hover:underline transition-all"
+        >
+          <span className="text-lg">←</span>
+          Volver
+        </button>
+      </div>
+
       <div
         className="mx-auto w-full max-w-3xl rounded-lg p-8 shadow"
         style={{ backgroundColor: PALETA.card }}
@@ -479,7 +494,7 @@ export default function NuevaIncidenciaPage() {
             <button
               type="submit"
               disabled={faltanObligatorios || enviando}
-              className="mx-auto block w-full max-w-sm rounded px-6 py-2 text-white disabled:opacity-60"
+              className="mx-auto block w-full max-w-sm rounded px-6 py-2 text-white disabled:opacity-60 transition-colors"
               style={{ backgroundColor: PALETA.boton }}
             >
               {enviando ? "Enviando…" : "Enviar"}

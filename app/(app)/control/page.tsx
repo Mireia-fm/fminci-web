@@ -17,16 +17,11 @@ export default function PanelControl() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [tipoUsuario, setTipoUsuario] = useState<string | null>(null);
-  const [estadisticas, setEstadisticas] = useState({
-    totalIncidencias: 0,
-    incidenciasAbiertas: 0,
-    incidenciasCerradas: 0,
-    usuariosActivos: 0
-  });
 
   useEffect(() => {
     verificarAcceso();
   }, []);
+
 
   const verificarAcceso = async () => {
     try {
@@ -52,7 +47,6 @@ export default function PanelControl() {
       }
 
       setTipoUsuario(persona.rol);
-      await cargarEstadisticas();
     } catch (error) {
       console.error("Error verificando acceso:", error);
       router.replace("/login");
@@ -61,45 +55,7 @@ export default function PanelControl() {
     }
   };
 
-  const cargarEstadisticas = async () => {
-    try {
-      // Cargar estadísticas generales
-      const { data: incidencias } = await supabase
-        .from("incidencias")
-        .select("estado_cliente");
 
-      if (incidencias) {
-        const total = incidencias.length;
-        const abiertas = incidencias.filter(inc => 
-          ["Abierta", "En espera", "En tramitación"].includes(inc.estado_cliente)
-        ).length;
-        const cerradas = incidencias.filter(inc => 
-          ["Cerrada", "Resuelta", "Anulada"].includes(inc.estado_cliente)
-        ).length;
-
-        setEstadisticas(prev => ({
-          ...prev,
-          totalIncidencias: total,
-          incidenciasAbiertas: abiertas,
-          incidenciasCerradas: cerradas
-        }));
-      }
-
-      // Cargar usuarios activos (aproximación)
-      const { data: usuarios } = await supabase
-        .from("personas")
-        .select("email", { count: "exact" });
-
-      if (usuarios) {
-        setEstadisticas(prev => ({
-          ...prev,
-          usuariosActivos: usuarios.length
-        }));
-      }
-    } catch (error) {
-      console.error("Error cargando estadísticas:", error);
-    }
-  };
 
   if (loading) {
     return (
@@ -122,121 +78,73 @@ export default function PanelControl() {
           PANEL DE CONTROL:
         </h1>
 
-        {/* Estadísticas generales */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div className="p-6 rounded-lg" style={{ backgroundColor: PALETA.card }}>
-            <h3 className="text-sm font-medium text-gray-600 mb-2">Total Incidencias</h3>
-            <p className="text-3xl font-bold" style={{ color: PALETA.textoOscuro }}>
-              {estadisticas.totalIncidencias}
-            </p>
-          </div>
-          
-          <div className="p-6 rounded-lg" style={{ backgroundColor: PALETA.card }}>
-            <h3 className="text-sm font-medium text-gray-600 mb-2">Incidencias Abiertas</h3>
-            <p className="text-3xl font-bold text-orange-600">
-              {estadisticas.incidenciasAbiertas}
-            </p>
-          </div>
-          
-          <div className="p-6 rounded-lg" style={{ backgroundColor: PALETA.card }}>
-            <h3 className="text-sm font-medium text-gray-600 mb-2">Incidencias Cerradas</h3>
-            <p className="text-3xl font-bold text-green-600">
-              {estadisticas.incidenciasCerradas}
-            </p>
-          </div>
-          
-          <div className="p-6 rounded-lg" style={{ backgroundColor: PALETA.card }}>
-            <h3 className="text-sm font-medium text-gray-600 mb-2">Usuarios Registrados</h3>
-            <p className="text-3xl font-bold" style={{ color: PALETA.textoOscuro }}>
-              {estadisticas.usuariosActivos}
-            </p>
-          </div>
-        </div>
+
+
 
         {/* Gestión de Incidencias */}
         <div className="mb-8">
           <h2 className="text-lg font-semibold mb-4" style={{ color: PALETA.texto }}>
             GESTIÓN DE INCIDENCIAS:
           </h2>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <button
-              onClick={() => router.push("/control/incidencias")}
-              className="p-4 rounded-lg text-left hover:opacity-90 transition-opacity"
-              style={{ backgroundColor: PALETA.headerTable, color: PALETA.textoOscuro }}
-            >
-              <h3 className="font-medium mb-2">Gestionar Todas</h3>
-              <p className="text-sm opacity-80">Gestión completa de incidencias</p>
-            </button>
-            
-            <button
-              onClick={() => router.push("/control/incidencias?filtro=proveedor")}
-              className="p-4 rounded-lg text-left hover:opacity-90 transition-opacity"
-              style={{ backgroundColor: PALETA.filtros, color: PALETA.textoOscuro }}
-            >
-              <h3 className="font-medium mb-2">Proveedor</h3>
-              <p className="text-sm opacity-80">Incidencias enviadas a proveedores</p>
-            </button>
-            
-            <button
-              onClick={() => router.push("/control/incidencias?filtro=cerrar")}
-              className="p-4 rounded-lg text-left hover:opacity-90 transition-opacity"
-              style={{ backgroundColor: PALETA.headerTable, color: PALETA.textoOscuro }}
-            >
-              <h3 className="font-medium mb-2">Cerrar</h3>
-              <p className="text-sm opacity-80">Incidencias resueltas para cerrar</p>
-            </button>
-          </div>
-        </div>
 
-        {/* Acciones de administración */}
-        <div className="mb-8">
-          <h2 className="text-lg font-semibold mb-4" style={{ color: PALETA.texto }}>
-            ACCIONES DE ADMINISTRACIÓN:
-          </h2>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4 mb-6">
             <button
               onClick={() => router.push("/incidencias")}
               className="p-4 rounded-lg text-left hover:opacity-90 transition-opacity"
               style={{ backgroundColor: PALETA.headerTable, color: PALETA.textoOscuro }}
             >
-              <h3 className="font-medium mb-2">Ver Listado Básico</h3>
-              <p className="text-sm opacity-80">Vista simple de incidencias</p>
+              <h3 className="font-medium mb-2">Gestionar Incidencias</h3>
+              <p className="text-sm opacity-80">Vista principal con herramientas avanzadas</p>
             </button>
-            
+
             <button
-              className="p-4 rounded-lg text-left opacity-50 cursor-not-allowed"
-              style={{ backgroundColor: PALETA.card, color: PALETA.textoOscuro }}
+              onClick={() => router.push("/control/asignacion-masiva")}
+              className="p-4 rounded-lg text-left hover:opacity-90 transition-opacity"
+              style={{ backgroundColor: PALETA.filtros, color: PALETA.textoOscuro }}
             >
-              <h3 className="font-medium mb-2">Gestión de Usuarios</h3>
-              <p className="text-sm opacity-60">Próximamente disponible</p>
-            </button>
-            
-            <button
-              className="p-4 rounded-lg text-left opacity-50 cursor-not-allowed"
-              style={{ backgroundColor: PALETA.card, color: PALETA.textoOscuro }}
-            >
-              <h3 className="font-medium mb-2">Reportes</h3>
-              <p className="text-sm opacity-60">Próximamente disponible</p>
+              <h3 className="font-medium mb-2">Asignación Masiva</h3>
+              <p className="text-sm opacity-80">Bulk actions</p>
             </button>
           </div>
         </div>
 
-        {/* Información del sistema */}
-        <div className="p-6 rounded-lg" style={{ backgroundColor: PALETA.card }}>
-          <h2 className="text-lg font-semibold mb-4" style={{ color: PALETA.textoOscuro }}>
-            Información del Sistema
+        {/* Gestión de Entidades */}
+        <div className="mb-8">
+          <h2 className="text-lg font-semibold mb-4" style={{ color: PALETA.texto }}>
+            GESTIÓN DE ENTIDADES:
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-            <div>
-              <span className="font-medium">Usuario:</span> Control
-            </div>
-            <div>
-              <span className="font-medium">Última actualización:</span> {new Date().toLocaleString()}
-            </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+            <button
+              onClick={() => router.push("/control/proveedores")}
+              className="p-4 rounded-lg text-left hover:opacity-90 transition-opacity"
+              style={{ backgroundColor: "#66bb6a", color: "white" }}
+            >
+              <h3 className="font-medium mb-2">🏢 Proveedores</h3>
+              <p className="text-sm opacity-90">Gestión y evaluación</p>
+            </button>
+
+            <button
+              onClick={() => router.push("/control/centros")}
+              className="p-4 rounded-lg text-left hover:opacity-90 transition-opacity"
+              style={{ backgroundColor: "#42a5f5", color: "white" }}
+            >
+              <h3 className="font-medium mb-2">🏫 Centros</h3>
+              <p className="text-sm opacity-90">Instituciones y personal</p>
+            </button>
+
+            <button
+              onClick={() => router.push("/control/usuarios")}
+              className="p-4 rounded-lg text-left hover:opacity-90 transition-opacity"
+              style={{ backgroundColor: "#8d6e63", color: "white" }}
+            >
+              <h3 className="font-medium mb-2">👤 Usuarios</h3>
+              <p className="text-sm opacity-90">Gestión de cuentas</p>
+            </button>
           </div>
         </div>
+
+
       </div>
     </div>
   );

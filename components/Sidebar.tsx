@@ -18,11 +18,13 @@ export default function Sidebar() {
     ? [
         { href: "/", label: "Dashboard" },
         { href: "/incidencias", label: "Incidencias" },
+        { href: "/control/presupuestos", label: "Presupuestos" },
         { href: "/control", label: "Panel de Control" },
       ]
     : [
         { href: "/", label: "Dashboard" },
         { href: "/incidencias", label: "Incidencias" },
+        { href: "/calendario", label: "Calendario" },
       ];
 
   return (
@@ -32,7 +34,9 @@ export default function Sidebar() {
     >
       <nav className="flex flex-col">
         {items.map(it => {
-          const active = pathname === it.href || (it.href !== "/" && pathname.startsWith(it.href));
+          const active = pathname === it.href ||
+            (it.href !== "/" && it.href !== "/control" && pathname.startsWith(it.href)) ||
+            (it.href === "/control" && pathname === "/control");
           return (
             <Link
               key={it.href}

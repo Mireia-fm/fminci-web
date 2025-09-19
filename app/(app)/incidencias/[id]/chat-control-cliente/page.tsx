@@ -26,7 +26,7 @@ type Adjunto = {
 type Comentario = {
   id: string;
   incidencia_id: string;
-  ambito: 'cliente' | 'proveedor';
+  ambito: 'cliente' | 'proveedor' | 'ambos';
   proveedor_id?: string | null;
   autor_id?: string | null;
   autor_email?: string | null;
@@ -47,7 +47,10 @@ type Incidencia = {
   fecha?: string;
   hora?: string;
   imagen_url?: string;
-  instituciones?: { 
+  catalogacion?: string | null;
+  prioridad?: string | null;
+  prioridad_proveedor?: string;
+  instituciones?: {
     nombre: string;
   }[] | null;
   adjuntos_principales?: Adjunto[];
@@ -66,14 +69,23 @@ export default function ChatControlCliente() {
   const [tipoUsuario, setTipoUsuario] = useState<string | null>(null);
   const [nombreUsuario, setNombreUsuario] = useState<string>("");
   const [autorId, setAutorId] = useState<string | null>(null);
+  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
   const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
   const [commentAttachmentUrls, setCommentAttachmentUrls] = useState<Record<string, string>>({});
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
 
   const incidenciaId = params.id as string;
 
   useEffect(() => {
     cargarDatos();
   }, [incidenciaId]);
+
+  // Marcar como no inicial después de la primera carga
+  useEffect(() => {
+    if (isInitialLoad) {
+      setIsInitialLoad(false);
+    }
+  }, [comentarios, isInitialLoad]);
 
   // Cargar URLs de imágenes cuando cambie la incidencia
   useEffect(() => {
@@ -139,6 +151,7 @@ export default function ChatControlCliente() {
         setTipoUsuario(persona.rol);
         setNombreUsuario(persona.nombre || userEmail);
         setAutorId(persona.id);
+        setCurrentUserEmail(userEmail);
       }
 
       // Cargar incidencia con adjuntos principales
@@ -153,10 +166,15 @@ export default function ChatControlCliente() {
           fecha,
           hora,
           imagen_url,
+          catalogacion,
+          prioridad,
           instituciones(nombre)
         `)
         .eq("id", incidenciaId)
         .single();
+
+      // La prioridad ya viene en incidenciaData
+      let prioridad = incidenciaData?.prioridad || null;
 
       // Cargar adjuntos principales (imágenes de la incidencia)
       let adjuntosPrincipales = [];
@@ -166,8 +184,20 @@ export default function ChatControlCliente() {
           .select("*")
           .eq("incidencia_id", incidenciaId)
           .eq("categoria", "imagen_principal");
-        
+
         adjuntosPrincipales = adjuntosData || [];
+
+        // También considerar imagen_url de la incidencia si existe
+        if (incidenciaData.imagen_url && adjuntosPrincipales.length === 0) {
+          // Crear un adjunto virtual para imagen_url
+          adjuntosPrincipales = [{
+            id: 'imagen_url_' + incidenciaId,
+            tipo: 'imagen',
+            nombre_archivo: 'Imagen de la incidencia',
+            storage_key: incidenciaData.imagen_url,
+            categoria: 'imagen_principal'
+          }];
+        }
       }
 
       if (incidenciaError) {
@@ -175,7 +205,8 @@ export default function ChatControlCliente() {
       } else {
         setIncidencia({
           ...incidenciaData,
-          adjuntos_principales: adjuntosPrincipales
+          adjuntos_principales: adjuntosPrincipales,
+          prioridad: prioridad
         });
       }
 
@@ -187,7 +218,7 @@ export default function ChatControlCliente() {
           adjuntos(id, tipo, nombre_archivo, storage_key, categoria)
         `)
         .eq("incidencia_id", incidenciaId)
-        .eq("ambito", "cliente")
+        .in("ambito", ["cliente", "ambos"])
         .not("cuerpo", "is", null)
         .order("creado_en", { ascending: true });
 
@@ -352,7 +383,7 @@ export default function ChatControlCliente() {
 
   const getSignedImageUrl = async (storageKey: string | null | undefined) => {
     if (!storageKey) return null;
-    
+
     try {
       let cleanPath = storageKey;
       
@@ -513,107 +544,189 @@ export default function ChatControlCliente() {
           ← Volver a incidencias
         </button>
 
-        <div className="text-white text-center">
-          <h1 className="text-lg font-semibold tracking-wider">CHAT CLIENTE</h1>
-          <p className="text-sm opacity-80">#{incidencia.num_solicitud}</p>
-        </div>
+        <div></div>
 
         <div></div>
       </div>
 
       {/* Sección de datos de incidencia - estilo más compacto y organizado */}
       <div className="px-6 pb-6">
-        <div 
-          className="rounded-lg p-6 mb-6 shadow-lg" 
-          style={{ 
-            backgroundColor: PALETA.verdeClaro,
-            boxShadow: `0 4px 6px -1px ${PALETA.verdeSombra}40, 0 2px 4px -1px ${PALETA.verdeSombra}20`
+        <div
+          className="rounded-lg mb-6 shadow-lg border"
+          style={{
+            backgroundColor: PALETA.card,
+            borderColor: PALETA.headerTable
           }}
         >
-          <h2 className="text-lg font-semibold mb-6" style={{ color: PALETA.fondo }}>DATOS INCIDENCIA</h2>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-sm">
-            {/* Primera columna */}
-            <div className="space-y-4">
-              <div>
-                <div className="font-semibold mb-1" style={{ color: PALETA.fondo }}>Número solicitud:</div>
-                <div style={{ color: PALETA.textoOscuro }}>{incidencia.num_solicitud}</div>
-              </div>
-              
-              <div>
-                <div className="font-semibold mb-1" style={{ color: PALETA.fondo }}>Centro:</div>
-                <div style={{ color: PALETA.textoOscuro }}>
-                  {incidencia.instituciones?.[0]?.nombre || incidencia.centro || "-"}
-                </div>
-              </div>
-            </div>
-
-            {/* Segunda columna */}
-            <div className="space-y-4">
-              <div>
-                <div className="font-semibold mb-1" style={{ color: PALETA.fondo }}>Fecha:</div>
-                <div style={{ color: PALETA.textoOscuro }}>
-                  {incidencia.fecha && incidencia.hora 
-                    ? new Date(incidencia.fecha + 'T' + incidencia.hora).toLocaleDateString('es-ES', {
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })
-                    : "-"
-                  }
-                </div>
-              </div>
-              
-              <div>
-                <div className="font-semibold mb-1" style={{ color: PALETA.fondo }}>Estado:</div>
-                <div style={{ color: PALETA.textoOscuro }}>{incidencia.estado_cliente}</div>
-              </div>
-            </div>
-
-            {/* Tercera columna - Descripción e Imagen */}
-            <div className="space-y-4">
-              <div>
-                <div className="font-semibold mb-1" style={{ color: PALETA.fondo }}>Descripción:</div>
-                <div style={{ color: PALETA.textoOscuro }} className="text-sm leading-relaxed">
-                  {incidencia.descripcion}
-                </div>
-              </div>
-              
-              {/* Solo mostrar imagen si existe en adjuntos */}
-              {incidencia.adjuntos_principales && incidencia.adjuntos_principales.length > 0 && (
-                <div>
-                  <div className="font-semibold mb-2" style={{ color: PALETA.fondo }}>Imagen:</div>
-                  <div className="space-y-2">
-                    {incidencia.adjuntos_principales.map((adjunto) => {
-                      const imageUrl = imageUrls[adjunto.id];
-                      if (!imageUrl) return null;
-                      return (
-                        <div key={adjunto.id} className="cursor-pointer" onClick={() => window.open(imageUrl, '_blank')}>
-                          <img 
-                            src={imageUrl}
-                            alt={adjunto.nombre_archivo || "Imagen de la incidencia"}
-                            className="w-24 h-24 object-cover rounded border-2 border-green-600 hover:scale-105 transition-transform duration-200"
-                            style={{ borderColor: PALETA.fondo }}
-                            onError={(e) => {
-                              console.error('Error cargando imagen:', adjunto.storage_key);
-                              e.currentTarget.style.display = 'none';
-                            }}
-                          />
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
+          <div
+            className="px-6 py-4 border-b"
+            style={{
+              backgroundColor: PALETA.headerTable,
+              color: PALETA.textoOscuro
+            }}
+          >
+            <h2 className="text-lg font-semibold">DATOS TÉCNICOS DE LA INCIDENCIA</h2>
           </div>
+
+          {/* Determinar si hay imágenes para mostrar */}
+          {(() => {
+            const hasImages = incidencia.adjuntos_principales && incidencia.adjuntos_principales.length > 0 &&
+              incidencia.adjuntos_principales.some(adjunto => imageUrls[adjunto.id]);
+
+            return (
+              <div className={`grid grid-cols-1 ${hasImages ? 'lg:grid-cols-3' : ''} gap-6 p-6`}>
+                {/* Tabla de datos técnicos */}
+                <div className={hasImages ? "lg:col-span-2" : ""}>
+                  <table className="w-full text-sm">
+                    <tbody className="divide-y" style={{ divideColor: PALETA.headerTable }}>
+                      <tr>
+                        <td className="py-2 font-semibold w-1/3" style={{ color: PALETA.textoOscuro }}>
+                          ID Solicitud:
+                        </td>
+                        <td className="py-2 font-mono" style={{ color: PALETA.textoOscuro }}>
+                          {incidencia.num_solicitud}
+                        </td>
+                      </tr>
+
+                      <tr style={{ backgroundColor: `${PALETA.headerTable}20` }}>
+                        <td className="py-2 font-semibold" style={{ color: PALETA.textoOscuro }}>
+                          Centro:
+                        </td>
+                        <td className="py-2" style={{ color: PALETA.textoOscuro }}>
+                          {incidencia.instituciones?.[0]?.nombre || incidencia.centro || "-"}
+                        </td>
+                      </tr>
+
+                      <tr>
+                        <td className="py-2 font-semibold" style={{ color: PALETA.textoOscuro }}>
+                          Fecha/Hora:
+                        </td>
+                        <td className="py-2 font-mono" style={{ color: PALETA.textoOscuro }}>
+                          {incidencia.fecha && incidencia.hora
+                            ? new Date(incidencia.fecha + 'T' + incidencia.hora).toLocaleString('es-ES', {
+                                year: 'numeric',
+                                month: '2-digit',
+                                day: '2-digit',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })
+                            : "-"
+                          }
+                        </td>
+                      </tr>
+
+                      <tr style={{ backgroundColor: `${PALETA.headerTable}20` }}>
+                        <td className="py-2 font-semibold" style={{ color: PALETA.textoOscuro }}>
+                          Estado:
+                        </td>
+                        <td className="py-2">
+                          <span
+                            className="px-2 py-1 rounded text-xs font-medium text-white"
+                            style={{ backgroundColor: '#3b82f6' }}
+                          >
+                            {incidencia.estado_cliente}
+                          </span>
+                        </td>
+                      </tr>
+
+                      <tr>
+                        <td className="py-2 font-semibold" style={{ color: PALETA.textoOscuro }}>
+                          Catalogación:
+                        </td>
+                        <td className="py-2" style={{ color: PALETA.textoOscuro }}>
+                          {incidencia.catalogacion || "Sin catalogar"}
+                        </td>
+                      </tr>
+
+                      <tr style={{ backgroundColor: `${PALETA.headerTable}20` }}>
+                        <td className="py-2 font-semibold" style={{ color: PALETA.textoOscuro }}>
+                          Prioridad:
+                        </td>
+                        <td className="py-2">
+                          {incidencia.prioridad ? (
+                            <span
+                              className="px-2 py-1 rounded text-xs font-medium text-white"
+                              style={{
+                                backgroundColor: incidencia.prioridad === 'Crítico' ? '#ef4444' : '#10b981'
+                              }}
+                            >
+                              {incidencia.prioridad}
+                            </span>
+                          ) : (
+                            <span style={{ color: PALETA.textoOscuro }}>No asignada</span>
+                          )}
+                        </td>
+                      </tr>
+
+                      <tr>
+                        <td className="py-2 font-semibold align-top" style={{ color: PALETA.textoOscuro }}>
+                          Descripción:
+                        </td>
+                        <td className="py-2 leading-relaxed" style={{ color: PALETA.textoOscuro }}>
+                          {incidencia.descripcion}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Sección de imágenes - solo mostrar si hay imágenes */}
+                {hasImages && (
+                  <div className="lg:col-span-1">
+                    <div
+                      className="border rounded-lg p-4"
+                      style={{ borderColor: PALETA.headerTable }}
+                    >
+                      <h3 className="font-semibold mb-4 text-center" style={{ color: PALETA.textoOscuro }}>
+                        EVIDENCIA VISUAL
+                      </h3>
+
+                      <div className="space-y-3">
+                        {incidencia.adjuntos_principales.map((adjunto) => {
+                          const imageUrl = imageUrls[adjunto.id];
+                          if (!imageUrl) return null;
+                          return (
+                            <div key={adjunto.id} className="text-center">
+                              <div
+                                className="cursor-pointer border-2 rounded-lg overflow-hidden hover:shadow-lg transition-shadow"
+                                style={{ borderColor: PALETA.fondo }}
+                                onClick={() => window.open(imageUrl, '_blank')}
+                              >
+                                <img
+                                  src={imageUrl}
+                                  alt={adjunto.nombre_archivo || "Imagen de la incidencia"}
+                                  className="w-full h-32 object-cover hover:scale-105 transition-transform duration-200"
+                                  onError={(e) => {
+                                    console.error('Error cargando imagen:', adjunto.storage_key);
+                                    e.currentTarget.style.display = 'none';
+                                  }}
+                                />
+                              </div>
+                              <p className="text-xs mt-1 truncate" style={{ color: PALETA.textoOscuro }}>
+                                {adjunto.nombre_archivo || "Imagen adjunta"}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
 
         {/* Sección de seguimiento */}
-        <div className="mb-6">
-          <h2 className="text-white text-center text-lg font-semibold mb-4 tracking-wider">SEGUIMIENTO</h2>
+        <div className="mb-8">
+          {tipoUsuario === 'Control' ? (
+            <div className="text-white text-center">
+              <h2 className="text-lg font-semibold mb-1 tracking-wider">CHAT CLIENTE</h2>
+              <p className="text-sm opacity-80">#{incidencia.num_solicitud}</p>
+            </div>
+          ) : (
+            <h2 className="text-white text-center text-lg font-semibold mb-4 tracking-wider">SEGUIMIENTO</h2>
+          )}
         </div>
 
         {/* Área de comentarios */}
@@ -629,9 +742,9 @@ export default function ChatControlCliente() {
                 <div
                   key={comentario.id}
                   className={`flex ${
-                    comentario.es_sistema 
-                      ? 'justify-center' 
-                      : comentario.autor_rol === 'Control' ? 'justify-end' : 'justify-start'
+                    comentario.es_sistema
+                      ? 'justify-center'
+                      : comentario.autor_email === currentUserEmail ? 'justify-end' : 'justify-start'
                   }`}
                 >
                   <div
@@ -641,9 +754,9 @@ export default function ChatControlCliente() {
                         : 'max-w-xs md:max-w-md'
                     }`}
                     style={{
-                      backgroundColor: comentario.es_sistema 
+                      backgroundColor: comentario.es_sistema
                         ? '#fef3c7'
-                        : comentario.autor_rol === 'Control' 
+                        : comentario.autor_email === currentUserEmail
                           ? '#dcfce7'
                           : "#f3f4f6"
                     }}
@@ -716,34 +829,55 @@ export default function ChatControlCliente() {
               value={nuevoComentario}
               onChange={(e) => setNuevoComentario(e.target.value)}
               placeholder="Añadir comentario"
-              className="w-full h-24 p-3 border border-gray-300 rounded focus:outline-none resize-none text-sm"
+              className="w-full h-24 p-3 border rounded focus:outline-none resize-none text-sm"
+              style={{ borderColor: PALETA.textoOscuro }}
               disabled={enviando}
             />
-            
+
             {/* Preview de archivos seleccionados */}
             {(imagenSeleccionada || documentoSeleccionado) && (
               <div className="flex gap-2 flex-wrap">
                 {imagenSeleccionada && (
-                  <div className="flex items-center gap-2 bg-blue-50 px-3 py-2 rounded border">
-                    <span className="text-blue-600">🖼️ {imagenSeleccionada.name}</span>
+                  <div className="flex items-center gap-2 bg-white px-3 py-2 rounded border border-gray-300">
+                    <span className="text-gray-700 text-sm">{imagenSeleccionada.name}</span>
                     <button
                       type="button"
                       onClick={() => setImagenSeleccionada(null)}
-                      className="text-red-500 hover:text-red-700 text-sm font-bold"
+                      className="text-gray-500 hover:text-gray-700 text-sm"
+                      style={{
+                        color: PALETA.textoOscuro,
+                        transition: 'color 0.2s'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.color = PALETA.fondo;
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.color = PALETA.textoOscuro;
+                      }}
                     >
-                      ✕
+                      ×
                     </button>
                   </div>
                 )}
                 {documentoSeleccionado && (
-                  <div className="flex items-center gap-2 bg-green-50 px-3 py-2 rounded border">
-                    <span className="text-green-600">📎 {documentoSeleccionado.name}</span>
+                  <div className="flex items-center gap-2 bg-white px-3 py-2 rounded border border-gray-300">
+                    <span className="text-gray-700 text-sm">{documentoSeleccionado.name}</span>
                     <button
                       type="button"
                       onClick={() => setDocumentoSeleccionado(null)}
-                      className="text-red-500 hover:text-red-700 text-sm font-bold"
+                      className="text-gray-500 hover:text-gray-700 text-sm"
+                      style={{
+                        color: PALETA.textoOscuro,
+                        transition: 'color 0.2s'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.color = PALETA.fondo;
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.color = PALETA.textoOscuro;
+                      }}
                     >
-                      ✕
+                      ×
                     </button>
                   </div>
                 )}
@@ -760,10 +894,10 @@ export default function ChatControlCliente() {
                   onChange={manejarSeleccionImagen}
                   className="hidden"
                 />
-                <label 
-                  htmlFor="imagen" 
-                  className="inline-flex items-center gap-2 px-3 py-1 border border-gray-400 rounded cursor-pointer transition-colors text-gray-600"
-                  style={{ 
+                <label
+                  htmlFor="imagen"
+                  className="inline-flex items-center gap-2 px-3 py-0.5 border border-gray-400 rounded cursor-pointer transition-colors text-gray-600"
+                  style={{
                     borderColor: PALETA.textoOscuro
                   }}
                   onMouseEnter={(e) => {
@@ -788,10 +922,10 @@ export default function ChatControlCliente() {
                   onChange={manejarSeleccionDocumento}
                   className="hidden"
                 />
-                <label 
-                  htmlFor="documento" 
-                  className="inline-flex items-center gap-2 px-3 py-1 border border-gray-400 rounded cursor-pointer transition-colors text-gray-600"
-                  style={{ 
+                <label
+                  htmlFor="documento"
+                  className="inline-flex items-center gap-2 px-3 py-0.5 border border-gray-400 rounded cursor-pointer transition-colors text-gray-600"
+                  style={{
                     borderColor: PALETA.textoOscuro
                   }}
                   onMouseEnter={(e) => {

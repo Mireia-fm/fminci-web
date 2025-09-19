@@ -111,7 +111,8 @@ export default function DashboardProveedor() {
     try {
       if (!personaInst) return;
 
-      // Buscar incidencias asignadas en las últimas 48 horas
+      // Buscar incidencias asignadas en las últimas 48 horas que aún están en estado "Abierta"
+      // (sin acciones del proveedor)
       const fechaLimite = new Date();
       fechaLimite.setHours(fechaLimite.getHours() - 48);
 
@@ -121,6 +122,7 @@ export default function DashboardProveedor() {
           id,
           incidencia_id,
           asignado_en,
+          estado_proveedor,
           incidencias (
             num_solicitud,
             descripcion,
@@ -130,18 +132,41 @@ export default function DashboardProveedor() {
         `)
         .eq("proveedor_id", personaInst.institucion_id)
         .eq("activo", true)
+        .eq("estado_proveedor", "Abierta")  // Solo incidencias que no han tenido acciones del proveedor
         .gte("asignado_en", fechaLimite.toISOString())
         .order("asignado_en", { ascending: false });
 
       if (casosRecientes) {
-        const notificacionesFormateadas = casosRecientes.map(caso => ({
+        // Filtrar también incidencias que ya tienen comentarios del proveedor
+        const incidenciasConComentarios = await Promise.all(
+          casosRecientes.map(async (caso) => {
+            const { count } = await supabase
+              .from("comentarios")
+              .select("*", { count: "exact", head: true })
+              .eq("incidencia_id", caso.incidencia_id)
+              .eq("ambito", "proveedor")
+              .not("cuerpo", "is", null);
+
+            return {
+              ...caso,
+              tieneComentarios: (count || 0) > 0
+            };
+          })
+        );
+
+        // Solo mostrar incidencias sin comentarios del proveedor
+        const incidenciasSinActividad = incidenciasConComentarios.filter(
+          caso => !caso.tieneComentarios
+        );
+
+        const notificacionesFormateadas = incidenciasSinActividad.map(caso => ({
           id: caso.incidencia_id,
           num_solicitud: caso.incidencias?.num_solicitud || "",
           descripcion: caso.incidencias?.descripcion || "",
           fecha_asignacion: caso.asignado_en,
           institucion_nombre: caso.incidencias?.instituciones?.nombre || caso.incidencias?.centro
         }));
-        
+
         setNotificaciones(notificacionesFormateadas);
       }
     } catch (error) {
@@ -172,11 +197,6 @@ export default function DashboardProveedor() {
 
   return (
     <main className="min-h-[calc(100vh-80px)]" style={{ backgroundColor: PALETA.bg }}>
-      <div className="px-6 mt-10 mb-8">
-        <h2 className="text-lg tracking-[0.3em]" style={{ color: PALETA.texto }}>
-          RESUMEN CASOS PROVEEDOR:
-        </h2>
-      </div>
 
       {/* Sección de Notificaciones */}
       {!loadingNotificaciones && notificaciones.length > 0 && (

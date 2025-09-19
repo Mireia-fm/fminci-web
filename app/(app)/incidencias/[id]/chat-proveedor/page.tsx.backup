@@ -77,7 +77,6 @@ export default function ChatProveedor() {
   const [fechaVisita, setFechaVisita] = useState('');
   const [horarioVisita, setHorarioVisita] = useState('');
   const [mostrarModalPresupuesto, setMostrarModalPresupuesto] = useState(false);
-  const [mostrarModalGestionPresupuesto, setMostrarModalGestionPresupuesto] = useState(false);
   const [presupuesto, setPresupuesto] = useState('');
   const [descripcionPresupuesto, setDescripcionPresupuesto] = useState('');
   const [fechaEstimadaInicio, setFechaEstimadaInicio] = useState('');
@@ -992,7 +991,7 @@ Notas adicionales: ${notasResolucion}`;
         .from("comentarios")
         .insert({
           incidencia_id: incidenciaId,
-          ambito: 'proveedor',
+          ambito: 'ambos',
           autor_id: autorId,
           autor_email: userEmail,
           autor_rol: 'Proveedor',
@@ -1178,22 +1177,33 @@ Notas adicionales: ${notasResolucion}`;
         .update({ estado_cliente: "Cerrada" })
         .eq("id", incidenciaId);
 
-      // 3. Comentario para ambos chats
+      // 3. Comentarios para ambos chats
       const mensajeCierre = motivoCierre.trim()
         ? `Incidencia cerrada por Control. ${motivoCierre}`
         : 'Incidencia cerrada por Control.';
 
       await supabase
         .from("comentarios")
-        .insert({
-          incidencia_id: incidenciaId,
-          ambito: 'ambos',
-          autor_id: autorId,
-          autor_email: userEmail,
-          autor_rol: 'Control',
-          cuerpo: mensajeCierre,
-          es_sistema: true
-        });
+        .insert([
+          {
+            incidencia_id: incidenciaId,
+            ambito: 'proveedor',
+            autor_id: autorId,
+            autor_email: userEmail,
+            autor_rol: 'Control',
+            cuerpo: mensajeCierre,
+            es_sistema: true
+          },
+          {
+            incidencia_id: incidenciaId,
+            ambito: 'cliente',
+            autor_id: autorId,
+            autor_email: userEmail,
+            autor_rol: 'Control',
+            cuerpo: mensajeCierre,
+            es_sistema: true
+          }
+        ]);
 
       setMostrarModalCerrar(false);
       setMotivoCierre('');
@@ -1696,7 +1706,7 @@ Notas adicionales: ${notasResolucion}`;
                       type="button"
                       onClick={() => {
                         cargarPresupuesto();
-                        setMostrarModalGestionPresupuesto(true);
+                        setMostrarModalPresupuesto(true);
                       }}
                       className="px-4 py-2 text-white rounded hover:opacity-90 transition-opacity"
                       style={{ backgroundColor: "#0ea5e9" }}
@@ -2707,7 +2717,7 @@ Notas adicionales: ${notasResolucion}`;
       )}
 
       {/* Modal para gestionar presupuesto */}
-      {mostrarModalGestionPresupuesto && (
+      {mostrarModalPresupuesto && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div
             className="rounded-lg p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow"
@@ -2812,7 +2822,7 @@ Notas adicionales: ${notasResolucion}`;
               <button
                 type="button"
                 onClick={() => {
-                  setMostrarModalGestionPresupuesto(false);
+                  setMostrarModalPresupuesto(false);
                   setPresupuestoActual(null);
                 }}
                 className="px-4 py-2 text-sm rounded border hover:bg-gray-50 transition-colors"
