@@ -28,6 +28,7 @@ export default function DashboardCliente() {
   const [vistaActiva, setVistaActiva] = useState<'cliente' | 'proveedor'>('cliente');
   const [metricasProveedor, setMetricasProveedor] = useState<Row[]>([]);
   const [tipoUsuario, setTipoUsuario] = useState<string | null>(null);
+  const [centrosGestor, setCentrosGestor] = useState<{nombre: string, incidencias: Row[]}[]>([]);
 
   useEffect(() => {
     cargarDatos();
@@ -61,47 +62,111 @@ export default function DashboardCliente() {
           .maybeSingle();
 
         if (persona?.rol === "Control") {
-          // Para Control: usar la vista global original
+          // Para Control: usar la vista global
           const { data } = await supabase.from("v_incidencias_por_estado").select("*");
           setRows((data ?? []) as Row[]);
         } else {
-          // Para otros usuarios: filtrar por centro
-          const { data: personaInstituciones } = await supabase
+          // Para otros usuarios: verificar si es Gestor o Cliente
+          // Primero obtener datos del usuario y verificar acceso_todos_centros
+          const { data: personaData } = await supabase
             .from("personas")
-            .select(`
-              id,
-              personas_instituciones!inner(
-                institucion_id,
-                instituciones!inner(id, nombre, tipo)
-              )
-            `)
-            .eq("email", userEmail);
+            .select("id, rol, acceso_todos_centros")
+            .eq("email", userEmail)
+            .maybeSingle();
 
-          if (personaInstituciones && personaInstituciones.length > 0) {
-            const institucionId = personaInstituciones[0].personas_instituciones?.[0]?.institucion_id;
+          if (personaData?.acceso_todos_centros) {
+            // Usuario con acceso a todos los centros - usar vista global
+            const { data } = await supabase.from("v_incidencias_por_estado").select("*");
+            setRows((data ?? []) as Row[]);
+          } else if (personaData) {
+            // Usuario con instituciones específicas
+            const { data: personaInstituciones } = await supabase
+              .from("personas")
+              .select(`
+                id,
+                rol,
+                personas_instituciones!inner(
+                  institucion_id,
+                  instituciones!inner(id, nombre, tipo)
+                )
+              `)
+              .eq("email", userEmail);
 
-            if (institucionId) {
-              const { data: incidenciasData } = await supabase
-                .from("incidencias")
-                .select(`
-                  id, estado_cliente
-                `)
-                .eq("institucion_id", institucionId);
+            if (personaInstituciones && personaInstituciones.length > 0) {
+            const esGestor = personaInstituciones[0].rol === 'Gestor';
 
-              if (incidenciasData) {
-                const contadores = incidenciasData.reduce((acc, inc) => {
-                  const estado = inc.estado_cliente || "Sin estado";
-                  const existing = acc.find(item => item.estado_cliente === estado);
-                  if (existing) {
-                    existing.n++;
-                  } else {
-                    acc.push({ estado_cliente: estado, n: 1 });
-                  }
-                  return acc;
-                }, [] as Row[]);
+            if (esGestor) {
+              // Para Gestores: cargar todas sus instituciones
+              const todasInstituciones = personaInstituciones[0].personas_instituciones;
+              const centrosData = [];
+              let contadoresGlobales = new Map<string, number>();
 
-                setRows(contadores);
+              for (const instituciones of todasInstituciones) {
+                const { data: incidenciasData } = await supabase
+                  .from("incidencias")
+                  .select("id, estado_cliente")
+                  .eq("institucion_id", instituciones.institucion_id);
+
+                if (incidenciasData) {
+                  const contadoresCentro = incidenciasData.reduce((acc, inc) => {
+                    const estado = inc.estado_cliente || "Sin estado";
+                    const existing = acc.find(item => item.estado_cliente === estado);
+                    if (existing) {
+                      existing.n++;
+                    } else {
+                      acc.push({ estado_cliente: estado, n: 1 });
+                    }
+                    return acc;
+                  }, [] as Row[]);
+
+                  centrosData.push({
+                    nombre: (instituciones.instituciones as any)?.nombre || 'Centro sin nombre',
+                    incidencias: contadoresCentro
+                  });
+
+                  // Agregar a contadores globales
+                  contadoresCentro.forEach(contador => {
+                    const estado = contador.estado_cliente || "Sin estado";
+                    const actual = contadoresGlobales.get(estado) || 0;
+                    contadoresGlobales.set(estado, actual + contador.n);
+                  });
+                }
               }
+
+              // Convertir map a array para setRows
+              const contadoresArray = Array.from(contadoresGlobales.entries()).map(([estado, n]) => ({
+                estado_cliente: estado,
+                n
+              }));
+
+              setRows(contadoresArray);
+              setCentrosGestor(centrosData);
+            } else {
+              // Para Clientes: usar solo su institución
+              const institucionId = personaInstituciones[0].personas_instituciones?.[0]?.institucion_id;
+
+              if (institucionId) {
+                const { data: incidenciasData } = await supabase
+                  .from("incidencias")
+                  .select("id, estado_cliente")
+                  .eq("institucion_id", institucionId);
+
+                if (incidenciasData) {
+                  const contadores = incidenciasData.reduce((acc, inc) => {
+                    const estado = inc.estado_cliente || "Sin estado";
+                    const existing = acc.find(item => item.estado_cliente === estado);
+                    if (existing) {
+                      existing.n++;
+                    } else {
+                      acc.push({ estado_cliente: estado, n: 1 });
+                    }
+                    return acc;
+                  }, [] as Row[]);
+
+                  setRows(contadores);
+                }
+              }
+            }
             }
           }
         }
@@ -189,7 +254,7 @@ export default function DashboardCliente() {
         </Link>
       </div>
 
-      <div className="px-6 mt-16 mb-8">
+      <div className="px-6 mt-24 mb-8">
         {/* Botones de alternancia solo para usuarios Control */}
         {tipoUsuario === 'Control' && (
           <div className="flex justify-center gap-2 mb-6">
@@ -315,6 +380,58 @@ export default function DashboardCliente() {
           </div>
         )}
       </section>
+
+      {/* Sección de centros para Gestores */}
+      {tipoUsuario === 'Gestor' && centrosGestor.length > 0 && (
+        <section className="px-6 pb-12">
+          <h2 className="text-lg tracking-[0.3em] mb-8" style={{ color: PALETA.texto }}>
+            MIS CENTROS:
+          </h2>
+          <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {centrosGestor.map((centro, index) => {
+              const totalIncidencias = centro.incidencias.reduce((total, row) => total + row.n, 0);
+              const abiertas = centro.incidencias.find(row => row.estado_cliente === 'Abierta')?.n || 0;
+              const enTramitacion = centro.incidencias.find(row => row.estado_cliente === 'En tramitación')?.n || 0;
+              const cerradas = centro.incidencias.find(row => row.estado_cliente === 'Cerrada')?.n || 0;
+
+              return (
+                <div
+                  key={index}
+                  className="p-4 rounded-lg shadow-md hover:shadow-lg transition-shadow cursor-pointer"
+                  style={{ backgroundColor: 'white' }}
+                  onClick={() => {
+                    // Redirigir a incidencias filtradas por este centro
+                    router.push(`/incidencias?centro=${encodeURIComponent(centro.nombre)}`);
+                  }}
+                >
+                  <h3 className="font-medium text-lg mb-3 text-gray-800 truncate" title={centro.nombre}>
+                    {centro.nombre}
+                  </h3>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span style={{ color: PALETA.b1 }}>Abiertas:</span>
+                      <span className="font-medium">{abiertas}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span style={{ color: PALETA.b2 }}>En tramitación:</span>
+                      <span className="font-medium">{enTramitacion}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span style={{ color: PALETA.b3 }}>Cerradas:</span>
+                      <span className="font-medium">{cerradas}</span>
+                    </div>
+                    <hr className="my-2" />
+                    <div className="flex justify-between text-sm font-semibold">
+                      <span>Total:</span>
+                      <span>{totalIncidencias}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
     </main>
   );
 }

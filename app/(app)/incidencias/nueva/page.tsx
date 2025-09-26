@@ -35,7 +35,6 @@ export default function NuevaIncidenciaPage() {
   const [descripcion, setDescripcion] = useState<string>("");
 
   const [imagen, setImagen] = useState<File | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
 
   const [opcionesCentros, setOpcionesCentros] = useState<Opcion[]>([]);
   const [opcionesCatalogacion, setOpcionesCatalogacion] = useState<Opcion[]>([]);
@@ -47,6 +46,7 @@ export default function NuevaIncidenciaPage() {
   ];
 
   const [enviando, setEnviando] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string>("");
   const [incidenciaCreada, setIncidenciaCreada] = useState<{id: string; num_solicitud: string} | null>(null);
 
@@ -121,23 +121,78 @@ export default function NuevaIncidenciaPage() {
   // Cargar opciones Centros + Catalogaciones
   useEffect(() => {
     (async () => {
-      // Centros
-      const { data: cData, error: cErr } = await supabase
-        .from("instituciones")
-        .select("id, nombre, tipo")
-        .eq("tipo", "Centro")
-        .order("nombre");
+      // Obtener email del usuario para cargar sus centros permitidos
+      const { data: userData } = await supabase.auth.getUser();
+      const userEmail = userData.user?.email;
 
-      if (!cErr && cData) {
-        const filas: CentroRow[] = (cData ?? []) as CentroRow[];
-        setOpcionesCentros([
-          { value: "", label: "Selecciona un centro" },
-          ...filas.map((c) => ({ value: c.id, label: c.nombre })),
-        ]);
-      } else if (cErr) {
-        console.error("Error Centros:", cErr);
-        setErrorMsg("No se pudieron cargar los centros.");
+      if (!userEmail) {
+        setErrorMsg("No se pudo obtener el email del usuario.");
+        setLoading(false);
+        return;
       }
+
+      // Obtener datos de la persona
+      const { data: persona } = await supabase
+        .from("personas")
+        .select("id, acceso_todos_centros")
+        .eq("email", userEmail)
+        .maybeSingle();
+
+      let centrosPermitidos: CentroRow[] = [];
+
+      if (persona?.acceso_todos_centros) {
+        // Si tiene acceso a todos los centros, mostrar todos
+        const { data: cData, error: cErr } = await supabase
+          .from("instituciones")
+          .select("id, nombre, tipo")
+          .eq("tipo", "Centro")
+          .order("nombre");
+
+        if (!cErr && cData) {
+          centrosPermitidos = (cData ?? []) as CentroRow[];
+        } else if (cErr) {
+          console.error("Error Centros:", cErr);
+          setErrorMsg("No se pudieron cargar los centros.");
+          return;
+        }
+      } else if (persona?.id) {
+        // Obtener solo los centros asignados al gestor
+        const { data: asignaciones, error: asignacionesError } = await supabase
+          .from("personas_instituciones")
+          .select(`
+            institucion_id,
+            instituciones!inner(id, nombre, tipo)
+          `)
+          .eq("persona_id", persona.id)
+          .eq("instituciones.tipo", "Centro");
+
+        if (asignacionesError) {
+          console.error("Error cargando asignaciones:", asignacionesError);
+          setErrorMsg("No se pudieron cargar los centros asignados.");
+          return;
+        }
+
+        // Extraer los centros de las asignaciones
+        centrosPermitidos = (asignaciones || [])
+          .map(a => a.instituciones)
+          .filter(inst => inst && typeof inst === 'object' && 'id' in inst)
+          .map(inst => ({
+            id: inst.id as string,
+            nombre: inst.nombre as string,
+            tipo: inst.tipo as string
+          }))
+          .sort((a, b) => a.nombre.localeCompare(b.nombre));
+      } else {
+        setErrorMsg("No se pudo identificar el usuario en el sistema.");
+        setLoading(false);
+        return;
+      }
+
+      // Configurar opciones de centros
+      setOpcionesCentros([
+        { value: "", label: "Selecciona un centro" },
+        ...centrosPermitidos.map((c) => ({ value: c.id, label: c.nombre })),
+      ]);
 
       // Catalogaciones
       const { data: catData, error: catErr } = await supabase
@@ -156,19 +211,12 @@ export default function NuevaIncidenciaPage() {
         console.error("Error Catalogaciones:", catErr);
         setErrorMsg("No se pudieron cargar las catalogaciones.");
       }
+
+      // Indicar que la carga ha terminado
+      setLoading(false);
     })();
   }, []);
 
-  // Preview de imagen
-  useEffect(() => {
-    if (!imagen) {
-      setPreview(null);
-      return;
-    }
-    const url = URL.createObjectURL(imagen);
-    setPreview(url);
-    return () => URL.revokeObjectURL(url);
-  }, [imagen]);
 
   // Validación: Imagen es OPCIONAL
   const faltanObligatorios = useMemo(() => {
@@ -181,12 +229,12 @@ export default function NuevaIncidenciaPage() {
     );
   }, [nombre, nombreAsignado, centro, catalogacion, prioridad, descripcion]);
 
-  // Subida opcional de imagen a Storage
-  async function subirImagenSiHay(file: File | null): Promise<string | null> {
+  // Subida de imagen principal después de crear la incidencia
+  async function subirImagenPrincipal(file: File, numSolicitud: string): Promise<string | null> {
     if (!file) return null;
-    // nombre único: <institucion>/<timestamp>_<nombreOriginal>
+    // Nueva estructura: incidencias/{num_solicitud}/{filename}
     const safeName = file.name.replace(/\s+/g, "_");
-    const path = `${centro}/${Date.now()}_${safeName}`;
+    const path = `incidencias/${numSolicitud}/${Date.now()}_${safeName}`;
 
     const { data, error } = await supabase.storage
       .from("incidencias")
@@ -194,7 +242,7 @@ export default function NuevaIncidenciaPage() {
 
     if (error) throw error;
 
-    // En lugar de URL pública, devolver solo el path para usar signed URLs después
+    // Devolver el path para la base de datos
     return data.path;
   }
 
@@ -212,10 +260,7 @@ export default function NuevaIncidenciaPage() {
       console.log("Usuario autenticado:", userData.user?.email);
       console.log("Token presente:", !!userData.user);
 
-      // 1) Subir imagen (opcional)
-      const imagenUrl = await subirImagenSiHay(imagen);
-
-      // 2) INSERT (num_solicitud se genera automáticamente por la BD)
+      // 1) INSERT sin imagen primero (num_solicitud se genera automáticamente)
       const { data, error } = await supabase
         .from("incidencias")
         .insert({
@@ -227,7 +272,7 @@ export default function NuevaIncidenciaPage() {
           fecha: fecha,
           hora: hora,
           email: email || null,
-          imagen_url: imagenUrl,               // puede ser null
+          imagen_url: null,                    // null inicialmente
           estado_cliente: "Abierta",           // enum estado_cliente
           // Si tu tabla aún usa 'centro' texto en lugar de FK, añade también:
           centro: opcionesCentros.find(o => o.value===centro)?.label ?? null,
@@ -240,6 +285,28 @@ export default function NuevaIncidenciaPage() {
         setErrorMsg(error.message ?? "Error al crear la incidencia.");
         setEnviando(false);
         return;
+      }
+
+      // 2) Subir imagen si existe y actualizar el registro
+      let imagenUrl = null;
+      if (imagen) {
+        try {
+          imagenUrl = await subirImagenPrincipal(imagen, data.num_solicitud);
+
+          // Actualizar el registro con la URL de la imagen
+          const { error: updateError } = await supabase
+            .from("incidencias")
+            .update({ imagen_url: imagenUrl })
+            .eq("id", data.id);
+
+          if (updateError) {
+            console.error("Error actualizando imagen_url:", updateError);
+            // No fallar la creación por esto, solo logear el error
+          }
+        } catch (imagenError) {
+          console.error("Error subiendo imagen:", imagenError);
+          // No fallar la creación por esto
+        }
       }
 
       // 3) Mostrar el número de solicitud generado
@@ -262,7 +329,7 @@ export default function NuevaIncidenciaPage() {
   const selectBase =
     "w-full h-9 rounded border px-3 text-sm outline-none focus:ring-2 focus:ring-[#C9D7A7] appearance-none pr-6";
   const textAreaBase =
-    "min-h-[200px] w-full rounded border p-3 text-sm outline-none focus:ring-2 focus:ring-[#C9D7A7]";
+    "min-h-[120px] w-full rounded border p-3 text-sm outline-none focus:ring-2 focus:ring-[#C9D7A7]";
 
   // Si la incidencia fue creada exitosamente, mostrar pantalla de éxito
   if (incidenciaCreada) {
@@ -336,12 +403,12 @@ export default function NuevaIncidenciaPage() {
   }
 
   return (
-    <div className="min-h-screen w-full py-12" style={{ backgroundColor: PALETA.fondo }}>
+    <div className="min-h-screen w-full py-4" style={{ backgroundColor: PALETA.fondo }}>
       {/* Botón volver atrás - arriba a la izquierda */}
-      <div className="px-8 mb-6">
+      <div className="px-8 mb-4">
         <button
           type="button"
-          onClick={() => router.back()}
+          onClick={() => router.push("/")}
           className="flex items-center gap-1 text-sm text-white hover:underline transition-all"
         >
           <span className="text-lg">←</span>
@@ -350,20 +417,26 @@ export default function NuevaIncidenciaPage() {
       </div>
 
       <div
-        className="mx-auto w-full max-w-3xl rounded-lg p-8 shadow"
+        className="mx-auto w-full max-w-3xl rounded-lg p-6 shadow"
         style={{ backgroundColor: PALETA.card }}
       >
-        <h1 className="mb-8 text-center text-3xl font-semibold" style={{ color: PALETA.titulo }}>
+        <h1 className="mb-6 text-center text-3xl font-semibold" style={{ color: PALETA.titulo }}>
           Nueva incidencia
         </h1>
 
-        {errorMsg && (
+        {loading ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="text-gray-600">Cargando...</div>
+          </div>
+        ) : (
+          <>
+            {errorMsg && (
           <div className="mb-4 rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
             {errorMsg}
           </div>
         )}
 
-        <form onSubmit={onSubmit} className="space-y-6">
+        <form onSubmit={onSubmit} className="space-y-4">
           {/* Nombre / Email */}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
@@ -464,16 +537,6 @@ export default function NuevaIncidenciaPage() {
               onChange={(e) => setImagen(e.target.files?.[0] ?? null)}
               className="block w-full text-sm file:mr-4 file:rounded file:border-0 file:bg-[#C9D7A7] file:px-3 file:py-2 file:text-sm file:font-medium hover:file:brightness-95"
             />
-            {preview && (
-              <div className="mt-3">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={preview}
-                  alt="preview"
-                  className="h-28 w-28 rounded object-cover ring-1 ring-gray-300"
-                />
-              </div>
-            )}
           </div>
 
           {/* Descripción */}
@@ -504,6 +567,8 @@ export default function NuevaIncidenciaPage() {
             </p>
           </div>
         </form>
+          </>
+        )}
       </div>
     </div>
   );

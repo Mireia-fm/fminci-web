@@ -6,10 +6,14 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "migrate-storage": "node migration-storage.js",
+    "move-legacy": "node move-legacy-files.js",
+    "check-storage": "node check-storage.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.2",
+    "dotenv": "^17.2.2",
     "next": "15.5.2",
     "react": "19.1.0",
     "react-dom": "19.1.0"

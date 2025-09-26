@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import ModalAsignarProveedor from "@/components/ModalAsignarProveedor";
 
 // Paleta de colores consistente
 const PALETA = {
@@ -35,6 +36,8 @@ type Comentario = {
   creado_en: string;
   es_sistema?: boolean | null;
   dedupe_key?: string | null;
+  imagen_url?: string | null;
+  documento_url?: string | null;
   adjuntos?: Adjunto[];
 };
 
@@ -54,6 +57,11 @@ type Incidencia = {
     nombre: string;
   }[] | null;
   adjuntos_principales?: Adjunto[];
+  proveedor_casos?: {
+    estado_proveedor: string;
+    prioridad?: string;
+    activo?: boolean;
+  }[] | null;
 };
 
 export default function ChatControlCliente() {
@@ -73,8 +81,20 @@ export default function ChatControlCliente() {
   const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
   const [commentAttachmentUrls, setCommentAttachmentUrls] = useState<Record<string, string>>({});
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [tieneProveedorAsignado, setTieneProveedorAsignado] = useState(false);
+  const [mostrarModalProveedor, setMostrarModalProveedor] = useState(false);
+  const [mostrarModalAnular, setMostrarModalAnular] = useState(false);
+  const [motivoAnulacion, setMotivoAnulacion] = useState('');
+  const [mostrarModalEspera, setMostrarModalEspera] = useState(false);
+  const [motivoEspera, setMotivoEspera] = useState('');
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const incidenciaId = params.id as string;
+
+  // Función para hacer scroll al último mensaje
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
 
   useEffect(() => {
     cargarDatos();
@@ -106,12 +126,27 @@ export default function ChatControlCliente() {
     }
   }, [incidencia?.adjuntos_principales]);
 
-  // Cargar URLs de adjuntos de comentarios
+  // Cargar URLs de adjuntos de comentarios (desde campos imagen_url y documento_url)
   useEffect(() => {
     if (comentarios.length > 0) {
       const loadCommentAttachmentUrls = async () => {
         const urls: Record<string, string> = {};
         for (const comentario of comentarios) {
+          // Cargar imagen_url del comentario
+          if (comentario.imagen_url) {
+            const url = await getSignedImageUrl(comentario.imagen_url);
+            if (url) {
+              urls[`imagen_${comentario.id}`] = url;
+            }
+          }
+          // Cargar documento_url del comentario
+          if (comentario.documento_url) {
+            const url = await getSignedImageUrl(comentario.documento_url);
+            if (url) {
+              urls[`documento_${comentario.id}`] = url;
+            }
+          }
+          // Mantener compatibilidad con adjuntos legacy
           if (comentario.adjuntos) {
             for (const adjunto of comentario.adjuntos) {
               if (adjunto.storage_key) {
@@ -154,7 +189,7 @@ export default function ChatControlCliente() {
         setCurrentUserEmail(userEmail);
       }
 
-      // Cargar incidencia con adjuntos principales
+      // Cargar incidencia con adjuntos principales y proveedor_casos
       const { data: incidenciaData, error: incidenciaError } = await supabase
         .from("incidencias")
         .select(`
@@ -168,7 +203,8 @@ export default function ChatControlCliente() {
           imagen_url,
           catalogacion,
           prioridad,
-          instituciones(nombre)
+          instituciones(nombre),
+          proveedor_casos(estado_proveedor, prioridad, activo)
         `)
         .eq("id", incidenciaId)
         .single();
@@ -203,23 +239,26 @@ export default function ChatControlCliente() {
       if (incidenciaError) {
         console.error("Error cargando incidencia:", incidenciaError);
       } else {
-        setIncidencia({
+        const incidenciaCompleta = {
           ...incidenciaData,
           adjuntos_principales: adjuntosPrincipales,
           prioridad: prioridad
-        });
+        };
+        setIncidencia(incidenciaCompleta);
+
+        // Verificar si tiene proveedor asignado
+        const tieneProveedor = incidenciaCompleta?.proveedor_casos &&
+                              incidenciaCompleta.proveedor_casos.length > 0 &&
+                              incidenciaCompleta.proveedor_casos.some(pc => pc.activo && pc.estado_proveedor);
+        setTieneProveedorAsignado(!!tieneProveedor);
       }
 
-      // Cargar comentarios del chat control/cliente con adjuntos de comentarios
+      // Cargar comentarios del chat control/cliente con campos de archivos
       const { data: comentariosData, error: comentariosError } = await supabase
         .from("comentarios")
-        .select(`
-          *,
-          adjuntos(id, tipo, nombre_archivo, storage_key, categoria)
-        `)
+        .select("*")
         .eq("incidencia_id", incidenciaId)
         .in("ambito", ["cliente", "ambos"])
-        .not("cuerpo", "is", null)
         .order("creado_en", { ascending: true });
 
       if (comentariosError) {
@@ -237,7 +276,7 @@ export default function ChatControlCliente() {
 
   const enviarComentario = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nuevoComentario.trim() || enviando || !tipoUsuario) return;
+    if (!nuevoComentario.trim() || enviando || !tipoUsuario || !autorId) return;
 
     try {
       setEnviando(true);
@@ -261,7 +300,7 @@ export default function ChatControlCliente() {
       const { data: userData } = await supabase.auth.getUser();
       const userEmail = userData.user?.email;
 
-      // Crear el comentario primero
+      // Crear el comentario con archivos adjuntos
       const { data: comentarioData, error } = await supabase
         .from("comentarios")
         .insert({
@@ -271,48 +310,21 @@ export default function ChatControlCliente() {
           autor_email: userEmail,
           autor_rol: tipoUsuario,
           cuerpo: nuevoComentario.trim(),
+          imagen_url: imagenUrl || null,
+          documento_url: documentoUrl || null,
         })
         .select()
         .single();
 
       if (error) {
-        console.error("Error enviando comentario:", error);
+        console.error("Error enviando comentario:", {
+          error: error,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        });
         return;
-      }
-
-      // Guardar archivos adjuntos si existen
-      const adjuntos = [];
-      
-      if (imagenUrl && comentarioData) {
-        adjuntos.push({
-          incidencia_id: incidenciaId,
-          comentario_id: comentarioData.id,
-          tipo: 'imagen',
-          categoria: 'imagen_comentario',
-          nombre_archivo: imagenSeleccionada?.name,
-          storage_key: imagenUrl
-        });
-      }
-
-      if (documentoUrl && comentarioData) {
-        adjuntos.push({
-          incidencia_id: incidenciaId,
-          comentario_id: comentarioData.id,
-          tipo: 'documento',
-          categoria: 'documento_comentario',
-          nombre_archivo: documentoSeleccionado?.name,
-          storage_key: documentoUrl
-        });
-      }
-
-      if (adjuntos.length > 0) {
-        const { error: adjuntosError } = await supabase
-          .from("adjuntos")
-          .insert(adjuntos);
-
-        if (adjuntosError) {
-          console.error("Error guardando adjuntos:", adjuntosError);
-        }
       }
 
       setNuevoComentario("");
@@ -329,7 +341,8 @@ export default function ChatControlCliente() {
   const subirArchivo = async (archivo: File, tipo: 'imagenes' | 'documentos') => {
     try {
       const nombreArchivo = `${Date.now()}_${archivo.name}`;
-      const ruta = `incidencias/${incidenciaId}/${tipo}/${nombreArchivo}`;
+      // Nueva estructura: incidencias/{num_solicitud}/comentarios/
+      const ruta = `incidencias/${incidencia?.num_solicitud}/comentarios/${nombreArchivo}`;
       
       console.log('Uploading file with path:', ruta);
       console.log('File details:', { name: archivo.name, size: archivo.size, type: archivo.type });
@@ -386,58 +399,93 @@ export default function ChatControlCliente() {
 
     try {
       let cleanPath = storageKey;
-      
-      // Extract potential filename from storage_key
-      let filename = '';
-      if (storageKey.includes('/')) {
-        const parts = storageKey.split('/');
-        filename = parts[parts.length - 1]; // Get the last part (filename)
-      } else {
-        filename = storageKey;
-      }
-      
+
       console.log('Original storage_key:', storageKey);
-      console.log('Extracted filename:', filename);
       
-      // Extract storage path from full URLs
+      // Extract storage path from full URLs (backward compatibility)
       if (storageKey.startsWith('https://')) {
-        // Handle double prefix URLs (comment attachments)
-        if (storageKey.includes('/storage/v1/object/public/incidencias/incidencias/')) {
-          const parts = storageKey.split('/storage/v1/object/public/incidencias/incidencias/');
-          if (parts.length > 1) {
-            cleanPath = parts[1];
-            console.log('Extracted path from double prefix URL:', cleanPath);
-          }
-        } 
-        // Handle single prefix URLs
-        else if (storageKey.includes('/storage/v1/object/public/incidencias/')) {
+        if (storageKey.includes('/storage/v1/object/public/incidencias/')) {
           const parts = storageKey.split('/storage/v1/object/public/incidencias/');
           if (parts.length > 1) {
             cleanPath = parts[1];
-            console.log('Extracted path from single prefix URL:', cleanPath);
+            console.log('Extracted path from URL:', cleanPath);
           }
         }
-      }
-      // For relative paths like "incidencias/00171/legacy/00171.jpg", use as-is
-      else {
-        console.log('Using relative path as-is:', cleanPath);
+      } else {
+        console.log('Using relative path:', cleanPath);
       }
       
       console.log('Attempting to create signed URL for path:', cleanPath);
-      
+
+      // Extract filename from path for potential fallback searches
+      const filename = cleanPath.split('/').pop() || cleanPath;
+      console.log('Extracted filename:', filename);
+
       // Create signed URL for private access (expires in 4 hours)
       const { data, error } = await supabase.storage
         .from('incidencias')
         .createSignedUrl(cleanPath, 14400);
-      
+
       if (error) {
         console.error('Error creating signed URL for path:', cleanPath, error);
-        
+
         // If direct path fails, try to find the file by listing bucket contents
         console.log('Direct path failed, searching for file:', filename);
         
         try {
-          console.log('Starting recursive file search...');
+          // Extract incidencia number from path for targeted search
+          const incidenciaNum = cleanPath.split('/')[1] || incidencia?.num_solicitud;
+          console.log('Starting targeted file search for incidencia:', incidenciaNum);
+
+          if (incidenciaNum) {
+            // Search in the specific incidencia folder and its subfolders
+            const searchPaths = [
+              `incidencias/${incidenciaNum}`,
+              `incidencias/${incidenciaNum}/imagenes`,
+              `incidencias/${incidenciaNum}/comentarios`,
+              `incidencias/${incidenciaNum}/presupuestos`
+            ];
+
+            let foundFile = null;
+
+            for (const searchPath of searchPaths) {
+              const { data: files, error: listError } = await supabase.storage
+                .from('incidencias')
+                .list(searchPath);
+
+              if (!listError && files) {
+                foundFile = files.find(file =>
+                  file.name === filename ||
+                  file.name.includes(filename) ||
+                  file.name.endsWith(filename.split('_').pop() || filename)
+                );
+
+                if (foundFile) {
+                  console.log(`Found file in ${searchPath}:`, foundFile.name);
+                  const correctedPath = `${searchPath}/${foundFile.name}`;
+
+                  // Try creating signed URL with corrected path
+                  const { data: correctedData, error: correctedError } = await supabase.storage
+                    .from('incidencias')
+                    .createSignedUrl(correctedPath, 14400);
+
+                  if (correctedData && !correctedError) {
+                    console.log('Successfully created signed URL with corrected path:', correctedPath);
+                    return correctedData.signedUrl;
+                  }
+                  break;
+                }
+              }
+            }
+
+            if (!foundFile) {
+              console.log('File not found in any incidencia subfolder');
+              return null;
+            }
+          }
+
+          // Fallback to original broad search if no incidencia number
+          console.log('Fallback: Starting broad file search...');
           const { data: files, error: listError } = await supabase.storage
             .from('incidencias')
             .list('');
@@ -517,6 +565,194 @@ export default function ChatControlCliente() {
     }
   };
 
+  const abrirModalProveedor = () => {
+    setMostrarModalProveedor(true);
+  };
+
+  const cerrarModalProveedor = () => {
+    setMostrarModalProveedor(false);
+  };
+
+  const asignarProveedorCompleto = async (formularioProveedor: any) => {
+    if (!formularioProveedor.proveedor_id) return;
+
+    try {
+      setEnviando(true);
+
+      // Obtener datos del usuario actual
+      const { data: userData } = await supabase.auth.getUser();
+      const userEmail = userData.user?.email;
+      let asignadoPorId = null;
+
+      if (userEmail) {
+        const { data: persona } = await supabase
+          .from("personas")
+          .select("id")
+          .eq("email", userEmail)
+          .maybeSingle();
+        asignadoPorId = persona?.id;
+      }
+
+      // Verificar si ya existe un caso activo
+      const { data: casoExistente } = await supabase
+        .from("proveedor_casos")
+        .select("id")
+        .eq("incidencia_id", incidenciaId)
+        .eq("activo", true)
+        .maybeSingle();
+
+      if (casoExistente) {
+        // Actualizar caso existente
+        const { error } = await supabase
+          .from("proveedor_casos")
+          .update({
+            proveedor_id: formularioProveedor.proveedor_id,
+            descripcion_proveedor: formularioProveedor.descripcion_proveedor,
+            prioridad: formularioProveedor.prioridad,
+            estado_proveedor: formularioProveedor.estado_proveedor,
+            asignado_por: asignadoPorId,
+            asignado_en: new Date().toISOString(),
+            actualizado_en: new Date().toISOString()
+          })
+          .eq("id", casoExistente.id);
+
+        if (error) throw error;
+      } else {
+        // Crear nuevo caso
+        const { error } = await supabase
+          .from("proveedor_casos")
+          .insert({
+            incidencia_id: incidenciaId,
+            proveedor_id: formularioProveedor.proveedor_id,
+            descripcion_proveedor: formularioProveedor.descripcion_proveedor,
+            prioridad: formularioProveedor.prioridad,
+            estado_proveedor: formularioProveedor.estado_proveedor,
+            asignado_por: asignadoPorId,
+            asignado_en: new Date().toISOString(),
+            activo: true
+          });
+
+        if (error) throw error;
+      }
+
+      // Cambiar estado de la incidencia a "En tramitación"
+      await supabase
+        .from("incidencias")
+        .update({ estado_cliente: "En tramitación" })
+        .eq("id", incidenciaId);
+
+      // Obtener nombre del proveedor para el comentario
+      const { data: proveedor } = await supabase
+        .from("instituciones")
+        .select("nombre")
+        .eq("id", formularioProveedor.proveedor_id)
+        .single();
+
+      if (proveedor) {
+        await supabase
+          .from("comentarios")
+          .insert({
+            incidencia_id: incidenciaId,
+            ambito: 'cliente',
+            autor_id: asignadoPorId,
+            autor_email: userEmail,
+            autor_rol: 'Control',
+            cuerpo: `La incidencia ha sido asignada al proveedor ${proveedor.nombre}.`,
+            es_sistema: true
+          });
+      }
+
+      cerrarModalProveedor();
+      cargarDatos(); // Recargar datos
+    } catch (error) {
+      console.error("Error asignando proveedor:", error);
+    } finally {
+      setEnviando(false);
+    }
+  };
+
+  const anularIncidencia = async () => {
+    if (!motivoAnulacion.trim() || !autorId) return;
+
+    try {
+      setEnviando(true);
+
+      const { data: userData } = await supabase.auth.getUser();
+      const userEmail = userData.user?.email;
+
+      // 1. Cambiar estado_cliente a "Anulada"
+      await supabase
+        .from("incidencias")
+        .update({ estado_cliente: "Anulada" })
+        .eq("id", incidenciaId);
+
+      // 2. Comentario en el chat del cliente
+      const mensajeAnulacion = `Incidencia anulada por Control. Motivo: ${motivoAnulacion}`;
+
+      await supabase
+        .from("comentarios")
+        .insert({
+          incidencia_id: incidenciaId,
+          ambito: 'cliente',
+          autor_id: autorId,
+          autor_email: userEmail,
+          autor_rol: 'Control',
+          cuerpo: mensajeAnulacion,
+          es_sistema: true
+        });
+
+      setMostrarModalAnular(false);
+      setMotivoAnulacion('');
+      cargarDatos();
+
+    } catch (error) {
+      console.error("Error anulando incidencia:", error);
+    } finally {
+      setEnviando(false);
+    }
+  };
+
+  const ponerEnEspera = async () => {
+    if (!motivoEspera.trim() || !autorId) return;
+
+    try {
+      setEnviando(true);
+
+      const { data: userData } = await supabase.auth.getUser();
+      const userEmail = userData.user?.email;
+
+      // 1. Cambiar estado_cliente a "En espera"
+      await supabase
+        .from("incidencias")
+        .update({ estado_cliente: "En espera" })
+        .eq("id", incidenciaId);
+
+      // 2. Comentario en el chat del cliente
+      const mensajeEspera = `Incidencia puesta en espera por Control. Motivo: ${motivoEspera}`;
+
+      await supabase
+        .from("comentarios")
+        .insert({
+          incidencia_id: incidenciaId,
+          ambito: 'cliente',
+          autor_id: autorId,
+          autor_email: userEmail,
+          autor_rol: 'Control',
+          cuerpo: mensajeEspera,
+          es_sistema: true
+        });
+
+      setMostrarModalEspera(false);
+      setMotivoEspera('');
+      cargarDatos();
+
+    } catch (error) {
+      console.error("Error poniendo incidencia en espera:", error);
+    } finally {
+      setEnviando(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: PALETA.fondo }}>
@@ -538,7 +774,7 @@ export default function ChatControlCliente() {
       {/* Header con logo */}
       <div className="flex justify-between items-center p-6 relative">
         <button
-          onClick={() => router.back()}
+          onClick={() => router.push("/incidencias")}
           className="text-white text-sm hover:underline"
         >
           ← Volver a incidencias
@@ -552,14 +788,13 @@ export default function ChatControlCliente() {
       {/* Sección de datos de incidencia - estilo más compacto y organizado */}
       <div className="px-6 pb-6">
         <div
-          className="rounded-lg mb-6 shadow-lg border"
+          className="rounded-lg mb-6 shadow-lg"
           style={{
-            backgroundColor: PALETA.card,
-            borderColor: PALETA.headerTable
+            backgroundColor: PALETA.card
           }}
         >
           <div
-            className="px-6 py-4 border-b"
+            className="px-6 py-4 border-b rounded-t-lg"
             style={{
               backgroundColor: PALETA.headerTable,
               color: PALETA.textoOscuro
@@ -673,13 +908,10 @@ export default function ChatControlCliente() {
                 {/* Sección de imágenes - solo mostrar si hay imágenes */}
                 {hasImages && (
                   <div className="lg:col-span-1">
-                    <div
-                      className="border rounded-lg p-4"
-                      style={{ borderColor: PALETA.headerTable }}
-                    >
-                      <h3 className="font-semibold mb-4 text-center" style={{ color: PALETA.textoOscuro }}>
-                        EVIDENCIA VISUAL
-                      </h3>
+                    <div className="rounded-lg p-4">
+                      <p className="py-2 font-semibold text-sm" style={{ color: PALETA.textoOscuro }}>
+                        Imagen:
+                      </p>
 
                       <div className="space-y-3">
                         {incidencia.adjuntos_principales.map((adjunto) => {
@@ -695,16 +927,13 @@ export default function ChatControlCliente() {
                                 <img
                                   src={imageUrl}
                                   alt={adjunto.nombre_archivo || "Imagen de la incidencia"}
-                                  className="w-full h-32 object-cover hover:scale-105 transition-transform duration-200"
+                                  className="w-full h-48 object-cover hover:scale-105 transition-transform duration-200"
                                   onError={(e) => {
                                     console.error('Error cargando imagen:', adjunto.storage_key);
                                     e.currentTarget.style.display = 'none';
                                   }}
                                 />
                               </div>
-                              <p className="text-xs mt-1 truncate" style={{ color: PALETA.textoOscuro }}>
-                                {adjunto.nombre_archivo || "Imagen adjunta"}
-                              </p>
                             </div>
                           );
                         })}
@@ -716,6 +945,87 @@ export default function ChatControlCliente() {
             );
           })()}
         </div>
+
+        {/* Acciones de Control - solo para Control */}
+        {tipoUsuario === 'Control' && (
+          <div className="mb-6">
+            <div
+              className="rounded-lg p-4 shadow-sm"
+              style={{
+                backgroundColor: PALETA.card
+              }}
+            >
+              <h3
+                className="text-center text-lg font-semibold mb-4"
+                style={{ color: PALETA.textoOscuro }}
+              >
+                ACCIONES DE CONTROL
+              </h3>
+
+              <div className="flex justify-center gap-4 flex-wrap">
+                {!tieneProveedorAsignado && (
+                  <button
+                    onClick={abrirModalProveedor}
+                    className="px-3 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity"
+                    style={{ backgroundColor: PALETA.verdeClaro }}
+                  >
+                    Asignar Proveedor
+                  </button>
+                )}
+
+                {/* Botón Poner en espera - disponible si no está anulada, ni en espera, ni tiene proveedor asignado */}
+                {incidencia.estado_cliente !== 'Anulada' && incidencia.estado_cliente !== 'En espera' && !tieneProveedorAsignado && (
+                  <button
+                    onClick={() => setMostrarModalEspera(true)}
+                    className="px-3 py-2 text-sm border bg-white rounded transition-colors"
+                    style={{
+                      borderColor: PALETA.verdeClaro,
+                      color: PALETA.verdeClaro
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = `${PALETA.verdeClaro}20`;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'white';
+                    }}
+                  >
+                    Poner en espera
+                  </button>
+                )}
+
+                {/* Botón Anular - disponible si no está anulada */}
+                {incidencia.estado_cliente !== 'Anulada' && (
+                  <button
+                    onClick={() => setMostrarModalAnular(true)}
+                    className="px-3 py-2 text-sm border border-red-500 text-red-600 bg-white rounded hover:bg-red-50 transition-colors"
+                  >
+                    Anular incidencia
+                  </button>
+                )}
+
+                {/* Botón Cambiar al Chat Proveedor - solo si hay proveedor asignado */}
+                {tieneProveedorAsignado && (
+                  <button
+                    onClick={() => router.push(`/incidencias/${incidenciaId}/chat-proveedor`)}
+                    className="px-3 py-2 text-sm border bg-white rounded transition-colors"
+                    style={{
+                      borderColor: PALETA.fondo,
+                      color: PALETA.fondo
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = `${PALETA.fondo}20`;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'white';
+                    }}
+                  >
+                    Cambiar al Chat Proveedor
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Sección de seguimiento */}
         <div className="mb-8">
@@ -730,9 +1040,27 @@ export default function ChatControlCliente() {
         </div>
 
         {/* Área de comentarios */}
-        <div className="bg-white rounded-lg p-6">
+        <div className="bg-white rounded-lg shadow-sm flex flex-col h-[700px] relative">
+          {/* Botón flotante para ir al último mensaje */}
+          {comentarios.length > 3 && (
+            <button
+              onClick={scrollToBottom}
+              className="absolute top-4 right-4 z-20 bg-white border-2 border-gray-300 rounded-full p-2 shadow-lg hover:shadow-xl transition-shadow hover:bg-gray-50"
+              title="Ir al último mensaje"
+            >
+              <svg
+                className="w-5 h-5 text-gray-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+              </svg>
+            </button>
+          )}
+
           {/* Lista de comentarios */}
-          <div className="space-y-4 mb-6 max-h-96 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto p-6 space-y-4">
             {comentarios.length === 0 ? (
               <div className="text-center text-gray-500 py-8">
                 No hay comentarios aún. ¡Añade el primero!
@@ -749,8 +1077,8 @@ export default function ChatControlCliente() {
                 >
                   <div
                     className={`rounded-lg p-3 ${
-                      comentario.es_sistema 
-                        ? 'max-w-full mx-4' 
+                      comentario.es_sistema
+                        ? 'max-w-full mx-4'
                         : 'max-w-xs md:max-w-md'
                     }`}
                     style={{
@@ -758,31 +1086,73 @@ export default function ChatControlCliente() {
                         ? '#fef3c7'
                         : comentario.autor_email === currentUserEmail
                           ? '#dcfce7'
-                          : "#f3f4f6"
+                          : getColorEmisor(comentario.autor_rol || 'cliente')
                     }}
                   >
                     {!comentario.es_sistema && (
-                      <div className="text-xs font-medium mb-1" style={{ 
-                        color: PALETA.fondo 
+                      <div className="text-xs font-medium mb-1" style={{
+                        color: PALETA.fondo
                       }}>
                         {`${comentario.autor_email} (${comentario.autor_rol})`}
                       </div>
                     )}
                     <div className="text-sm">{comentario.cuerpo}</div>
-                    
-                    {/* Mostrar adjuntos */}
-                    {comentario.adjuntos && comentario.adjuntos.length > 0 && (
+
+                    {/* Mostrar adjuntos desde campos imagen_url y documento_url */}
+                    {((comentario.imagen_url || comentario.documento_url) || (comentario.adjuntos && comentario.adjuntos.length > 0)) && (
                       <div className="mt-2 space-y-2">
-                        {comentario.adjuntos.map((adjunto) => (
+                        {/* Mostrar imagen_url del comentario */}
+                        {comentario.imagen_url && (
+                          (() => {
+                            const imageUrl = commentAttachmentUrls[`imagen_${comentario.id}`];
+                            return imageUrl ? (
+                              <img
+                                src={imageUrl}
+                                alt="Imagen adjunta al comentario"
+                                className="max-w-32 h-24 object-cover rounded border cursor-pointer hover:scale-105 transition-transform"
+                                onClick={() => window.open(imageUrl, '_blank')}
+                              />
+                            ) : (
+                              <div className="text-sm text-red-600">
+                                Error cargando imagen: {comentario.imagen_url}
+                              </div>
+                            );
+                          })()
+                        )}
+
+                        {/* Mostrar documento_url del comentario */}
+                        {comentario.documento_url && (
+                          (() => {
+                            const documentUrl = commentAttachmentUrls[`documento_${comentario.id}`];
+                            const fileName = comentario.documento_url.split('/').pop() || 'Documento adjunto';
+                            return documentUrl ? (
+                              <a
+                                href={documentUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-2 text-blue-600 hover:underline text-sm bg-blue-50 px-3 py-1 rounded"
+                              >
+                                📎 {fileName}
+                              </a>
+                            ) : (
+                              <div className="text-sm text-red-600">
+                                Error cargando documento: {comentario.documento_url}
+                              </div>
+                            );
+                          })()
+                        )}
+
+                        {/* Mantener compatibilidad con adjuntos legacy */}
+                        {comentario.adjuntos && comentario.adjuntos.map((adjunto) => (
                           <div key={adjunto.id}>
                             {adjunto.tipo === 'imagen' && (
                               (() => {
                                 const imageUrl = commentAttachmentUrls[adjunto.id];
                                 return imageUrl ? (
-                                  <img 
-                                    src={imageUrl} 
+                                  <img
+                                    src={imageUrl}
                                     alt={adjunto.nombre_archivo || "Imagen adjunta"}
-                                    className="max-w-sm rounded border cursor-pointer"
+                                    className="max-w-32 h-24 object-cover rounded border cursor-pointer hover:scale-105 transition-transform"
                                     onClick={() => window.open(imageUrl, '_blank')}
                                   />
                                 ) : null;
@@ -792,9 +1162,9 @@ export default function ChatControlCliente() {
                               (() => {
                                 const documentUrl = commentAttachmentUrls[adjunto.id] || adjunto.storage_key;
                                 return documentUrl ? (
-                                  <a 
-                                    href={documentUrl} 
-                                    target="_blank" 
+                                  <a
+                                    href={documentUrl}
+                                    target="_blank"
                                     rel="noopener noreferrer"
                                     className="inline-flex items-center gap-2 text-blue-600 hover:underline text-sm bg-blue-50 px-3 py-1 rounded"
                                   >
@@ -807,7 +1177,7 @@ export default function ChatControlCliente() {
                         ))}
                       </div>
                     )}
-                    
+
                     <div className="text-xs opacity-75 mt-1">
                       {new Date(comentario.creado_en).toLocaleDateString('es-ES', {
                         year: 'numeric',
@@ -821,10 +1191,12 @@ export default function ChatControlCliente() {
                 </div>
               ))
             )}
+            {/* Referencia para scroll al último mensaje */}
+            <div ref={messagesEndRef} />
           </div>
 
           {/* Formulario para añadir comentario */}
-          <form onSubmit={enviarComentario} className="space-y-4">
+          <form onSubmit={enviarComentario} className="border-t p-4 space-y-4">
             <textarea
               value={nuevoComentario}
               onChange={(e) => setNuevoComentario(e.target.value)}
@@ -964,6 +1336,128 @@ export default function ChatControlCliente() {
           Software de gestión de incidencias para los centros de Gent Gran de Fundació La Caixa
         </p>
       </div>
+
+      <ModalAsignarProveedor
+        isOpen={mostrarModalProveedor}
+        onClose={cerrarModalProveedor}
+        onSubmit={asignarProveedorCompleto}
+        descripcionInicial={incidencia?.descripcion || ''}
+        enviando={enviando}
+      />
+
+      {/* Modal para anular incidencia */}
+      {mostrarModalAnular && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div
+            className="rounded-lg p-8 max-w-md w-full mx-4 shadow"
+            style={{ backgroundColor: PALETA.card }}
+          >
+            <h3 className="text-xl font-semibold mb-6" style={{ color: PALETA.textoOscuro }}>
+              Anular Incidencia
+            </h3>
+
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600">
+                Esta acción anulará la incidencia completamente. Por favor, proporciona el motivo:
+              </p>
+
+              <div>
+                <label className="block text-sm font-medium mb-2" style={{ color: PALETA.textoOscuro }}>
+                  Motivo de anulación *
+                </label>
+                <textarea
+                  value={motivoAnulacion}
+                  onChange={(e) => setMotivoAnulacion(e.target.value)}
+                  className="w-full h-20 rounded border px-3 py-2 text-sm outline-none resize-none"
+                  placeholder=""
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                type="button"
+                onClick={() => {
+                  setMostrarModalAnular(false);
+                  setMotivoAnulacion('');
+                }}
+                className="px-4 py-2 text-sm rounded border hover:bg-gray-50 transition-colors"
+                style={{ color: PALETA.textoOscuro, borderColor: '#d1d5db' }}
+                disabled={enviando}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={anularIncidencia}
+                disabled={!motivoAnulacion.trim() || enviando}
+                className="px-6 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity disabled:opacity-50"
+                style={{ backgroundColor: PALETA.fondo }}
+              >
+                {enviando ? 'Anulando...' : 'Anular Incidencia'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal para poner en espera */}
+      {mostrarModalEspera && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div
+            className="rounded-lg p-8 max-w-md w-full mx-4 shadow"
+            style={{ backgroundColor: PALETA.card }}
+          >
+            <h3 className="text-xl font-semibold mb-6" style={{ color: PALETA.textoOscuro }}>
+              Poner en Espera
+            </h3>
+
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600">
+                Esta acción pondrá la incidencia en espera. Por favor, proporciona el motivo:
+              </p>
+
+              <div>
+                <label className="block text-sm font-medium mb-2" style={{ color: PALETA.textoOscuro }}>
+                  Motivo para poner en espera *
+                </label>
+                <textarea
+                  value={motivoEspera}
+                  onChange={(e) => setMotivoEspera(e.target.value)}
+                  className="w-full h-20 rounded border px-3 py-2 text-sm outline-none resize-none"
+                  placeholder=""
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                type="button"
+                onClick={() => {
+                  setMostrarModalEspera(false);
+                  setMotivoEspera('');
+                }}
+                className="px-4 py-2 text-sm rounded border hover:bg-gray-50 transition-colors"
+                style={{ color: PALETA.textoOscuro, borderColor: '#d1d5db' }}
+                disabled={enviando}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={ponerEnEspera}
+                disabled={!motivoEspera.trim() || enviando}
+                className="px-6 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity disabled:opacity-50"
+                style={{ backgroundColor: PALETA.fondo }}
+              >
+                {enviando ? 'Poniendo en espera...' : 'Poner en Espera'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import { registrarCambioEstado } from "@/lib/historialEstados";
+import { registrarCambioEstado, obtenerHistorialEstados } from "@/lib/historialEstados";
+import SearchableSelect from "@/components/SearchableSelect";
 
 // Paleta de colores consistente
 const PALETA = {
@@ -36,6 +37,8 @@ type Comentario = {
   creado_en: string;
   es_sistema?: boolean | null;
   dedupe_key?: string | null;
+  imagen_url?: string | null;
+  documento_url?: string | null;
   adjuntos?: Adjunto[];
 };
 
@@ -70,6 +73,8 @@ export default function ChatProveedor() {
   const [enviando, setEnviando] = useState(false);
   const [tipoUsuario, setTipoUsuario] = useState<string | null>(null);
   const [nombreUsuario, setNombreUsuario] = useState<string>("");
+  const [direccionCentro, setDireccionCentro] = useState<string | null>(null);
+
   const [autorId, setAutorId] = useState<string | null>(null);
   const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
   const [commentAttachmentUrls, setCommentAttachmentUrls] = useState<Record<string, string>>({});
@@ -87,14 +92,34 @@ export default function ChatProveedor() {
   const [mostrarModalResolver, setMostrarModalResolver] = useState(false);
   const [solucionAplicada, setSolucionAplicada] = useState('');
   const [tieneOfertaAprobada, setTieneOfertaAprobada] = useState(false);
+
+  // Estados para valoración económica
   const [importeResolucion, setImporteResolucion] = useState('');
+  const [conceptoResolucion, setConceptoResolucion] = useState('');
+  const [notasAdicionales, setNotasAdicionales] = useState('');
   const [imagenResolucion, setImagenResolucion] = useState<File | null>(null);
   const [documentoResolucion, setDocumentoResolucion] = useState<File | null>(null);
-  const [notasResolucion, setNotasResolucion] = useState('');
-  const [mostrarModalValorar, setMostrarModalValorar] = useState(false);
-  const [valoracion, setValoracion] = useState('');
-  const [comentariosValoracion, setComentariosValoracion] = useState('');
+  const [importeSinIva, setImporteSinIva] = useState('');
+  const [importeConIva, setImporteConIva] = useState('');
+  const [porcentajeIva, setPorcentajeIva] = useState('');
+  const [busquedaIva, setBusquedaIva] = useState('');
+  const [mostrarOpcionesIva, setMostrarOpcionesIva] = useState(false);
+
+  const opcionesIva = [
+    { valor: '0', texto: '0% (Exento)' },
+    { valor: '4', texto: '4% (Superreducido)' },
+    { valor: '10', texto: '10% (Reducido)' },
+    { valor: '21', texto: '21% (General)' }
+  ];
+
+  const opcionesFiltradas = busquedaIva.trim() === ''
+    ? opcionesIva
+    : opcionesIva.filter(opcion =>
+        opcion.texto.toLowerCase().includes(busquedaIva.toLowerCase())
+      );
+  const [documentoJustificativo, setDocumentoJustificativo] = useState<File | null>(null);
   const [proveedorAsignado, setProveedorAsignado] = useState(false);
+  const [fechaAsignacionProveedor, setFechaAsignacionProveedor] = useState<string | null>(null);
   const [visitaCalendarizada, setVisitaCalendarizada] = useState<{
     fecha: string;
     horario: string;
@@ -103,14 +128,104 @@ export default function ChatProveedor() {
   // Estados para modales de Control
   const [mostrarModalAnular, setMostrarModalAnular] = useState(false);
   const [mostrarModalCerrar, setMostrarModalCerrar] = useState(false);
-  const [mostrarModalPendienteValoracion, setMostrarModalPendienteValoracion] = useState(false);
+  const [mostrarModalValorarIncidencia, setMostrarModalValorarIncidencia] = useState(false);
   const [motivoAnulacion, setMotivoAnulacion] = useState('');
   const [motivoCierre, setMotivoCierre] = useState('');
   const [presupuestoActual, setPresupuestoActual] = useState<any>(null);
+  const [tuvoOfertaAprobada, setTuvoOfertaAprobada] = useState(false);
   const [cargandoPresupuesto, setCargandoPresupuesto] = useState(false);
   const [nombreProveedor, setNombreProveedor] = useState<string | null>(null);
+  const [documentoPresupuestoUrl, setDocumentoPresupuestoUrl] = useState<string | null>(null);
+  const [mostrarModalMotivoRevision, setMostrarModalMotivoRevision] = useState(false);
+  const [motivoRevision, setMotivoRevision] = useState('');
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
 
   const incidenciaId = params.id as string;
+
+  // Función para hacer scroll al último mensaje
+  const scrollToBottom = () => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+  };
+
+  // Función para generar URL firmada del documento
+  const getSignedDocumentUrl = async (storageKey: string) => {
+    try {
+      let cleanPath = storageKey;
+
+      // Limpiar la ruta si viene con prefijos
+      if (storageKey.startsWith('https://')) {
+        // Extraer la ruta del storage de URLs completas
+        if (storageKey.includes('/storage/v1/object/public/incidencias/')) {
+          const parts = storageKey.split('/storage/v1/object/public/incidencias/');
+          if (parts.length > 1) {
+            cleanPath = parts[1];
+          }
+        }
+      }
+
+      // Crear URL firmada
+      const { data, error } = await supabase.storage
+        .from('incidencias')
+        .createSignedUrl(cleanPath, 14400); // 4 horas
+
+      if (error) {
+        console.error('Error creando URL firmada:', error);
+        return null;
+      }
+
+      return data.signedUrl;
+    } catch (error) {
+      console.error('Error generando URL firmada:', error);
+      return null;
+    }
+  };
+
+  // Función para abrir el modal y cargar el presupuesto
+  const abrirModalGestionPresupuesto = async () => {
+    try {
+      setCargandoPresupuesto(true);
+      setMostrarModalGestionPresupuesto(true);
+      setDocumentoPresupuestoUrl(null);
+
+      console.log("Buscando presupuesto para incidencia_id:", incidenciaId);
+
+      // Cargar presupuesto de la incidencia (el más reciente)
+      const { data: presupuestos, error } = await supabase
+        .from("presupuestos")
+        .select(`
+          *,
+          instituciones(nombre),
+          incidencias(num_solicitud, descripcion)
+        `)
+        .eq("incidencia_id", incidenciaId)
+        .order("creado_en", { ascending: false })
+        .limit(1);
+
+      const presupuesto = presupuestos && presupuestos.length > 0 ? presupuestos[0] : null;
+
+      console.log("Resultado de la consulta:", { presupuesto, error });
+
+      if (error) {
+        console.error("Error cargando presupuesto:", error);
+        return;
+      }
+
+      setPresupuestoActual(presupuesto);
+
+      // Si hay documento adjunto, cargar la URL firmada
+      if (presupuesto?.presupuesto_detallado_url) {
+        const signedUrl = await getSignedDocumentUrl(presupuesto.presupuesto_detallado_url);
+        setDocumentoPresupuestoUrl(signedUrl);
+      }
+    } catch (error) {
+      console.error("Error abriendo modal de gestión de presupuesto:", error);
+    } finally {
+      setCargandoPresupuesto(false);
+    }
+  };
 
   useEffect(() => {
     cargarDatos();
@@ -135,12 +250,13 @@ export default function ChatProveedor() {
     }
   }, [incidencia?.adjuntos_principales]);
 
-  // Cargar URLs de adjuntos de comentarios
+  // Cargar URLs de adjuntos de comentarios (desde adjuntos y campos imagen_url/documento_url)
   useEffect(() => {
     if (comentarios.length > 0) {
       const loadCommentAttachmentUrls = async () => {
         const urls: Record<string, string> = {};
         for (const comentario of comentarios) {
+          // Cargar adjuntos tradicionales
           if (comentario.adjuntos) {
             for (const adjunto of comentario.adjuntos) {
               if (adjunto.storage_key) {
@@ -151,12 +267,61 @@ export default function ChatProveedor() {
               }
             }
           }
+          // Cargar imagen_url del comentario
+          if (comentario.imagen_url) {
+            const url = await getSignedImageUrl(comentario.imagen_url);
+            if (url) {
+              urls[`imagen_${comentario.id}`] = url;
+            }
+          }
+          // Cargar documento_url del comentario
+          if (comentario.documento_url) {
+            const url = await getSignedImageUrl(comentario.documento_url);
+            if (url) {
+              urls[`documento_${comentario.id}`] = url;
+            }
+          }
         }
         setCommentAttachmentUrls(urls);
       };
       loadCommentAttachmentUrls();
     }
   }, [comentarios]);
+
+  // Limpiar documento justificativo cuando el importe coincide con la oferta aprobada
+  useEffect(() => {
+    if (tieneOfertaAprobada && presupuestoActual && importeSinIva) {
+      const importeActual = parseFloat(importeSinIva) || 0;
+      const importeOferta = presupuestoActual?.importe_total_sin_iva ? parseFloat(presupuestoActual.importe_total_sin_iva) : 0;
+      const importeCoincide = importeActual > 0 && importeActual === importeOferta;
+
+      if (importeCoincide && documentoJustificativo) {
+        setDocumentoJustificativo(null);
+      }
+    }
+  }, [tieneOfertaAprobada, presupuestoActual, importeSinIva, documentoJustificativo]);
+
+  const cargarDireccionCentro = async (institucionId?: string, nombreCentro?: string) => {
+    try {
+      let query = supabase.from("instituciones").select("direccion");
+
+      if (institucionId) {
+        query = query.eq("id", institucionId);
+      } else if (nombreCentro) {
+        query = query.eq("nombre", nombreCentro);
+      } else {
+        return;
+      }
+
+      const { data, error } = await query.maybeSingle();
+
+      if (!error && data?.direccion) {
+        setDireccionCentro(data.direccion);
+      }
+    } catch (error) {
+      console.error("Error cargando dirección del centro:", error);
+    }
+  };
 
   const cargarDatos = async () => {
     try {
@@ -213,7 +378,7 @@ export default function ChatProveedor() {
           hora,
           imagen_url,
           catalogacion,
-          instituciones(nombre)
+          instituciones(nombre, direccion)
         `)
         .eq("id", incidenciaId)
         .single();
@@ -225,50 +390,38 @@ export default function ChatProveedor() {
       let asignado = false;
 
       if (incidenciaData) {
-        // Para usuarios de Control, verificar si existe alguna asignación activa
-        if (persona?.rol === 'Control') {
-          const { data: proveedorCaso } = await supabase
+        // Permitir acceso a usuarios Control y Proveedor
+        if (persona?.rol === 'Control' || persona?.rol === 'Proveedor') {
+          asignado = true;
+
+          // Obtener datos del proveedor (fecha de asignación, estado y prioridad)
+          console.log('Buscando proveedor_casos para incidencia:', incidenciaId);
+
+          const { data: proveedorCaso, error: proveedorError } = await supabase
             .from("proveedor_casos")
-            .select("estado_proveedor, proveedor_id, prioridad, descripcion_proveedor")
+            .select("asignado_en, estado_proveedor, prioridad, descripcion_proveedor, activo")
             .eq("incidencia_id", incidenciaId)
             .eq("activo", true)
             .maybeSingle();
 
+          console.log('Resultado proveedor_casos:', { proveedorCaso, proveedorError });
+
           if (proveedorCaso) {
-            estadoProveedor = proveedorCaso.estado_proveedor;
-            prioridadProveedor = proveedorCaso.prioridad;
-            descripcionProveedor = proveedorCaso.descripcion_proveedor;
-            asignado = true;
-
-            // Obtener el nombre del proveedor
-            if (proveedorCaso.proveedor_id) {
-              const { data: institacion } = await supabase
-                .from("instituciones")
-                .select("nombre")
-                .eq("id", proveedorCaso.proveedor_id)
-                .maybeSingle();
-
-              if (institacion?.nombre) {
-                setNombreProveedor(institacion.nombre);
-              }
+            if (proveedorCaso.asignado_en) {
+              setFechaAsignacionProveedor(proveedorCaso.asignado_en);
             }
-          }
-        }
-        // Para proveedores, verificar si están asignados a esta incidencia
-        else if (personaInst?.institucion_id) {
-          const { data: proveedorCaso } = await supabase
-            .from("proveedor_casos")
-            .select("estado_proveedor, prioridad, descripcion_proveedor")
-            .eq("incidencia_id", incidenciaId)
-            .eq("proveedor_id", personaInst.institucion_id)
-            .eq("activo", true)
-            .maybeSingle();
-
-          if (proveedorCaso) {
             estadoProveedor = proveedorCaso.estado_proveedor;
             prioridadProveedor = proveedorCaso.prioridad;
             descripcionProveedor = proveedorCaso.descripcion_proveedor;
-            asignado = true;
+
+            console.log('Datos asignados:', {
+              estadoProveedor,
+              prioridadProveedor,
+              descripcionProveedor,
+              fechaAsignacion: proveedorCaso.asignado_en
+            });
+          } else {
+            console.log('No se encontró proveedor_casos o está inactivo');
           }
         }
       }
@@ -309,17 +462,29 @@ export default function ChatProveedor() {
           descripcion_proveedor: descripcionProveedor,
           adjuntos_principales: adjuntosPrincipales
         });
+
+        // Cargar dirección del centro
+        if (incidenciaData.institucion_id) {
+          await cargarDireccionCentro(incidenciaData.institucion_id);
+        } else if (incidenciaData.centro) {
+          await cargarDireccionCentro(undefined, incidenciaData.centro);
+        }
       }
 
-      // Verificar si existe oferta aprobada para esta incidencia
+      // Verificar si existe oferta aprobada para esta incidencia y cargar todos sus datos
       const { data: ofertaData } = await supabase
         .from("presupuestos")
-        .select("estado")
+        .select("*")
         .eq("incidencia_id", incidenciaId)
         .eq("estado", "aprobado")
         .maybeSingle();
 
       setTieneOfertaAprobada(!!ofertaData);
+
+      // Si hay oferta aprobada, cargar los datos del presupuesto para comparación
+      if (ofertaData) {
+        setPresupuestoActual(ofertaData);
+      }
 
       // Cargar comentarios del chat proveedor con adjuntos de comentarios
       const { data: comentariosData, error: comentariosError } = await supabase
@@ -339,6 +504,12 @@ export default function ChatProveedor() {
         setComentarios(comentariosData || []);
       }
 
+      // Verificar si alguna vez se aprobó una oferta
+      const historial = await obtenerHistorialEstados(incidenciaId);
+      const tuvoOfertaAprobadaEnHistorial = historial.some(registro =>
+        registro.tipo_estado === 'proveedor' && registro.estado_nuevo === 'Oferta aprobada'
+      );
+      setTuvoOfertaAprobada(tuvoOfertaAprobadaEnHistorial);
 
     } catch (error) {
       console.error("Error:", error);
@@ -441,7 +612,8 @@ export default function ChatProveedor() {
   const subirArchivo = async (archivo: File, tipo: 'imagenes' | 'documentos') => {
     try {
       const nombreArchivo = `${Date.now()}_${archivo.name}`;
-      const ruta = `incidencias/${incidenciaId}/${tipo}/${nombreArchivo}`;
+      // Nueva estructura: incidencias/{num_solicitud}/comentarios/
+      const ruta = `incidencias/${incidencia?.num_solicitud}/comentarios/${nombreArchivo}`;
       
       console.log('Uploading file with path:', ruta);
       console.log('File details:', { name: archivo.name, size: archivo.size, type: archivo.type });
@@ -687,7 +859,7 @@ export default function ChatProveedor() {
         : 'horario de tarde';
 
       // 4. Agregar comentario visible en ambos chats
-      const mensajeVisita = `Visita programada para el ${fechaFormateada} en ${horarioTexto}. El estado ha cambiado a "En resolución".`;
+      const mensajeVisita = `Visita programada para el ${fechaFormateada} en ${horarioTexto}.`;
 
       // Comentario con ámbito 'ambos' - se verá en ambos chats
       const { error: errorComentario } = await supabase
@@ -741,7 +913,8 @@ export default function ChatProveedor() {
       let documentoUrl = '';
       if (documentoPresupuesto) {
         const nombreArchivo = `${Date.now()}_${documentoPresupuesto.name}`;
-        const ruta = `presupuestos/${incidenciaId}/${nombreArchivo}`;
+        // Nueva estructura: incidencias/{num_solicitud}/presupuestos/
+        const ruta = `incidencias/${incidencia?.num_solicitud}/presupuestos/${nombreArchivo}`;
 
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from('incidencias')
@@ -815,11 +988,15 @@ export default function ChatProveedor() {
       });
 
       // 6. Comentario en chat de proveedor con formato lista
+      const descripcionTruncada = descripcionPresupuesto.length > 100
+        ? descripcionPresupuesto.substring(0, 100) + '...'
+        : descripcionPresupuesto;
+
       const mensajePresupuesto = `Datos del presupuesto:
 • Fecha estimada de inicio: ${new Date(fechaEstimadaInicio).toLocaleDateString('es-ES')}
 • Duración estimada: ${duracionEstimada}
 • Importe total sin IVA: ${importeTotalSinIva}€
-• Descripción: ${descripcionPresupuesto}
+• Descripción: ${descripcionTruncada}
 
 Documento adjunto: ${documentoPresupuesto.name}`;
 
@@ -878,14 +1055,14 @@ Documento adjunto: ${documentoPresupuesto.name}`;
   };
 
   const resolverIncidencia = async () => {
-    // Validación condicional
-    const camposObligatorios = [solucionAplicada, autorId];
-    if (!tieneOfertaAprobada) {
-      camposObligatorios.push(importeResolucion);
+    // Solo validar que existe solución aplicada
+    if (!solucionAplicada || !solucionAplicada.trim()) {
+      alert('Por favor, complete la solución aplicada');
+      return;
     }
 
-    if (camposObligatorios.some(campo => !campo)) {
-      alert('Por favor, complete todos los campos obligatorios');
+    if (!autorId) {
+      alert('Error: no se pudo identificar el usuario');
       return;
     }
 
@@ -949,30 +1126,27 @@ Documento adjunto: ${documentoPresupuesto.name}`;
         metadatosResolucion.importe_resolucion = parseFloat(importeResolucion);
       }
 
-      if (notasResolucion) {
-        metadatosResolucion.notas_adicionales = notasResolucion;
-      }
 
-      await registrarCambioEstado([
-        {
-          incidenciaId,
-          tipoEstado: 'proveedor',
-          estadoAnterior: estadoProveedorAnterior,
-          estadoNuevo: 'Resuelta',
-          autorId,
-          motivo: 'Incidencia resuelta por proveedor',
-          metadatos: metadatosResolucion
-        },
-        {
-          incidenciaId,
-          tipoEstado: 'cliente',
-          estadoAnterior: estadoClienteAnterior,
-          estadoNuevo: 'Resuelta',
-          autorId,
-          motivo: 'Incidencia resuelta por proveedor',
-          metadatos: metadatosResolucion
-        }
-      ]);
+      // Registrar cambios de estado individualmente
+      await registrarCambioEstado({
+        incidenciaId,
+        tipoEstado: 'proveedor',
+        estadoAnterior: estadoProveedorAnterior || undefined,
+        estadoNuevo: 'Resuelta',
+        autorId,
+        motivo: 'Incidencia resuelta por proveedor',
+        metadatos: metadatosResolucion
+      });
+
+      await registrarCambioEstado({
+        incidenciaId,
+        tipoEstado: 'cliente',
+        estadoAnterior: estadoClienteAnterior || undefined,
+        estadoNuevo: 'Resuelta',
+        autorId,
+        motivo: 'Incidencia resuelta por proveedor',
+        metadatos: metadatosResolucion
+      });
 
       // 5. Crear comentario con información de resolución
       let mensajeSolucion = `Incidencia resuelta
@@ -983,10 +1157,6 @@ Solución aplicada: ${solucionAplicada}`;
 Importe total sin IVA: ${importeResolucion}€`;
       }
 
-      if (notasResolucion) {
-        mensajeSolucion += `
-Notas adicionales: ${notasResolucion}`;
-      }
 
       const { data: comentarioCreado, error: comentarioError } = await supabase
         .from("comentarios")
@@ -1042,13 +1212,40 @@ Notas adicionales: ${notasResolucion}`;
         }
       }
 
-      // 7. Limpiar formulario y cerrar modal
+      // 7. Crear comentario para ambos chats indicando que la incidencia ha sido resuelta
+      const { data: comentarioCliente, error: comentarioClienteError } = await supabase
+        .from("comentarios")
+        .insert({
+          incidencia_id: incidenciaId,
+          ambito: 'ambos',
+          autor_id: autorId,
+          autor_email: userEmail || 'proveedor@sistema.com',
+          autor_rol: 'Proveedor',
+          cuerpo: "La incidencia ha sido resuelta técnicamente.",
+          es_sistema: true
+        })
+        .select()
+        .single();
+
+      if (comentarioClienteError) {
+        console.error("Error creando comentario para cliente:", {
+          error: comentarioClienteError,
+          message: comentarioClienteError.message,
+          details: comentarioClienteError.details,
+          hint: comentarioClienteError.hint,
+          code: comentarioClienteError.code
+        });
+        // No lanzamos el error para que no interrumpa el proceso
+      } else {
+        console.log("Comentario para cliente creado exitosamente:", comentarioCliente);
+      }
+
+      // 8. Limpiar formulario y cerrar modal
       setMostrarModalResolver(false);
       setSolucionAplicada('');
       setImporteResolucion('');
       setImagenResolucion(null);
       setDocumentoResolucion(null);
-      setNotasResolucion('');
       cargarDatos();
 
     } catch (error) {
@@ -1060,7 +1257,126 @@ Notas adicionales: ${notasResolucion}`;
   };
 
   const valorarIncidencia = async () => {
-    if (!valoracion || !autorId) return;
+    if (!importeResolucion || !importeResolucion.trim() || !conceptoResolucion || !conceptoResolucion.trim()) {
+      alert('Por favor, complete el importe y concepto de resolución');
+      return;
+    }
+
+    try {
+      setEnviando(true);
+
+      // Obtener datos del usuario actual
+      const { data: userData } = await supabase.auth.getUser();
+      const userEmail = userData.user?.email;
+
+      if (!userEmail) {
+        throw new Error('No se pudo obtener el email del usuario');
+      }
+
+      // Obtener ID del usuario
+      const { data: persona } = await supabase
+        .from("personas")
+        .select("id")
+        .eq("email", userEmail)
+        .single();
+
+      if (!persona) {
+        throw new Error('No se encontró el usuario');
+      }
+
+      const autorId = persona.id;
+
+      // 1. Cambiar estado del proveedor a "Valorada"
+      await supabase
+        .from("proveedor_casos")
+        .update({ estado_proveedor: "Valorada" })
+        .eq("incidencia_id", incidenciaId)
+        .eq("activo", true);
+
+      // 2. Registrar el cambio de estado en el historial
+      await supabase
+        .from('historial_estados')
+        .insert({
+          incidencia_id: incidenciaId,
+          tipo_estado: 'proveedor',
+          estado_anterior: 'Resuelta',
+          estado_nuevo: 'Valorada',
+          autor_id: autorId,
+          motivo: 'Valoración económica realizada por proveedor',
+          metadatos: {
+            importe_resolucion: parseFloat(importeResolucion),
+            concepto_resolucion: conceptoResolucion,
+            notas_adicionales: notasAdicionales,
+            accion: 'valorar_incidencia'
+          }
+        });
+
+      // 3. Crear comentario del proveedor con la valoración
+      let mensajeValoracion = `💰 Valoración económica realizada
+Importe: €${importeResolucion}
+Concepto: ${conceptoResolucion}`;
+
+      if (notasAdicionales && notasAdicionales.trim()) {
+        mensajeValoracion += `
+Notas adicionales: ${notasAdicionales}`;
+      }
+
+      await supabase
+        .from("comentarios")
+        .insert({
+          incidencia_id: incidenciaId,
+          ambito: 'proveedor',
+          autor_id: autorId,
+          autor_email: userEmail,
+          autor_rol: 'Proveedor',
+          cuerpo: mensajeValoracion,
+          es_sistema: false
+        });
+
+      // 4. Crear comentario del sistema para el cliente
+      await supabase
+        .from("comentarios")
+        .insert({
+          incidencia_id: incidenciaId,
+          ambito: 'cliente',
+          autor_id: autorId,
+          autor_email: userEmail,
+          autor_rol: 'Proveedor',
+          cuerpo: `La incidencia ha sido valorada económicamente por el proveedor. Importe: €${importeResolucion}`,
+          es_sistema: true
+        });
+
+      // 5. Limpiar formulario y cerrar modal
+      setMostrarModalValorarIncidencia(false);
+      setImporteResolucion('');
+      setConceptoResolucion('');
+      setNotasAdicionales('');
+      cargarDatos();
+
+      alert('Valoración realizada correctamente');
+
+    } catch (error) {
+      console.error("Error valorando incidencia:", error);
+      alert('Error al valorar la incidencia. Por favor, inténtelo de nuevo.');
+    } finally {
+      setEnviando(false);
+    }
+  };
+
+  const valoracionEconomica = async () => {
+    // Validar si el documento es requerido
+    const importeActual = parseFloat(importeSinIva) || 0;
+    const importeOferta = presupuestoActual?.importe_total_sin_iva ? parseFloat(presupuestoActual.importe_total_sin_iva) : 0;
+    const importeHaCambiado = tieneOfertaAprobada && importeActual !== importeOferta;
+    const importeCoincide = tieneOfertaAprobada && !importeHaCambiado && importeActual > 0;
+    const documentoRequerido = !tieneOfertaAprobada || importeHaCambiado;
+
+    // Si el importe coincide, no requiere documento
+    if (importeCoincide) {
+      if (!importeSinIva || !importeConIva || !autorId) return;
+    } else {
+      if (!importeSinIva || !importeConIva || (documentoRequerido && !documentoJustificativo) || !autorId) return;
+    }
 
     try {
       setEnviando(true);
@@ -1068,46 +1384,75 @@ Notas adicionales: ${notasResolucion}`;
       const { data: userData } = await supabase.auth.getUser();
       const userEmail = userData.user?.email;
 
-      // 1. Cambiar estado_proveedor a "Valorada"
+      // 1. Subir documento justificativo si existe y es requerido
+      let documentoUrl = null;
+      if (documentoJustificativo && !importeCoincide) {
+        const fileName = `${Date.now()}-${documentoJustificativo.name}`;
+        const storagePath = `${incidencia?.num_solicitud}/comentarios/${fileName}`;
+
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('incidencias')
+          .upload(storagePath, documentoJustificativo);
+
+        if (uploadError) {
+          throw uploadError;
+        }
+
+        const { data: urlData } = supabase.storage
+          .from('incidencias')
+          .getPublicUrl(storagePath);
+
+        documentoUrl = urlData.publicUrl;
+      }
+
+      // 2. Cambiar estado_proveedor a "Valorada"
       await supabase
         .from("proveedor_casos")
         .update({ estado_proveedor: "Valorada" })
         .eq("incidencia_id", incidenciaId)
         .eq("activo", true);
 
-      // 2. Comentarios para ambos chats
-      const mensajeValoracion = `Valoración del proveedor: ${valoracion}/5${comentariosValoracion ? `\nComentarios: ${comentariosValoracion}` : ''}`;
+      // 3. Crear mensaje de valoración económica
+      const mensajeValoracion = `Valoración económica completada:
+• Importe sin IVA: €${importeSinIva}
+• Porcentaje IVA: ${porcentajeIva}%
+• Importe con IVA: €${importeConIva}${tieneOfertaAprobada ? '\n• Incidencia con oferta previa aprobada' : ''}`;
 
-      await supabase
-        .from("comentarios")
-        .insert([
-          {
-            incidencia_id: incidenciaId,
-            ambito: 'proveedor',
-            autor_id: autorId,
-            autor_email: userEmail,
-            autor_rol: 'Proveedor',
-            cuerpo: mensajeValoracion,
-            es_sistema: true
-          },
-          {
-            incidencia_id: incidenciaId,
-            ambito: 'cliente',
-            autor_id: autorId,
-            autor_email: userEmail,
-            autor_rol: 'Proveedor',
-            cuerpo: `El proveedor ha completado la valoración de la incidencia:\n${mensajeValoracion}`,
-            es_sistema: true
-          }
-        ]);
+      // 4. Insertar comentarios
+      const comentariosData = [
+        {
+          incidencia_id: incidenciaId,
+          ambito: 'proveedor',
+          autor_id: autorId,
+          autor_email: userEmail,
+          autor_rol: 'Proveedor',
+          cuerpo: mensajeValoracion,
+          documento_url: documentoUrl,
+          es_sistema: true
+        },
+        {
+          incidencia_id: incidenciaId,
+          ambito: 'cliente',
+          autor_id: autorId,
+          autor_email: userEmail,
+          autor_rol: 'Proveedor',
+          cuerpo: `El proveedor ha completado la valoración económica de la incidencia:\n${mensajeValoracion}`,
+          documento_url: documentoUrl,
+          es_sistema: true
+        }
+      ];
 
-      setMostrarModalValorar(false);
-      setValoracion('');
-      setComentariosValoracion('');
+      await supabase.from("comentarios").insert(comentariosData);
+
+      // 5. Limpiar estados y cerrar modal
+      setMostrarModalValorarIncidencia(false);
+      setImporteSinIva('');
+      setImporteConIva('');
+      setDocumentoJustificativo(null);
       cargarDatos();
 
     } catch (error) {
-      console.error("Error valorando incidencia:", error);
+      console.error("Error en valoración económica:", error);
     } finally {
       setEnviando(false);
     }
@@ -1206,66 +1551,33 @@ Notas adicionales: ${notasResolucion}`;
     }
   };
 
-  const marcarPendienteValoracion = async () => {
-    if (!autorId) return;
-
-    try {
-      setEnviando(true);
-
-      const { data: userData } = await supabase.auth.getUser();
-      const userEmail = userData.user?.email;
-
-      // 1. Cambiar estado_proveedor a "Pendiente valoración"
-      await supabase
-        .from("proveedor_casos")
-        .update({ estado_proveedor: "Pendiente valoración" })
-        .eq("incidencia_id", incidenciaId)
-        .eq("activo", true);
-
-      // 2. Comentario para el proveedor
-      await supabase
-        .from("comentarios")
-        .insert({
-          incidencia_id: incidenciaId,
-          ambito: 'proveedor',
-          autor_id: autorId,
-          autor_email: userEmail,
-          autor_rol: 'Control',
-          cuerpo: 'La incidencia está lista para ser valorada por el proveedor.',
-          es_sistema: true
-        });
-
-      setMostrarModalPendienteValoracion(false);
-      cargarDatos();
-
-    } catch (error) {
-      console.error("Error marcando pendiente valoración:", error);
-    } finally {
-      setEnviando(false);
-    }
-  };
 
   // Función para cargar presupuesto
   const cargarPresupuesto = async () => {
     try {
       setCargandoPresupuesto(true);
+      console.log("Cargando presupuesto para incidencia:", incidenciaId);
 
       const { data: presupuestoData, error } = await supabase
         .from("presupuestos")
         .select("*")
         .eq("incidencia_id", incidenciaId)
         .order("creado_en", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .limit(1);
+
+      console.log("Resultado consulta presupuesto:", { data: presupuestoData, error });
 
       if (error) {
         console.error("Error cargando presupuesto:", error);
         return;
       }
 
-      setPresupuestoActual(presupuestoData);
+      // Tomar el primer (y único) elemento del array
+      const presupuesto = presupuestoData && presupuestoData.length > 0 ? presupuestoData[0] : null;
+      console.log("Presupuesto seleccionado:", presupuesto);
+      setPresupuestoActual(presupuesto);
     } catch (error) {
-      console.error("Error:", error);
+      console.error("Error en cargarPresupuesto:", error);
     } finally {
       setCargandoPresupuesto(false);
     }
@@ -1273,7 +1585,7 @@ Notas adicionales: ${notasResolucion}`;
 
   // Función para aprobar presupuesto
   const aprobarPresupuesto = async () => {
-    if (!autorId || !presupuestoActual) return;
+    if (!autorId || !presupuestoActual || enviando) return;
 
     try {
       setEnviando(true);
@@ -1291,8 +1603,23 @@ Notas adicionales: ${notasResolucion}`;
       // 2. Actualizar estado del presupuesto
       await supabase
         .from("presupuestos")
-        .update({ estado: "Aprobado" })
+        .update({ estado: "aprobado" })
         .eq("id", presupuestoActual.id);
+
+      // 2.1. Registrar cambio de estado en el historial
+      await registrarCambioEstado({
+        incidenciaId,
+        tipoEstado: 'proveedor',
+        estadoAnterior: "pendiente_revision",
+        estadoNuevo: "aprobado",
+        autorId,
+        motivo: `Presupuesto aprobado desde chat-proveedor. Importe: ${presupuestoActual.importe_total_sin_iva}€ (sin IVA)`,
+        metadatos: {
+          presupuesto_id: presupuestoActual.id,
+          importe: presupuestoActual.importe_total_sin_iva,
+          accion: 'aprobar_presupuesto'
+        }
+      });
 
       // 3. Comentario para el proveedor
       await supabase
@@ -1307,7 +1634,7 @@ Notas adicionales: ${notasResolucion}`;
           es_sistema: true
         });
 
-      setMostrarModalPresupuesto(false);
+      setMostrarModalGestionPresupuesto(false);
       cargarDatos();
 
     } catch (error) {
@@ -1319,7 +1646,7 @@ Notas adicionales: ${notasResolucion}`;
 
   // Función para mandar a revisar presupuesto
   const mandarARevisar = async () => {
-    if (!autorId || !presupuestoActual) return;
+    if (!autorId || !presupuestoActual || !motivoRevision.trim()) return;
 
     try {
       setEnviando(true);
@@ -1337,10 +1664,25 @@ Notas adicionales: ${notasResolucion}`;
       // 2. Actualizar estado del presupuesto
       await supabase
         .from("presupuestos")
-        .update({ estado: "A revisar" })
+        .update({ estado: "rechazado" })
         .eq("id", presupuestoActual.id);
 
-      // 3. Comentario para el proveedor
+      // 2.1. Registrar cambio de estado en el historial
+      await registrarCambioEstado({
+        incidenciaId,
+        tipoEstado: 'proveedor',
+        estadoAnterior: "pendiente_revision",
+        estadoNuevo: "rechazado",
+        autorId,
+        motivo: `Presupuesto rechazado desde chat-proveedor. Motivo: ${motivoRevision}`,
+        metadatos: {
+          presupuesto_id: presupuestoActual.id,
+          motivo_rechazo: motivoRevision,
+          accion: 'rechazar_presupuesto'
+        }
+      });
+
+      // 3. Comentario para el proveedor con motivo personalizado
       await supabase
         .from("comentarios")
         .insert({
@@ -1349,11 +1691,38 @@ Notas adicionales: ${notasResolucion}`;
           autor_id: autorId,
           autor_email: userEmail,
           autor_rol: 'Control',
-          cuerpo: 'El presupuesto requiere revisión. Por favor, ajusta la oferta y reenvía.',
+          cuerpo: `El presupuesto requiere revisión. Motivo: ${motivoRevision}`,
           es_sistema: true
         });
 
-      setMostrarModalPresupuesto(false);
+      // 4. Crear notificación para el proveedor
+      const { data: proveedorCaso } = await supabase
+        .from("proveedor_casos")
+        .select("proveedor_id")
+        .eq("incidencia_id", incidenciaId)
+        .eq("activo", true)
+        .single();
+
+      if (proveedorCaso) {
+        await supabase
+          .from("proveedor_notificaciones")
+          .upsert({
+            proveedor_id: proveedorCaso.proveedor_id,
+            incidencia_id: incidenciaId,
+            tipo_notificacion: 'revision',
+            notificacion_vista: false
+          }, {
+            onConflict: 'proveedor_id,incidencia_id,tipo_notificacion'
+          });
+      }
+
+      // Cerrar modales y limpiar estados
+      setMostrarModalGestionPresupuesto(false);
+      setMostrarModalMotivoRevision(false);
+      setMotivoRevision('');
+      setPresupuestoActual(null);
+      setDocumentoPresupuestoUrl(null);
+
       cargarDatos();
 
     } catch (error) {
@@ -1398,7 +1767,7 @@ Notas adicionales: ${notasResolucion}`;
               Asignar Proveedor
             </button>
             <button
-              onClick={() => router.back()}
+              onClick={() => router.push("/incidencias")}
               className="px-4 py-2 bg-white text-gray-800 rounded hover:bg-gray-100 transition-colors"
             >
               ← Volver a incidencias
@@ -1474,7 +1843,7 @@ Notas adicionales: ${notasResolucion}`;
       {/* Header */}
       <div className="flex items-center justify-between p-6">
         <button
-          onClick={() => router.back()}
+          onClick={() => router.push("/incidencias")}
           className="text-white text-sm hover:underline"
         >
           ← Volver a incidencias
@@ -1488,14 +1857,13 @@ Notas adicionales: ${notasResolucion}`;
       {/* Información de la incidencia - estilo mejorado */}
       <div className="px-6 pb-4">
         <div
-          className="rounded-lg mb-6 shadow-lg border"
+          className="rounded-lg mb-6 shadow-lg"
           style={{
-            backgroundColor: PALETA.card,
-            borderColor: PALETA.headerTable
+            backgroundColor: PALETA.card
           }}
         >
           <div
-            className="px-6 py-4 mb-6 border-b"
+            className="px-6 py-4 mb-6 border-b rounded-t-lg"
             style={{
               backgroundColor: PALETA.headerTable,
               color: PALETA.textoOscuro
@@ -1529,17 +1897,31 @@ Notas adicionales: ${notasResolucion}`;
                           Centro:
                         </td>
                         <td className="py-2" style={{ color: PALETA.textoOscuro }}>
-                          {incidencia.instituciones?.[0]?.nombre || incidencia.centro || "-"}
+                          <div className="flex items-center gap-2">
+                            <span>{incidencia.instituciones?.[0]?.nombre || incidencia.centro || "-"}</span>
+                            {direccionCentro && (
+                              <button
+                                onClick={() => {
+                                  window.open(direccionCentro || '', '_blank');
+                                }}
+                                className="px-2 py-1 text-xs rounded text-white hover:opacity-90 transition-opacity"
+                                style={{ backgroundColor: PALETA.fondo }}
+                                title="Ir a la dirección"
+                              >
+                                📍 Ir a la dirección
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
 
-                      <tr>
+                      <tr style={{ backgroundColor: `${PALETA.headerTable}20` }}>
                         <td className="py-2 font-semibold" style={{ color: PALETA.textoOscuro }}>
                           Fecha/Hora:
                         </td>
                         <td className="py-2 font-mono" style={{ color: PALETA.textoOscuro }}>
-                          {incidencia.fecha && incidencia.hora
-                            ? new Date(incidencia.fecha + 'T' + incidencia.hora).toLocaleString('es-ES', {
+                          {fechaAsignacionProveedor
+                            ? new Date(fechaAsignacionProveedor).toLocaleString('es-ES', {
                                 year: 'numeric',
                                 month: '2-digit',
                                 day: '2-digit',
@@ -1560,7 +1942,7 @@ Notas adicionales: ${notasResolucion}`;
                             className="px-2 py-1 rounded text-xs font-medium text-white"
                             style={{ backgroundColor: '#3b82f6' }}
                           >
-                            {incidencia.estado_proveedor || incidencia.estado_cliente}
+                            {incidencia.estado_proveedor || "Sin asignar"}
                           </span>
                         </td>
                       </tr>
@@ -1610,12 +1992,11 @@ Notas adicionales: ${notasResolucion}`;
                 {hasImages && (
                   <div className="lg:col-span-1">
                     <div
-                      className="border rounded-lg p-4"
-                      style={{ borderColor: PALETA.headerTable }}
+                      className="rounded-lg p-4"
                     >
-                      <h3 className="font-semibold mb-4 text-center" style={{ color: PALETA.textoOscuro }}>
-                        EVIDENCIA VISUAL
-                      </h3>
+                      <p className="py-2 font-semibold text-sm" style={{ color: PALETA.textoOscuro }}>
+                        Imagen:
+                      </p>
 
                       <div className="space-y-3">
                         {incidencia.adjuntos_principales.map((adjunto) => {
@@ -1631,16 +2012,13 @@ Notas adicionales: ${notasResolucion}`;
                                 <img
                                   src={imageUrl}
                                   alt={adjunto.nombre_archivo || "Imagen de la incidencia"}
-                                  className="w-full h-32 object-cover hover:scale-105 transition-transform duration-200"
+                                  className="w-full h-48 object-cover hover:scale-105 transition-transform duration-200"
                                   onError={(e) => {
                                     console.error('Error cargando imagen:', adjunto.storage_key);
                                     e.currentTarget.style.display = 'none';
                                   }}
                                 />
                               </div>
-                              <p className="text-xs mt-1 truncate" style={{ color: PALETA.textoOscuro }}>
-                                {adjunto.nombre_archivo || "Imagen adjunta"}
-                              </p>
                             </div>
                           );
                         })}
@@ -1678,13 +2056,13 @@ Notas adicionales: ${notasResolucion}`;
                     </button>
                   )}
 
-                  {/* Botón Cerrar - disponible si está Resuelta o Valorada */}
-                  {(estado === "Resuelta" || estado === "Valorada") && (
+                  {/* Botón Cerrar - disponible solo cuando está Valorada */}
+                  {estado === "Valorada" && (
                     <button
                       type="button"
                       onClick={() => setMostrarModalCerrar(true)}
                       className="px-4 py-2 text-white rounded hover:opacity-90 transition-opacity"
-                      style={{ backgroundColor: "#059669" }}
+                      style={{ backgroundColor: PALETA.verdeClaro }}
                     >
                       Cerrar Incidencia
                     </button>
@@ -1694,26 +2072,39 @@ Notas adicionales: ${notasResolucion}`;
                   {estado === "Ofertada" && (
                     <button
                       type="button"
-                      onClick={() => {
-                        cargarPresupuesto();
-                        setMostrarModalGestionPresupuesto(true);
-                      }}
+                      onClick={abrirModalGestionPresupuesto}
                       className="px-4 py-2 text-white rounded hover:opacity-90 transition-opacity"
-                      style={{ backgroundColor: "#0ea5e9" }}
+                      style={{ backgroundColor: PALETA.verdeClaro }}
                     >
                       Gestionar Presupuesto
                     </button>
                   )}
 
-                  {/* Botón Pendiente Valoración - solo si está Resuelta */}
-                  {estado === "Resuelta" && (
+
+                  {/* Botón Valorar Incidencia - solo para proveedores si está Resuelta */}
+                  {tipoUsuario === 'Proveedor' && estado === "Resuelta" && (
                     <button
                       type="button"
-                      onClick={() => setMostrarModalPendienteValoracion(true)}
+                      onClick={() => setMostrarModalValorarIncidencia(true)}
                       className="px-4 py-2 text-white rounded hover:opacity-90 transition-opacity"
-                      style={{ backgroundColor: "#7c3aed" }}
+                      style={{ backgroundColor: "#059669" }}
                     >
-                      Pendiente Valoración
+                      Valorar Incidencia
+                    </button>
+                  )}
+
+                  {/* Botón Cambiar al Chat Cliente - solo para Control */}
+                  {tipoUsuario === 'Control' && (
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/incidencias/${incidenciaId}/chat-control-cliente`)}
+                      className="px-4 py-2 text-sm border rounded hover:bg-gray-50 transition-colors"
+                      style={{
+                        borderColor: PALETA.fondo,
+                        color: PALETA.fondo
+                      }}
+                    >
+                      Cambiar al Chat Cliente
                     </button>
                   )}
                 </div>
@@ -1764,13 +2155,13 @@ Notas adicionales: ${notasResolucion}`;
                   break;
 
                 case "Oferta a revisar":
-                  botonesDisponibles.calendarizar = true;
                   botonesDisponibles.ofertar = true;
-                  botonesDisponibles.resolver = true;
+                  mensaje = '🔄 Oferta rechazada - Debe revisar y presentar una nueva oferta';
                   break;
 
                 case "Resuelta":
-                  mensaje = '✅ Incidencia resuelta - Esperando confirmación de Control';
+                  botonesDisponibles.valorar = true;
+                  mensaje = '✅ Incidencia resuelta - Puede proceder con la valoración económica';
                   break;
 
                 case "Pendiente valoración":
@@ -1785,10 +2176,13 @@ Notas adicionales: ${notasResolucion}`;
                   break;
 
                 default:
-                  // Estados no contemplados - habilitar botones básicos
-                  botonesDisponibles.calendarizar = true;
-                  botonesDisponibles.ofertar = true;
-                  botonesDisponibles.resolver = true;
+                  // Estados no contemplados - no habilitar botones por seguridad
+                  mensaje = '⚠️ Estado desconocido - Contacte con soporte si persiste';
+              }
+
+              // Si alguna vez se aprobó una oferta, no permitir ofertar de nuevo
+              if (tuvoOfertaAprobada) {
+                botonesDisponibles.ofertar = false;
               }
 
               return (
@@ -1848,7 +2242,7 @@ Notas adicionales: ${notasResolucion}`;
                     <div className="flex justify-center mt-4">
                       <button
                         type="button"
-                        onClick={() => setMostrarModalValorar(true)}
+                        onClick={() => setMostrarModalValorarIncidencia(true)}
                         className="px-4 py-2 text-white rounded hover:opacity-90 transition-opacity"
                         style={{ backgroundColor: PALETA.verdeClaro }}
                       >
@@ -1882,9 +2276,27 @@ Notas adicionales: ${notasResolucion}`;
 
       {/* Chat */}
       <div className="px-6 pb-6">
-        <div className="bg-white rounded-lg shadow-sm flex flex-col h-[500px]">
+        <div className="bg-white rounded-lg shadow-sm flex flex-col h-[700px] relative">
+          {/* Botón flotante para ir al último mensaje */}
+          {comentarios.length > 3 && (
+            <button
+              onClick={scrollToBottom}
+              className="absolute top-4 right-4 z-20 bg-white border-2 border-gray-300 rounded-full p-2 shadow-lg hover:shadow-xl transition-shadow hover:bg-gray-50"
+              title="Ir al último mensaje"
+            >
+              <svg
+                className="w-5 h-5 text-gray-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+              </svg>
+            </button>
+          )}
+
           {/* Comentarios */}
-          <div className="flex-1 p-4 overflow-y-auto space-y-3">
+          <div ref={chatContainerRef} className="flex-1 p-4 overflow-y-auto space-y-3 relative">
             {comentarios.length === 0 ? (
               <div className="text-center text-gray-500 py-8">
                 No hay comentarios aún. ¡Sé el primero en escribir!
@@ -1930,7 +2342,7 @@ Notas adicionales: ${notasResolucion}`;
                                   <img 
                                     src={imageUrl} 
                                     alt={adjunto.nombre_archivo || "Imagen adjunta"}
-                                    className="max-w-sm rounded border cursor-pointer"
+                                    className="max-w-32 h-24 object-cover rounded border cursor-pointer hover:scale-105 transition-transform"
                                     onClick={() => window.open(imageUrl, '_blank')}
                                   />
                                 ) : null;
@@ -1955,7 +2367,53 @@ Notas adicionales: ${notasResolucion}`;
                         ))}
                       </div>
                     )}
-                    
+
+                    {/* Mostrar adjuntos desde campos imagen_url y documento_url */}
+                    {((comentario.imagen_url || comentario.documento_url)) && (
+                      <div className="mt-2 space-y-2">
+                        {/* Mostrar imagen_url del comentario */}
+                        {comentario.imagen_url && (
+                          (() => {
+                            const imageUrl = commentAttachmentUrls[`imagen_${comentario.id}`];
+                            return imageUrl ? (
+                              <img
+                                src={imageUrl}
+                                alt="Imagen adjunta"
+                                className="max-w-32 h-24 object-cover rounded border cursor-pointer hover:scale-105 transition-transform"
+                                onClick={() => window.open(imageUrl, '_blank')}
+                              />
+                            ) : (
+                              <div className="text-sm text-red-600">
+                                Error cargando imagen: {comentario.imagen_url}
+                              </div>
+                            );
+                          })()
+                        )}
+
+                        {/* Mostrar documento_url del comentario */}
+                        {comentario.documento_url && (
+                          (() => {
+                            const documentUrl = commentAttachmentUrls[`documento_${comentario.id}`];
+                            const fileName = comentario.documento_url.split('/').pop() || 'Documento adjunto';
+                            return documentUrl ? (
+                              <a
+                                href={documentUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-2 text-blue-600 hover:underline text-sm bg-blue-50 px-3 py-1 rounded"
+                              >
+                                📎 {fileName}
+                              </a>
+                            ) : (
+                              <div className="text-sm text-red-600">
+                                Error cargando documento: {comentario.documento_url}
+                              </div>
+                            );
+                          })()
+                        )}
+                      </div>
+                    )}
+
                     <div className="text-xs opacity-75 mt-1">
                       {new Date(comentario.creado_en).toLocaleDateString('es-ES', {
                         year: 'numeric',
@@ -1969,6 +2427,9 @@ Notas adicionales: ${notasResolucion}`;
                 </div>
               ))
             )}
+            {/* Referencia para scroll al último mensaje */}
+            <div ref={messagesEndRef} />
+
           </div>
 
           {/* Formulario de envío */}
@@ -2146,27 +2607,16 @@ Notas adicionales: ${notasResolucion}`;
                 <label className="block text-sm font-medium mb-2" style={{ color: PALETA.textoOscuro }}>
                   Horario *
                 </label>
-                <select
+                <SearchableSelect
                   value={horarioVisita}
-                  onChange={(e) => setHorarioVisita(e.target.value)}
-                  className="w-full h-9 rounded border px-3 text-sm outline-none bg-white"
-                  style={{
-                    '--focus-border-color': PALETA.verdeClaro,
-                  } as any}
-                  onFocus={(e) => {
-                    e.target.style.borderColor = PALETA.verdeClaro;
-                    e.target.style.boxShadow = `0 0 0 2px ${PALETA.verdeClaro}40`;
-                  }}
-                  onBlur={(e) => {
-                    e.target.style.borderColor = '';
-                    e.target.style.boxShadow = '';
-                  }}
-                  required
-                >
-                  <option value="">Seleccione un horario</option>
-                  <option value="mañana">Horario de mañana</option>
-                  <option value="tarde">Horario de tarde</option>
-                </select>
+                  onChange={(value) => setHorarioVisita(value)}
+                  options={[
+                    { value: "mañana", label: "Horario de mañana" },
+                    { value: "tarde", label: "Horario de tarde" }
+                  ]}
+                  placeholder="Seleccione un horario"
+                  focusColor={PALETA.verdeClaro}
+                />
               </div>
             </div>
 
@@ -2290,16 +2740,16 @@ Notas adicionales: ${notasResolucion}`;
                 </div>
               </div>
 
-              {/* Descripción breve */}
+              {/* Descripción del trabajo */}
               <div>
                 <label className="block text-sm font-medium mb-2" style={{ color: PALETA.textoOscuro }}>
-                  Descripción breve *
+                  Descripción del trabajo *
                 </label>
                 <textarea
                   value={descripcionPresupuesto}
                   onChange={(e) => setDescripcionPresupuesto(e.target.value)}
                   className="w-full h-24 rounded border px-3 py-2 text-sm outline-none resize-none"
-                  placeholder="Descripción breve del trabajo a realizar..."
+                  placeholder="Descripción del trabajo a realizar..."
                   required
                 />
               </div>
@@ -2347,7 +2797,7 @@ Notas adicionales: ${notasResolucion}`;
             <h3 className="text-xl font-semibold mb-6" style={{ color: PALETA.textoOscuro }}>
               Resolver Incidencia
               {tieneOfertaAprobada && (
-                <span className="text-sm text-green-600 block mt-1">
+                <span className="text-sm block mt-1" style={{ color: PALETA.verdeClaro }}>
                   ✓ Incidencia con oferta aprobada
                 </span>
               )}
@@ -2368,26 +2818,6 @@ Notas adicionales: ${notasResolucion}`;
                 />
               </div>
 
-              {/* Importe - Solo obligatorio si NO tiene oferta aprobada */}
-              {!tieneOfertaAprobada && (
-                <div>
-                  <label className="block text-sm font-medium mb-2" style={{ color: PALETA.textoOscuro }}>
-                    Importe total sin IVA (€) *
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={importeResolucion}
-                    onChange={(e) => setImporteResolucion(e.target.value)}
-                    className="w-full h-9 rounded border px-3 text-sm outline-none"
-                    placeholder="0.00"
-                    required
-                  />
-                  <p className="text-xs text-gray-600 mt-1">
-                    Este campo es obligatorio para incidencias sin oferta previa
-                  </p>
-                </div>
-              )}
 
               {/* Imagen de evidencia - Opcional */}
               <div>
@@ -2410,10 +2840,10 @@ Notas adicionales: ${notasResolucion}`;
                 )}
               </div>
 
-              {/* Documento justificativo - Opcional */}
+              {/* Documento de parte de trabajo - Opcional */}
               <div>
                 <label className="block text-sm font-medium mb-2" style={{ color: PALETA.textoOscuro }}>
-                  Documento justificativo (opcional)
+                  Documento de parte de trabajo (opcional)
                 </label>
                 <div className="relative">
                   <input
@@ -2431,18 +2861,6 @@ Notas adicionales: ${notasResolucion}`;
                 )}
               </div>
 
-              {/* Notas adicionales - Opcional */}
-              <div>
-                <label className="block text-sm font-medium mb-2" style={{ color: PALETA.textoOscuro }}>
-                  Notas adicionales (opcional)
-                </label>
-                <textarea
-                  value={notasResolucion}
-                  onChange={(e) => setNotasResolucion(e.target.value)}
-                  className="w-full h-20 rounded border px-3 py-2 text-sm outline-none resize-none"
-                  placeholder="Comentarios adicionales sobre la resolución..."
-                />
-              </div>
             </div>
 
             <div className="flex justify-end gap-3 mt-8">
@@ -2454,7 +2872,6 @@ Notas adicionales: ${notasResolucion}`;
                   setImporteResolucion('');
                   setImagenResolucion(null);
                   setDocumentoResolucion(null);
-                  setNotasResolucion('');
                 }}
                 className="px-4 py-2 text-sm rounded border hover:bg-gray-50 transition-colors"
                 style={{ color: PALETA.textoOscuro, borderColor: '#d1d5db' }}
@@ -2466,8 +2883,7 @@ Notas adicionales: ${notasResolucion}`;
                 type="button"
                 onClick={resolverIncidencia}
                 disabled={
-                  !solucionAplicada ||
-                  (!tieneOfertaAprobada && !importeResolucion) ||
+                  !solucionAplicada?.trim() ||
                   enviando
                 }
                 className="px-6 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity disabled:opacity-50"
@@ -2480,57 +2896,302 @@ Notas adicionales: ${notasResolucion}`;
         </div>
       )}
 
-      {/* Modal para valorar incidencia */}
-      {mostrarModalValorar && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      {/* Modal para valorar incidencia por proveedor */}
+      {mostrarModalValorarIncidencia && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div
-            className="rounded-lg p-8 max-w-md w-full mx-4 shadow"
+            className="rounded-lg p-8 max-w-lg w-full shadow"
             style={{ backgroundColor: PALETA.card }}
           >
             <h3 className="text-xl font-semibold mb-6" style={{ color: PALETA.textoOscuro }}>
               Valorar Incidencia
             </h3>
 
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-2" style={{ color: PALETA.textoOscuro }}>
-                  Valoración *
-                </label>
-                <select
-                  value={valoracion}
-                  onChange={(e) => setValoracion(e.target.value)}
-                  className="w-full h-9 rounded border px-3 text-sm outline-none "
-                  required
-                >
-                  <option value="">Selecciona valoración</option>
-                  <option value="1">⭐ 1 - Muy insatisfecho</option>
-                  <option value="2">⭐⭐ 2 - Insatisfecho</option>
-                  <option value="3">⭐⭐⭐ 3 - Neutral</option>
-                  <option value="4">⭐⭐⭐⭐ 4 - Satisfecho</option>
-                  <option value="5">⭐⭐⭐⭐⭐ 5 - Muy satisfecho</option>
-                </select>
+            <form onSubmit={(e) => { e.preventDefault(); valorarIncidencia(); }}>
+              <div className="space-y-6">
+                {/* Importe de Resolución */}
+                <div>
+                  <label className="block text-sm font-medium mb-2" style={{ color: PALETA.textoOscuro }}>
+                    Importe de Resolución (€) *
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={importeResolucion}
+                    onChange={(e) => setImporteResolucion(e.target.value)}
+                    className="w-full px-3 py-2 rounded border text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="0.00"
+                    required
+                  />
+                </div>
+
+                {/* Concepto de Resolución */}
+                <div>
+                  <label className="block text-sm font-medium mb-2" style={{ color: PALETA.textoOscuro }}>
+                    Concepto de Resolución *
+                  </label>
+                  <input
+                    type="text"
+                    value={conceptoResolucion}
+                    onChange={(e) => setConceptoResolucion(e.target.value)}
+                    className="w-full px-3 py-2 rounded border text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Descripción del trabajo realizado"
+                    required
+                  />
+                </div>
+
+                {/* Notas Adicionales */}
+                <div>
+                  <label className="block text-sm font-medium mb-2" style={{ color: PALETA.textoOscuro }}>
+                    Notas Adicionales
+                  </label>
+                  <textarea
+                    value={notasAdicionales}
+                    onChange={(e) => setNotasAdicionales(e.target.value)}
+                    placeholder="Información adicional sobre la valoración (opcional)"
+                    className="min-h-[80px] w-full rounded border p-3 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
               </div>
 
+              <div className="flex justify-end gap-3 mt-8">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMostrarModalValorarIncidencia(false);
+                    setImporteResolucion('');
+                    setConceptoResolucion('');
+                    setNotasAdicionales('');
+                  }}
+                  className="px-4 py-2 text-sm rounded border hover:bg-gray-50 transition-colors"
+                  style={{ color: PALETA.textoOscuro, borderColor: '#d1d5db' }}
+                  disabled={enviando}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={!importeResolucion?.trim() || !conceptoResolucion?.trim() || enviando}
+                  className="px-6 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity disabled:opacity-50"
+                  style={{ backgroundColor: '#059669' }}
+                >
+                  {enviando ? 'Valorando...' : 'Valorar Incidencia'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal para valoración económica */}
+      {mostrarModalValorarIncidencia && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div
+            className="rounded-lg p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow"
+            style={{ backgroundColor: PALETA.card }}
+          >
+            <h3 className="text-xl font-semibold mb-6" style={{ color: PALETA.textoOscuro }}>
+              Valoración Económica
+              {tieneOfertaAprobada && (
+                <span className="text-sm block mt-1" style={{ color: PALETA.verdeClaro }}>
+                  ✓ Incidencia con oferta aprobada
+                </span>
+              )}
+            </h3>
+
+            <div className="space-y-6">
+              {/* Importe sin IVA - Obligatorio */}
               <div>
                 <label className="block text-sm font-medium mb-2" style={{ color: PALETA.textoOscuro }}>
-                  Comentarios adicionales
+                  Importe sin IVA (€) *
                 </label>
-                <textarea
-                  value={comentariosValoracion}
-                  onChange={(e) => setComentariosValoracion(e.target.value)}
-                  className="w-full h-20 rounded border px-3 py-2 text-sm outline-none  resize-none"
-                  placeholder="Comentarios sobre la resolución de la incidencia..."
+                <input
+                  type="number"
+                  step="0.01"
+                  value={importeSinIva}
+                  onChange={(e) => {
+                    const sinIva = parseFloat(e.target.value) || 0;
+                    setImporteSinIva(e.target.value);
+                    // Calcular automáticamente el IVA con el porcentaje seleccionado
+                    const iva = parseFloat(porcentajeIva) || 0;
+                    const multiplier = 1 + (iva / 100);
+                    const conIva = (sinIva * multiplier).toFixed(2);
+                    setImporteConIva(conIva);
+                  }}
+                  className="w-full h-9 rounded border px-3 text-sm outline-none"
+                  style={{
+                    '--focus-border-color': PALETA.verdeClaro,
+                  } as any}
+                  onFocus={(e) => {
+                    e.target.style.borderColor = PALETA.verdeClaro;
+                    e.target.style.boxShadow = `0 0 0 2px ${PALETA.verdeClaro}40`;
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = '';
+                    e.target.style.boxShadow = '';
+                  }}
+                  placeholder="0.00"
+                  required
                 />
               </div>
+
+              {/* Porcentaje de IVA */}
+              <div className="relative">
+                <label className="block text-sm font-medium mb-2" style={{ color: PALETA.textoOscuro }}>
+                  Porcentaje de IVA (%) *
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={busquedaIva}
+                    onChange={(e) => {
+                      setBusquedaIva(e.target.value);
+                      setMostrarOpcionesIva(true);
+                    }}
+                    onFocus={(e) => {
+                      e.target.style.borderColor = PALETA.verdeClaro;
+                      e.target.style.boxShadow = `0 0 0 2px ${PALETA.verdeClaro}40`;
+                      setMostrarOpcionesIva(true);
+                    }}
+                    onBlur={(e) => {
+                      e.target.style.borderColor = '';
+                      e.target.style.boxShadow = '';
+                      // Delay para permitir click en opciones
+                      setTimeout(() => setMostrarOpcionesIva(false), 200);
+                    }}
+                    className="w-full h-9 rounded border px-3 text-sm outline-none"
+                    placeholder="Seleccionar porcentaje de IVA..."
+                    required
+                  />
+
+                  {/* Dropdown de opciones */}
+                  {mostrarOpcionesIva && opcionesFiltradas.length > 0 && (
+                    <div
+                      className="absolute top-full left-0 right-0 bg-white border border-gray-300 rounded-md shadow-lg z-50 max-h-40 overflow-y-auto"
+                      style={{ marginTop: '2px' }}
+                    >
+                      {opcionesFiltradas.map((opcion) => (
+                        <div
+                          key={opcion.valor}
+                          className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                          onClick={() => {
+                            setPorcentajeIva(opcion.valor);
+                            setBusquedaIva(opcion.texto);
+                            setMostrarOpcionesIva(false);
+
+                            // Recalcular el importe con IVA
+                            const sinIva = parseFloat(importeSinIva) || 0;
+                            const iva = parseFloat(opcion.valor) || 0;
+                            const multiplier = 1 + (iva / 100);
+                            const conIva = (sinIva * multiplier).toFixed(2);
+                            setImporteConIva(conIva);
+                          }}
+                        >
+                          {opcion.texto}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Importe con IVA - Obligatorio y calculado automáticamente */}
+              <div>
+                <label className="block text-sm font-medium mb-2" style={{ color: PALETA.textoOscuro }}>
+                  Importe con IVA (€) *
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={importeConIva}
+                  onChange={(e) => setImporteConIva(e.target.value)}
+                  className="w-full h-9 rounded border px-3 text-sm outline-none"
+                  style={{
+                    '--focus-border-color': PALETA.verdeClaro,
+                  } as any}
+                  onFocus={(e) => {
+                    e.target.style.borderColor = PALETA.verdeClaro;
+                    e.target.style.boxShadow = `0 0 0 2px ${PALETA.verdeClaro}40`;
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = '';
+                    e.target.style.boxShadow = '';
+                  }}
+                  placeholder="0.00"
+                  required
+                />
+                <p className="text-xs text-gray-600 mt-1">
+                  Se calcula automáticamente al introducir el importe sin IVA y el porcentaje de IVA
+                </p>
+              </div>
+
+              {/* Documento justificativo - Solo mostrar si es necesario */}
+              {(() => {
+                // Determinar si el importe ha cambiado respecto a la oferta aprobada
+                const importeActual = parseFloat(importeSinIva) || 0;
+                const importeOferta = presupuestoActual?.importe_total_sin_iva ? parseFloat(presupuestoActual.importe_total_sin_iva) : 0;
+                const importeHaCambiado = tieneOfertaAprobada && importeActual !== importeOferta;
+                const mostrarCampo = !tieneOfertaAprobada || importeHaCambiado;
+
+                // Si el importe coincide exactamente, no mostrar el campo
+                if (tieneOfertaAprobada && !importeHaCambiado && importeActual > 0) {
+                  return (
+                    <div>
+                      <p className="text-xs mt-1" style={{ color: PALETA.verdeClaro }}>
+                        El importe coincide con la oferta aprobada (€{importeOferta}). No se requiere documento justificativo.
+                      </p>
+                    </div>
+                  );
+                }
+
+                // Mostrar el campo solo cuando sea necesario
+                if (!mostrarCampo) return null;
+
+                return (
+                  <div>
+                    <label className="block text-sm font-medium mb-2" style={{ color: PALETA.textoOscuro }}>
+                      Documento justificativo
+                      <span className="text-red-500"> *</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="file"
+                        accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
+                        onChange={(e) => setDocumentoJustificativo(e.target.files?.[0] || null)}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        required={true}
+                      />
+                      <div className="w-full h-9 rounded border px-3 text-sm bg-white flex items-center justify-center cursor-pointer hover:bg-gray-50">
+                        <span className="text-3xl">+</span>
+                      </div>
+                    </div>
+                    {documentoJustificativo && (
+                      <p className="text-xs text-gray-600 mt-1">{documentoJustificativo.name}</p>
+                    )}
+                    {!tieneOfertaAprobada && (
+                      <p className="text-xs text-red-600 mt-1">
+                        Este documento es obligatorio para incidencias sin oferta previa aprobada
+                      </p>
+                    )}
+                    {tieneOfertaAprobada && importeHaCambiado && (
+                      <p className="text-xs mt-1" style={{ color: '#d97706' }}>
+                        El importe ha cambiado respecto a la oferta aprobada (€{importeOferta}). Documento requerido.
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             <div className="flex justify-end gap-3 mt-6">
               <button
                 type="button"
                 onClick={() => {
-                  setMostrarModalValorar(false);
-                  setValoracion('');
-                  setComentariosValoracion('');
+                  setMostrarModalValorarIncidencia(false);
+                  setImporteSinIva('');
+                  setImporteConIva('');
+                  setDocumentoJustificativo(null);
                 }}
                 className="px-4 py-2 text-sm rounded border hover:bg-gray-50 transition-colors"
                 style={{ color: PALETA.textoOscuro, borderColor: '#d1d5db' }}
@@ -2540,12 +3201,25 @@ Notas adicionales: ${notasResolucion}`;
               </button>
               <button
                 type="button"
-                onClick={valorarIncidencia}
-                disabled={!valoracion || enviando}
+                onClick={valoracionEconomica}
+                disabled={(() => {
+                  const importeActual = parseFloat(importeSinIva) || 0;
+                  const importeOferta = presupuestoActual?.importe_total_sin_iva ? parseFloat(presupuestoActual.importe_total_sin_iva) : 0;
+                  const importeHaCambiado = tieneOfertaAprobada && importeActual !== importeOferta;
+                  const importeCoincide = tieneOfertaAprobada && !importeHaCambiado && importeActual > 0;
+                  const documentoRequerido = !tieneOfertaAprobada || importeHaCambiado;
+
+                  // Si el importe coincide, no requiere documento
+                  if (importeCoincide) {
+                    return !importeSinIva || !importeConIva || enviando;
+                  }
+
+                  return !importeSinIva || !importeConIva || (documentoRequerido && !documentoJustificativo) || enviando;
+                })()}
                 className="px-6 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity disabled:opacity-50"
                 style={{ backgroundColor: '#7A8A6F' }}
               >
-                {enviando ? 'Valorando...' : 'Enviar Valoración'}
+                {enviando ? 'Valorando...' : 'Confirmar Valoración Económica'}
               </button>
             </div>
           </div>
@@ -2656,7 +3330,7 @@ Notas adicionales: ${notasResolucion}`;
                 onClick={cerrarIncidencia}
                 disabled={enviando}
                 className="px-6 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity disabled:opacity-50"
-                style={{ backgroundColor: '#059669' }}
+                style={{ backgroundColor: PALETA.verdeClaro }}
               >
                 {enviando ? 'Cerrando...' : 'Cerrar Incidencia'}
               </button>
@@ -2665,161 +3339,313 @@ Notas adicionales: ${notasResolucion}`;
         </div>
       )}
 
-      {/* Modal para pendiente valoración */}
-      {mostrarModalPendienteValoracion && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div
-            className="rounded-lg p-8 max-w-md w-full mx-4 shadow"
-            style={{ backgroundColor: PALETA.card }}
-          >
-            <h3 className="text-xl font-semibold mb-6" style={{ color: PALETA.textoOscuro }}>
-              Marcar Pendiente de Valoración
-            </h3>
 
-            <div className="space-y-4">
-              <p className="text-sm text-gray-600">
-                La incidencia será marcada como "Pendiente valoración" para que el proveedor pueda valorarla.
-              </p>
+      {/* Modal para gestionar presupuesto */}
+      {mostrarModalGestionPresupuesto && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div
+            className="rounded-lg shadow-lg border max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+            style={{
+              backgroundColor: PALETA.card,
+              borderColor: PALETA.headerTable
+            }}
+          >
+            {/* Header del modal */}
+            <div
+              className="px-6 py-4 border-b flex justify-between items-center"
+              style={{
+                backgroundColor: PALETA.headerTable,
+                color: PALETA.textoOscuro
+              }}
+            >
+              <h3 className="text-xl font-semibold">
+                DETALLE DEL PRESUPUESTO #{incidencia?.num_solicitud}
+              </h3>
+              <button
+                onClick={() => {
+                  setMostrarModalGestionPresupuesto(false);
+                  setPresupuestoActual(null);
+                  setDocumentoPresupuestoUrl(null);
+                }}
+                className="text-2xl hover:opacity-70 transition-opacity"
+                style={{ color: PALETA.textoOscuro }}
+              >
+                ×
+              </button>
             </div>
 
-            <div className="flex justify-end gap-3 mt-6">
+            <div className="p-6">
+              {cargandoPresupuesto ? (
+                <div className="text-center py-8">
+                  <p className="text-gray-600">Cargando presupuesto...</p>
+                </div>
+              ) : !presupuestoActual ? (
+                <div className="text-center py-8">
+                  <p className="text-red-600">No se encontró el presupuesto para esta incidencia.</p>
+                </div>
+              ) : (
+                <>
+                  {/* Grid de información */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    {/* Información del proveedor */}
+                    <div
+                      className="border rounded-lg p-4"
+                      style={{ borderColor: PALETA.verdeSombra }}
+                    >
+                      <h4 className="font-semibold mb-4 text-center text-sm" style={{ color: PALETA.textoOscuro }}>
+                        INFORMACIÓN DEL PROVEEDOR
+                      </h4>
+                      <table className="w-full text-xs">
+                        <tbody>
+                          <tr>
+                            <td className="py-2 font-semibold" style={{ color: PALETA.textoOscuro }}>
+                              Proveedor:
+                            </td>
+                            <td className="py-2" style={{ color: PALETA.textoOscuro }}>
+                              {nombreProveedor || 'No especificado'}
+                            </td>
+                          </tr>
+                          <tr style={{ backgroundColor: `${PALETA.headerTable}20` }}>
+                            <td className="py-2 font-semibold" style={{ color: PALETA.textoOscuro }}>
+                              Estado:
+                            </td>
+                            <td className="py-2">
+                              <span
+                                className="px-2 py-1 rounded text-xs font-medium text-white"
+                                style={{ backgroundColor: PALETA.verdeClaro }}
+                              >
+                                Pendiente revisión
+                              </span>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Detalles financieros */}
+                    <div
+                      className="border rounded-lg p-4"
+                      style={{ borderColor: PALETA.verdeSombra }}
+                    >
+                      <h4 className="font-semibold mb-4 text-center text-sm" style={{ color: PALETA.textoOscuro }}>
+                        DETALLES
+                      </h4>
+                      <table className="w-full text-xs">
+                        <tbody>
+                          <tr>
+                            <td className="py-2 font-semibold" style={{ color: PALETA.textoOscuro }}>
+                              Importe sin IVA:
+                            </td>
+                            <td className="py-2 font-bold text-base" style={{ color: PALETA.fondo }}>
+                              {presupuestoActual.importe_total_sin_iva}€
+                            </td>
+                          </tr>
+                          <tr style={{ backgroundColor: `${PALETA.headerTable}20` }}>
+                            <td className="py-2 font-semibold" style={{ color: PALETA.textoOscuro }}>
+                              Fecha estimada de inicio:
+                            </td>
+                            <td className="py-2" style={{ color: PALETA.textoOscuro }}>
+                              {presupuestoActual.fecha_estimada_inicio ? new Date(presupuestoActual.fecha_estimada_inicio).toLocaleDateString('es-ES') : 'No especificada'}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td className="py-2 font-semibold" style={{ color: PALETA.textoOscuro }}>
+                              Duración estimada:
+                            </td>
+                            <td className="py-2" style={{ color: PALETA.textoOscuro }}>
+                              {presupuestoActual.duracion_estimada || 'No especificada'}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Descripción del trabajo */}
+                  <div className="mb-6">
+                    <div
+                      className="border rounded-lg"
+                      style={{ borderColor: PALETA.verdeSombra }}
+                    >
+                      <div
+                        className="px-4 py-3 border-b"
+                        style={{
+                          backgroundColor: `${PALETA.headerTable}40`,
+                          borderColor: PALETA.verdeSombra
+                        }}
+                      >
+                        <h4 className="font-semibold text-sm" style={{ color: PALETA.textoOscuro }}>
+                          DESCRIPCIÓN DEL TRABAJO
+                        </h4>
+                      </div>
+                      <div className="p-4">
+                        <p className="text-sm" style={{ color: PALETA.textoOscuro }}>
+                          {presupuestoActual.descripcion_breve || 'No especificada'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Descripción de la incidencia */}
+                  <div className="mb-6">
+                    <div
+                      className="border rounded-lg"
+                      style={{ borderColor: PALETA.verdeSombra }}
+                    >
+                      <div
+                        className="px-4 py-3 border-b"
+                        style={{
+                          backgroundColor: `${PALETA.headerTable}40`,
+                          borderColor: PALETA.verdeSombra
+                        }}
+                      >
+                        <h4 className="font-semibold text-sm" style={{ color: PALETA.textoOscuro }}>
+                          DESCRIPCIÓN DE LA INCIDENCIA
+                        </h4>
+                      </div>
+                      <div className="p-4">
+                        <p className="text-sm" style={{ color: PALETA.textoOscuro }}>
+                          {incidencia?.descripcion || 'No especificada'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Documento adjunto */}
+                  {presupuestoActual.presupuesto_detallado_url && (
+                    <div className="mb-6">
+                      <div
+                        className="border rounded-lg"
+                        style={{ borderColor: PALETA.verdeSombra }}
+                      >
+                        <div
+                          className="px-4 py-3 border-b"
+                          style={{
+                            backgroundColor: `${PALETA.headerTable}40`,
+                            borderColor: PALETA.verdeSombra
+                          }}
+                        >
+                          <h4 className="font-semibold text-sm" style={{ color: PALETA.textoOscuro }}>
+                            DOCUMENTO ADJUNTO
+                          </h4>
+                        </div>
+                        <div className="p-4">
+                          {documentoPresupuestoUrl ? (
+                            <a
+                              href={documentoPresupuestoUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-2 px-4 py-2 rounded border transition-colors text-sm"
+                              style={{
+                                borderColor: PALETA.verdeSombra,
+                                color: PALETA.fondo
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.backgroundColor = PALETA.headerTable;
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.backgroundColor = 'transparent';
+                              }}
+                            >
+                              📎 Visualizar detalle del presupuesto
+                            </a>
+                          ) : (
+                            <div className="inline-flex items-center gap-2 px-4 py-2 rounded border text-sm" style={{
+                              borderColor: '#d1d5db',
+                              color: '#9ca3af'
+                            }}>
+                              📎 Cargando documento...
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Botones de acción */}
+                  <div className="flex gap-3 justify-end">
+                    <button
+                      onClick={() => {
+                        setMostrarModalGestionPresupuesto(false);
+                        setPresupuestoActual(null);
+                        setDocumentoPresupuestoUrl(null);
+                      }}
+                      className="px-4 py-2 text-sm rounded border hover:bg-gray-50 transition-colors"
+                      style={{ color: PALETA.textoOscuro, borderColor: '#d1d5db' }}
+                      disabled={enviando}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={() => setMostrarModalMotivoRevision(true)}
+                      disabled={enviando}
+                      className="px-6 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity disabled:opacity-50"
+                      style={{ backgroundColor: '#d4a574' }}
+                    >
+                      Mandar a revisar
+                    </button>
+                    <button
+                      onClick={aprobarPresupuesto}
+                      disabled={enviando}
+                      className="px-6 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity disabled:opacity-50"
+                      style={{ backgroundColor: PALETA.verdeClaro }}
+                    >
+                      {enviando ? 'Procesando...' : 'Aprobar Presupuesto'}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal para pedir motivo de revisión */}
+      {mostrarModalMotivoRevision && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div
+            className="rounded-lg p-6 max-w-md w-full shadow-lg"
+            style={{ backgroundColor: PALETA.card }}
+          >
+            <h3 className="text-lg font-semibold mb-4" style={{ color: PALETA.textoOscuro }}>
+              Motivo de Revisión
+            </h3>
+
+            <p className="text-sm text-gray-600 mb-4">
+              Por favor, especifica el motivo por el cual este presupuesto requiere revisión:
+            </p>
+
+            <textarea
+              value={motivoRevision}
+              onChange={(e) => setMotivoRevision(e.target.value)}
+              placeholder="Describe el motivo de la revisión..."
+              className="w-full p-3 border border-gray-300 rounded-md resize-none"
+              rows={4}
+              style={{ fontSize: '14px' }}
+            />
+
+            <div className="flex gap-3 justify-end mt-6">
               <button
                 type="button"
-                onClick={() => setMostrarModalPendienteValoracion(false)}
+                onClick={() => {
+                  setMostrarModalMotivoRevision(false);
+                  setMotivoRevision('');
+                }}
                 className="px-4 py-2 text-sm rounded border hover:bg-gray-50 transition-colors"
                 style={{ color: PALETA.textoOscuro, borderColor: '#d1d5db' }}
                 disabled={enviando}
               >
                 Cancelar
               </button>
+
               <button
                 type="button"
-                onClick={marcarPendienteValoracion}
-                disabled={enviando}
+                onClick={mandarARevisar}
+                disabled={enviando || !motivoRevision.trim()}
                 className="px-6 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity disabled:opacity-50"
-                style={{ backgroundColor: '#7c3aed' }}
+                style={{ backgroundColor: '#d4a574' }}
               >
-                {enviando ? 'Marcando...' : 'Marcar Pendiente Valoración'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal para gestionar presupuesto */}
-      {mostrarModalGestionPresupuesto && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div
-            className="rounded-lg p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow"
-            style={{ backgroundColor: PALETA.card }}
-          >
-            <h3 className="text-xl font-semibold mb-6" style={{ color: PALETA.textoOscuro }}>
-              Gestionar Presupuesto
-            </h3>
-
-            {cargandoPresupuesto ? (
-              <div className="text-center py-8">
-                <p className="text-gray-600">Cargando presupuesto...</p>
-              </div>
-            ) : !presupuestoActual ? (
-              <div className="text-center py-8">
-                <p className="text-red-600">No se encontró el presupuesto para esta incidencia.</p>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                {/* Información del presupuesto */}
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <h4 className="font-semibold mb-3" style={{ color: PALETA.textoOscuro }}>
-                    Detalles del Presupuesto
-                  </h4>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <span className="font-medium">Descripción:</span>
-                      <p className="mt-1">{presupuestoActual.descripcion || 'No especificada'}</p>
-                    </div>
-
-                    <div>
-                      <span className="font-medium">Importe (sin IVA):</span>
-                      <p className="mt-1 text-lg font-bold text-green-600">
-                        {presupuestoActual.importe_total_sin_iva}€
-                      </p>
-                    </div>
-
-                    <div>
-                      <span className="font-medium">Fecha estimada de inicio:</span>
-                      <p className="mt-1">{presupuestoActual.fecha_estimada_inicio || 'No especificada'}</p>
-                    </div>
-
-                    <div>
-                      <span className="font-medium">Duración estimada:</span>
-                      <p className="mt-1">{presupuestoActual.duracion_estimada || 'No especificada'}</p>
-                    </div>
-                  </div>
-
-                  {presupuestoActual.presupuesto_detallado_url && (
-                    <div className="mt-4">
-                      <span className="font-medium">Documento detallado:</span>
-                      <div className="mt-2">
-                        <a
-                          href={presupuestoActual.presupuesto_detallado_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 underline"
-                        >
-                          📄 Ver presupuesto detallado
-                        </a>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Opciones de gestión */}
-                <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
-                  <h4 className="font-semibold mb-2 text-yellow-800">
-                    ¿Qué deseas hacer con este presupuesto?
-                  </h4>
-                  <p className="text-sm text-yellow-700 mb-4">
-                    Selecciona una opción para continuar con el proceso:
-                  </p>
-
-                  <div className="flex gap-3 flex-wrap">
-                    <button
-                      type="button"
-                      onClick={aprobarPresupuesto}
-                      disabled={enviando}
-                      className="px-6 py-2 text-white rounded hover:opacity-90 transition-opacity disabled:opacity-50"
-                      style={{ backgroundColor: '#059669' }}
-                    >
-                      {enviando ? 'Aprobando...' : '✅ Aprobar Presupuesto'}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={mandarARevisar}
-                      disabled={enviando}
-                      className="px-6 py-2 text-white rounded hover:opacity-90 transition-opacity disabled:opacity-50"
-                      style={{ backgroundColor: '#f59e0b' }}
-                    >
-                      {enviando ? 'Enviando...' : '📝 Mandar a Revisar'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div className="flex justify-end gap-3 mt-6">
-              <button
-                type="button"
-                onClick={() => {
-                  setMostrarModalGestionPresupuesto(false);
-                  setPresupuestoActual(null);
-                }}
-                className="px-4 py-2 text-sm rounded border hover:bg-gray-50 transition-colors"
-                style={{ color: PALETA.textoOscuro, borderColor: '#d1d5db' }}
-                disabled={enviando}
-              >
-                Cerrar
+                {enviando ? 'Procesando...' : 'Enviar a Revisión'}
               </button>
             </div>
           </div>

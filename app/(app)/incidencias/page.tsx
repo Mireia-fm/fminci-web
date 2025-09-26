@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { registrarCambiosEstado } from "@/lib/historialEstados";
+import SearchableSelect from "@/components/SearchableSelect";
 
 // Paleta similar a la imagen de Wix
 const PALETA = {
@@ -32,6 +33,7 @@ type Incidencia = {
     estado_proveedor: string;
     prioridad?: string;
     activo?: boolean;
+    proveedor_id?: string;
   }[] | null;
 };
 
@@ -54,7 +56,15 @@ export default function IncidenciasListado() {
   const [filtroCatalogacion, setFiltroCatalogacion] = useState("");
   const [filtroPrioridadCliente, setFiltroPrioridadCliente] = useState("");
   const [filtroPrioridadProveedor, setFiltroPrioridadProveedor] = useState("");
-  const [tipoUsuario, setTipoUsuario] = useState<string | null>(null);
+  const [filtroProveedor, setFiltroProveedor] = useState("");
+  const [tipoUsuario, setTipoUsuario] = useState<string | null>(() => {
+    // Intentar obtener el tipo de usuario del sessionStorage
+    if (typeof window !== 'undefined') {
+      return sessionStorage.getItem('tipoUsuario');
+    }
+    return null;
+  });
+  const [tipoUsuarioConfirmado, setTipoUsuarioConfirmado] = useState(false);
   const [mostrarModal, setMostrarModal] = useState(false);
   const [incidenciaSeleccionada, setIncidenciaSeleccionada] = useState<string | null>(null);
   const [tieneProveedorAsignado, setTieneProveedorAsignado] = useState(false);
@@ -71,6 +81,8 @@ export default function IncidenciasListado() {
   const [accionEnCurso, setAccionEnCurso] = useState<string | null>(null);
   const [centrosUnicos, setCentrosUnicos] = useState<string[]>([]);
   const [catalogacionesUnicas, setCatalogacionesUnicas] = useState<string[]>([]);
+  const [mostrarFiltroCentro, setMostrarFiltroCentro] = useState(false);
+  const [centrosAsignados, setCentrosAsignados] = useState<{id: string, nombre: string}[]>([]);
 
   // Manejar parámetros URL al cargar
   useEffect(() => {
@@ -78,18 +90,91 @@ export default function IncidenciasListado() {
     if (filtroEstadoParam) {
       setFiltroEstado(filtroEstadoParam);
     }
-    
+
     const filtroEstadoProveedorParam = searchParams.get('estado_proveedor');
     if (filtroEstadoProveedorParam) {
       setFiltroEstadoProveedor(filtroEstadoProveedorParam);
+    }
+
+    const filtroCentroParam = searchParams.get('centro');
+    if (filtroCentroParam) {
+      setFiltroCentro(filtroCentroParam);
     }
   }, [searchParams]);
 
   // Cargar incidencias del usuario actual
   useEffect(() => {
-    cargarIncidencias();
+    // Solo cargar si no hay filtro de número específico
+    if (!filtroNumero || filtroNumero.length < 4) {
+      cargarIncidencias();
+    }
     cargarProveedores();
   }, []);
+
+  // Búsqueda específica cuando se busca un número exacto
+  useEffect(() => {
+    if (filtroNumero && filtroNumero.length >= 4) {
+      console.log("Búsqueda específica para:", filtroNumero);
+      buscarIncidenciaEspecifica(filtroNumero);
+    } else {
+      cargarIncidencias();
+    }
+  }, [filtroNumero]);
+
+  const buscarIncidenciaEspecifica = async (numeroSolicitud: string) => {
+    try {
+      setLoading(true);
+      const { data: userData } = await supabase.auth.getUser();
+      const userEmail = userData.user?.email;
+
+      if (!userEmail) {
+        setLoading(false);
+        return;
+      }
+
+      // Obtener tipo de usuario
+      const { data: persona } = await supabase
+        .from("personas")
+        .select("rol, id")
+        .eq("email", userEmail)
+        .maybeSingle();
+
+      if (persona?.rol === "Control") {
+        // Búsqueda específica para Control
+        const { data, error } = await supabase
+          .from("incidencias")
+          .select(`
+            id,
+            num_solicitud,
+            fecha,
+            estado_cliente,
+            centro,
+            descripcion,
+            catalogacion,
+            prioridad,
+            institucion_id,
+            email,
+            instituciones(nombre),
+            proveedor_casos(estado_proveedor, prioridad, activo)
+          `)
+          .eq("num_solicitud", numeroSolicitud);
+
+        if (!error && data) {
+          setIncidencias(data);
+          console.log("✅ Búsqueda específica EXITOSA:", data.length, "incidencias");
+          console.log("✅ Datos:", data[0]?.num_solicitud, data[0]?.descripcion?.substring(0, 50));
+        } else {
+          console.error("❌ Error en búsqueda específica:", error);
+          setIncidencias([]);
+        }
+      }
+    } catch (error) {
+      console.error("Error en búsqueda específica:", error);
+      setIncidencias([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const cargarIncidencias = async () => {
     try {
@@ -110,7 +195,12 @@ export default function IncidenciasListado() {
 
       if (!personaError && persona) {
         setTipoUsuario(persona.rol);
+        // Guardar en sessionStorage para futuras cargas
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('tipoUsuario', persona.rol);
+        }
       }
+      setTipoUsuarioConfirmado(true);
 
       let data, error;
 
@@ -137,10 +227,12 @@ export default function IncidenciasListado() {
             estado_cliente,
             centro,
             descripcion,
+            catalogacion,
             institucion_id,
             instituciones(nombre),
             proveedor_casos!inner(
               estado_proveedor,
+              prioridad,
               activo
             )
           `)
@@ -166,29 +258,70 @@ export default function IncidenciasListado() {
             institucion_id,
             email,
             instituciones(nombre),
-            proveedor_casos(estado_proveedor, prioridad, activo)
+            proveedor_casos(estado_proveedor, prioridad, activo, proveedor_id)
           `)
           .order("fecha_creacion", { ascending: false });
 
         data = result.data;
         error = result.error;
+
+        // Debug - solo para búsqueda
+        if (data && data.length < 100) {
+          console.log("Carga completa - incidencias encontradas:", data.length);
+        }
       } else {
-        // Para otros usuarios: mostrar todas las incidencias de su centro
-        const { data: personaInstituciones } = await supabase
+        // Para otros usuarios: verificar si es Gestor o Cliente
+        // Primero obtener datos del usuario y verificar acceso_todos_centros
+        const { data: personaData } = await supabase
           .from("personas")
-          .select(`
-            id,
-            personas_instituciones!inner(
+          .select("id, rol, acceso_todos_centros")
+          .eq("email", userEmail)
+          .maybeSingle();
+
+        if (personaData?.acceso_todos_centros) {
+          // Usuario con acceso a todos los centros - cargar todas las incidencias
+          const result = await supabase
+            .from("incidencias")
+            .select(`
+              id,
+              num_solicitud,
+              fecha,
+              estado_cliente,
+              centro,
+              descripcion,
+              catalogacion,
+              prioridad,
               institucion_id,
-              instituciones!inner(id, nombre, tipo)
-            )
-          `)
-          .eq("email", userEmail);
+              email,
+              instituciones(nombre),
+              proveedor_casos(estado_proveedor, prioridad, activo)
+            `)
+            .order("fecha_creacion", { ascending: false });
 
-        if (personaInstituciones && personaInstituciones.length > 0) {
-          const institucionId = personaInstituciones[0].personas_instituciones?.[0]?.institucion_id;
+          data = result.data;
+          error = result.error;
+        } else if (personaData) {
+          // Usuario con instituciones específicas
+          const { data: personaInstituciones } = await supabase
+            .from("personas")
+            .select(`
+              id,
+              rol,
+              personas_instituciones!inner(
+                institucion_id,
+                instituciones!inner(id, nombre, tipo)
+              )
+            `)
+            .eq("email", userEmail);
 
-          if (institucionId) {
+          if (personaInstituciones && personaInstituciones.length > 0) {
+          const esGestor = personaInstituciones[0].rol === 'Gestor';
+
+          if (esGestor) {
+            // Para Gestores: cargar incidencias de TODAS sus instituciones
+            const todasInstituciones = personaInstituciones[0].personas_instituciones;
+            const institucionIds = todasInstituciones.map(inst => inst.institucion_id);
+
             const result = await supabase
               .from("incidencias")
               .select(`
@@ -205,14 +338,85 @@ export default function IncidenciasListado() {
                 instituciones(nombre),
                 proveedor_casos(estado_proveedor, prioridad, activo)
               `)
-              .eq("institucion_id", institucionId)
+              .in("institucion_id", institucionIds)
               .order("fecha_creacion", { ascending: false });
 
             data = result.data;
             error = result.error;
           } else {
-            data = [];
-            error = null;
+            // Para Clientes: verificar si tiene múltiples centros
+            const todasInstituciones = personaInstituciones[0].personas_instituciones;
+
+            if (todasInstituciones.length > 1) {
+              // Cliente con múltiples centros - mostrar filtro de Centro
+              setMostrarFiltroCentro(true);
+              const centros = todasInstituciones.map(inst => ({
+                id: inst.institucion_id,
+                nombre: inst.instituciones.nombre
+              }));
+              setCentrosAsignados(centros);
+
+              // Cargar incidencias de todos sus centros (filtrar por centro si está seleccionado)
+              const institucionIds = todasInstituciones.map(inst => inst.institucion_id);
+              let query = supabase
+                .from("incidencias")
+                .select(`
+                  id,
+                  num_solicitud,
+                  fecha,
+                  estado_cliente,
+                  centro,
+                  descripcion,
+                  catalogacion,
+                  prioridad,
+                  institucion_id,
+                  email,
+                  instituciones(nombre),
+                  proveedor_casos(estado_proveedor, prioridad, activo)
+                `)
+                .in("institucion_id", institucionIds);
+
+              // Aplicar filtro de centro si está seleccionado
+              if (filtroCentro) {
+                query = query.eq("institucion_id", filtroCentro);
+              }
+
+              const result = await query.order("fecha_creacion", { ascending: false });
+              data = result.data;
+              error = result.error;
+            } else {
+              // Cliente con un solo centro - comportamiento actual
+              setMostrarFiltroCentro(false);
+              const institucionId = todasInstituciones[0]?.institucion_id;
+
+              if (institucionId) {
+                const result = await supabase
+                  .from("incidencias")
+                  .select(`
+                    id,
+                    num_solicitud,
+                    fecha,
+                    estado_cliente,
+                    centro,
+                    descripcion,
+                    catalogacion,
+                    prioridad,
+                    institucion_id,
+                    email,
+                    instituciones(nombre),
+                    proveedor_casos(estado_proveedor, prioridad, activo)
+                  `)
+                  .eq("institucion_id", institucionId)
+                  .order("fecha_creacion", { ascending: false });
+
+                data = result.data;
+                error = result.error;
+              } else {
+                data = [];
+                error = null;
+              }
+            }
+          }
           }
         } else {
           data = [];
@@ -305,7 +509,7 @@ export default function IncidenciasListado() {
     setFormularioProveedor({
       proveedor_id: '',
       descripcion_proveedor: descripcionIncidencia,
-      prioridad: '',
+      prioridad: 'No crítico' as 'Crítico' | 'No crítico',
       estado_proveedor: 'Abierta'
     });
     setMostrarModalProveedor(true);
@@ -317,7 +521,7 @@ export default function IncidenciasListado() {
     setFormularioProveedor({
       proveedor_id: '',
       descripcion_proveedor: '',
-      prioridad: '',
+      prioridad: 'No crítico' as 'Crítico' | 'No crítico',
       estado_proveedor: 'Abierta'
     });
   };
@@ -487,8 +691,8 @@ export default function IncidenciasListado() {
       );
 
     const coincideCentro = !filtroCentro ||
-      (inc.centro && inc.centro.toLowerCase().includes(filtroCentro.toLowerCase())) ||
-      (inc.instituciones?.[0]?.nombre && inc.instituciones[0].nombre.toLowerCase().includes(filtroCentro.toLowerCase()));
+      (inc.centro && inc.centro.toLowerCase() === filtroCentro.toLowerCase()) ||
+      (inc.instituciones?.[0]?.nombre && inc.instituciones[0].nombre.toLowerCase() === filtroCentro.toLowerCase());
     const coincideNumero = !filtroNumero ||
       inc.num_solicitud.toLowerCase().includes(filtroNumero.toLowerCase());
     const coincideEstadoProveedor = !filtroEstadoProveedor ||
@@ -498,16 +702,20 @@ export default function IncidenciasListado() {
     const coincideCatalogacion = !filtroCatalogacion ||
       inc.catalogacion === filtroCatalogacion;
     const coincidePrioridadCliente = !filtroPrioridadCliente ||
-      inc.prioridad === filtroPrioridadCliente;
+      (tipoUsuario === "Cliente" || tipoUsuario === "Gestor" ?
+        inc.prioridad === filtroPrioridadCliente :
+        (inc.proveedor_casos && inc.proveedor_casos.some(pc => pc.activo && pc.prioridad === filtroPrioridadCliente)));
     const coincidePrioridadProveedor = !filtroPrioridadProveedor ||
       (inc.proveedor_casos && inc.proveedor_casos.some(pc => pc.activo && pc.prioridad === filtroPrioridadProveedor));
+    const coincideProveedor = !filtroProveedor ||
+      (inc.proveedor_casos && inc.proveedor_casos.some(pc => pc.activo && pc.proveedor_id === filtroProveedor));
 
     // Para proveedores: no verificar filtroEstadoProveedor por separado si ya se verificó en coincideEstado
     const verificarEstadoProveedorSeparado = tipoUsuario !== "Proveedor" && filtroEstadoProveedor;
 
     return coincideEstado && coincideCentro && coincideNumero &&
            (!verificarEstadoProveedorSeparado || coincideEstadoProveedor) &&
-           coincideFecha && coincideCatalogacion && coincidePrioridadCliente && coincidePrioridadProveedor;
+           coincideFecha && coincideCatalogacion && coincidePrioridadCliente && coincidePrioridadProveedor && coincideProveedor;
   });
 
   // Calcular paginación
@@ -525,6 +733,7 @@ export default function IncidenciasListado() {
     setFiltroCatalogacion("");
     setFiltroPrioridadCliente("");
     setFiltroPrioridadProveedor("");
+    setFiltroProveedor("");
     setPaginaActual(1); // Resetear a la primera página
 
     // Limpiar también los parámetros de URL
@@ -558,7 +767,7 @@ export default function IncidenciasListado() {
       const incidencia = incidencias.find(inc => inc.id === incidenciaId);
       const tieneProveedor = incidencia?.proveedor_casos &&
                            incidencia.proveedor_casos.length > 0 &&
-                           incidencia.proveedor_casos.some(pc => pc.estado_proveedor);
+                           incidencia.proveedor_casos.some(pc => pc.estado_proveedor && pc.activo);
 
       setTieneProveedorAsignado(!!tieneProveedor);
       setIncidenciaSeleccionada(incidenciaId);
@@ -598,6 +807,15 @@ export default function IncidenciasListado() {
     }
   };
 
+  // Mostrar loading si el tipo de usuario no está confirmado o si está cargando
+  if (!tipoUsuarioConfirmado || loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: PALETA.fondo }}>
+        <div className="text-white">Cargando incidencias...</div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen w-full" style={{ backgroundColor: PALETA.fondo }}>
 
@@ -611,161 +829,238 @@ export default function IncidenciasListado() {
         )}
 
         {/* Filtros - encima de la tabla */}
-        <div
-          className="p-4 rounded-lg relative mb-6"
-          style={{ backgroundColor: PALETA.headerTable }}
-        >
-          {/* Primera fila de filtros: número solicitud, fecha, estado cliente, estado proveedor */}
-          <div className="flex gap-4 items-center mb-4 flex-wrap">
-            <input
-              type="text"
-              placeholder="Número solicitud"
-              value={filtroNumero}
-              onChange={(e) => setFiltroNumero(e.target.value)}
-              className="px-3 py-2 rounded border text-sm h-10 bg-white w-48"
-            />
+        <div className="mb-12 relative">
+          <div
+            className="p-4"
+            style={{
+              backgroundColor: PALETA.headerTable,
+              borderRadius: "4px 4px 0 4px"
+            }}
+          >
+            {/* Primera fila de filtros: número solicitud, fecha, estado cliente, estado proveedor */}
+            <div className="grid gap-4 mb-4" style={{ gridTemplateColumns: `repeat(${tipoUsuario === "Control" ? 4 : 3}, minmax(0, 1fr))` }}>
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: PALETA.textoOscuro }}>
+                Número solicitud
+              </label>
+              <input
+                type="text"
+                placeholder="Buscar"
+                value={filtroNumero}
+                onChange={(e) => setFiltroNumero(e.target.value)}
+                className="px-3 py-1.5 rounded border text-sm h-8 bg-white w-full"
+              />
+            </div>
 
-            <input
-              type="date"
-              value={filtroFecha}
-              onChange={(e) => setFiltroFecha(e.target.value)}
-              className="px-3 py-2 rounded border text-sm h-10 bg-white w-44"
-            />
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: PALETA.textoOscuro }}>
+                Fecha
+              </label>
+              <input
+                type="date"
+                value={filtroFecha}
+                onChange={(e) => setFiltroFecha(e.target.value)}
+                className="px-3 py-1.5 rounded border text-sm h-8 bg-white w-full"
+              />
+            </div>
 
-            <select
-              value={filtroEstado}
-              onChange={(e) => setFiltroEstado(e.target.value)}
-              className="px-3 py-2 rounded border text-sm h-10 bg-white appearance-none w-48"
-              style={{ backgroundImage: "url('data:image/svg+xml;charset=US-ASCII,<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"4\" height=\"5\"><path fill=\"%23666\" d=\"M2 0L0 2h4zm0 5L0 3h4z\"/></svg>')", backgroundRepeat: "no-repeat", backgroundPosition: "right 8px center", backgroundSize: "12px" }}
-            >
-              {tipoUsuario === "Proveedor" ? (
-                <>
-                  <option value="">Estado</option>
-                  <option value="Abierta">Abierta</option>
-                  <option value="En resolución">En resolución</option>
-                  <option value="Ofertada">Ofertada</option>
-                  <option value="Oferta aprobada">Oferta aprobada</option>
-                  <option value="Oferta a revisar">Oferta a revisar</option>
-                  <option value="Resuelta">Resuelta</option>
-                  <option value="Cerrada">Cerrada</option>
-                  <option value="Anulada">Anulada</option>
-                  <option value="Valorada">Valorada</option>
-                  <option value="Pendiente valoración">Pendiente valoración</option>
-                </>
-              ) : tipoUsuario === "Control" ? (
-                <>
-                  <option value="">Estado Cliente</option>
-                  <option value="Abierta">Abierta</option>
-                  <option value="En espera">En espera</option>
-                  <option value="En tramitación">En tramitación</option>
-                  <option value="Resuelta">Resuelta</option>
-                  <option value="Cerrada">Cerrada</option>
-                  <option value="Anulada">Anulada</option>
-                </>
-              ) : (
-                <>
-                  <option value="">Estado Cliente</option>
-                  <option value="Abierta">Abierta</option>
-                  <option value="En espera">En espera</option>
-                  <option value="En tramitación">En tramitación</option>
-                  <option value="Resuelta">Resuelta</option>
-                  <option value="Cerrada">Cerrada</option>
-                  <option value="Anulada">Anulada</option>
-                </>
-              )}
-            </select>
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: PALETA.textoOscuro }}>
+                {tipoUsuario === "Control" ? "Estado Cliente" : "Estado"}
+              </label>
+              <SearchableSelect
+                value={filtroEstado}
+                onChange={setFiltroEstado}
+                placeholder="Seleccionar"
+                className="w-full"
+                options={
+                  tipoUsuario === "Proveedor" ? [
+                    { value: "Abierta", label: "Abierta" },
+                    { value: "En resolución", label: "En resolución" },
+                    { value: "Ofertada", label: "Ofertada" },
+                    { value: "Oferta aprobada", label: "Oferta aprobada" },
+                    { value: "Oferta a revisar", label: "Oferta a revisar" },
+                    { value: "Resuelta", label: "Resuelta" },
+                    { value: "Cerrada", label: "Cerrada" },
+                    { value: "Anulada", label: "Anulada" },
+                    { value: "Valorada", label: "Valorada" },
+                    { value: "Pendiente valoración", label: "Pendiente valoración" }
+                  ] : [
+                    { value: "Abierta", label: "Abierta" },
+                    { value: "En espera", label: "En espera" },
+                    { value: "En tramitación", label: "En tramitación" },
+                    { value: "Resuelta", label: "Resuelta" },
+                    { value: "Cerrada", label: "Cerrada" },
+                    { value: "Anulada", label: "Anulada" }
+                  ]
+                }
+              />
+            </div>
 
             {tipoUsuario === "Control" && (
-              <select
-                value={filtroEstadoProveedor}
-                onChange={(e) => setFiltroEstadoProveedor(e.target.value)}
-                className="px-3 py-2 rounded border text-sm h-10 bg-white appearance-none w-52"
-                style={{ backgroundImage: "url('data:image/svg+xml;charset=US-ASCII,<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"4\" height=\"5\"><path fill=\"%23666\" d=\"M2 0L0 2h4zm0 5L0 3h4z\"/></svg>')", backgroundRepeat: "no-repeat", backgroundPosition: "right 8px center", backgroundSize: "12px" }}
-              >
-                <option value="">Estado Proveedor</option>
-                <option value="Abierta">Abierta</option>
-                <option value="En resolución">En resolución</option>
-                <option value="Ofertada">Ofertada</option>
-                <option value="Oferta aprobada">Oferta aprobada</option>
-                <option value="Oferta a revisar">Oferta a revisar</option>
-                <option value="Resuelta">Resuelta</option>
-                <option value="Cerrada">Cerrada</option>
-                <option value="Anulada">Anulada</option>
-                <option value="Valorada">Valorada</option>
-                <option value="Pendiente valoración">Pendiente valoración</option>
-              </select>
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: PALETA.textoOscuro }}>
+                  Estado Proveedor
+                </label>
+                <SearchableSelect
+                  value={filtroEstadoProveedor}
+                  onChange={setFiltroEstadoProveedor}
+                  placeholder="Seleccionar"
+                  className="w-full"
+                  options={[
+                    { value: "Abierta", label: "Abierta" },
+                    { value: "En resolución", label: "En resolución" },
+                    { value: "Ofertada", label: "Ofertada" },
+                    { value: "Oferta aprobada", label: "Oferta aprobada" },
+                    { value: "Oferta a revisar", label: "Oferta a revisar" },
+                    { value: "Resuelta", label: "Resuelta" },
+                    { value: "Cerrada", label: "Cerrada" },
+                    { value: "Anulada", label: "Anulada" },
+                    { value: "Valorada", label: "Valorada" },
+                    { value: "Pendiente valoración", label: "Pendiente valoración" }
+                  ]}
+                />
+              </div>
             )}
           </div>
 
-          {/* Segunda fila de filtros: centro, catalogación, prioridad cliente, prioridad proveedor */}
-          <div className="flex gap-4 items-center flex-wrap">
-            {/* Centro como desplegable - solo para Control y Proveedor */}
-            {tipoUsuario !== "Cliente" && (
-              <select
-                value={filtroCentro}
-                onChange={(e) => setFiltroCentro(e.target.value)}
-                className="px-3 py-2 rounded border text-sm h-10 bg-white appearance-none w-48"
-                style={{ backgroundImage: "url('data:image/svg+xml;charset=US-ASCII,<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"4\" height=\"5\"><path fill=\"%23666\" d=\"M2 0L0 2h4zm0 5L0 3h4z\"/></svg>')", backgroundRepeat: "no-repeat", backgroundPosition: "right 8px center", backgroundSize: "12px" }}
-              >
-                <option value="">Centro</option>
-                {centrosUnicos.map(centro => (
-                  <option key={centro} value={centro}>{centro}</option>
-                ))}
-              </select>
+            {/* Segunda fila de filtros: centro, catalogación, prioridad cliente, proveedor */}
+            <div className="grid gap-4 mb-4" style={{
+              gridTemplateColumns: tipoUsuario === "Control"
+                ? "repeat(4, minmax(0, 1fr))"
+                : "repeat(3, minmax(0, 1fr))"
+            }}>
+            {/* Centro como desplegable - para Control, Proveedor y Cliente con múltiples centros */}
+            {(tipoUsuario !== "Cliente" || mostrarFiltroCentro) ? (
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: PALETA.textoOscuro }}>
+                  Centro
+                </label>
+                <SearchableSelect
+                  value={filtroCentro}
+                  onChange={setFiltroCentro}
+                  placeholder="Seleccionar"
+                  className="w-full"
+                  options={
+                    /* Para Cliente con múltiples centros, usar centrosAsignados. Para otros, usar centrosUnicos */
+                    mostrarFiltroCentro
+                      ? centrosAsignados.map(centro => ({
+                          value: centro.id,
+                          label: centro.nombre
+                        }))
+                      : centrosUnicos.map(centro => ({
+                          value: centro,
+                          label: centro
+                        }))
+                  }
+                />
+              </div>
+            ) : (
+              /* Div vacío para mantener la estructura de 3 columnas */
+              <div></div>
             )}
 
             {/* Catalogación como desplegable */}
-            <select
-              value={filtroCatalogacion}
-              onChange={(e) => setFiltroCatalogacion(e.target.value)}
-              className="px-3 py-2 rounded border text-sm h-10 bg-white appearance-none w-48"
-              style={{ backgroundImage: "url('data:image/svg+xml;charset=US-ASCII,<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"4\" height=\"5\"><path fill=\"%23666\" d=\"M2 0L0 2h4zm0 5L0 3h4z\"/></svg>')", backgroundRepeat: "no-repeat", backgroundPosition: "right 8px center", backgroundSize: "12px" }}
-            >
-              <option value="">Catalogación</option>
-              {catalogacionesUnicas.map(catalogacion => (
-                <option key={catalogacion} value={catalogacion}>{catalogacion}</option>
-              ))}
-            </select>
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: PALETA.textoOscuro }}>
+                Catalogación
+              </label>
+              <SearchableSelect
+                value={filtroCatalogacion}
+                onChange={setFiltroCatalogacion}
+                placeholder="Seleccionar"
+                className="w-full"
+                options={catalogacionesUnicas.map(catalogacion => ({
+                  value: catalogacion,
+                  label: catalogacion
+                }))}
+              />
+            </div>
 
             {/* Filtro de prioridad cliente */}
-            <select
-              value={filtroPrioridadCliente}
-              onChange={(e) => setFiltroPrioridadCliente(e.target.value)}
-              className="px-3 py-2 rounded border text-sm h-10 bg-white appearance-none w-48"
-              style={{ backgroundImage: "url('data:image/svg+xml;charset=US-ASCII,<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"4\" height=\"5\"><path fill=\"%23666\" d=\"M2 0L0 2h4zm0 5L0 3h4z\"/></svg>')", backgroundRepeat: "no-repeat", backgroundPosition: "right 8px center", backgroundSize: "12px" }}
-            >
-              <option value="">Prioridad Cliente</option>
-              <option value="Urgente">Urgente</option>
-              <option value="Crítico">Crítico</option>
-              <option value="Normal">Normal</option>
-            </select>
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: PALETA.textoOscuro }}>
+                Prioridad Cliente
+              </label>
+              <SearchableSelect
+                value={filtroPrioridadCliente}
+                onChange={setFiltroPrioridadCliente}
+                placeholder="Seleccionar"
+                className="w-full"
+                options={
+                  tipoUsuario === "Cliente" || tipoUsuario === "Gestor" ? [
+                    { value: "Urgente", label: "Urgente" },
+                    { value: "Crítico", label: "Crítico" },
+                    { value: "Normal", label: "Normal" }
+                  ] : [
+                    { value: "Crítico", label: "Crítico" },
+                    { value: "No crítico", label: "No crítico" }
+                  ]
+                }
+              />
+            </div>
 
             {/* Filtro de prioridad proveedor */}
             {tipoUsuario === "Control" && (
-              <select
-                value={filtroPrioridadProveedor}
-                onChange={(e) => setFiltroPrioridadProveedor(e.target.value)}
-                className="px-3 py-2 rounded border text-sm h-10 bg-white appearance-none w-52"
-                style={{ backgroundImage: "url('data:image/svg+xml;charset=US-ASCII,<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"4\" height=\"5\"><path fill=\"%23666\" d=\"M2 0L0 2h4zm0 5L0 3h4z\"/></svg>')", backgroundRepeat: "no-repeat", backgroundPosition: "right 8px center", backgroundSize: "12px" }}
-              >
-                <option value="">Prioridad Proveedor</option>
-                <option value="Crítico">Crítico</option>
-                <option value="No crítico">No crítico</option>
-              </select>
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: PALETA.textoOscuro }}>
+                  Prioridad Proveedor
+                </label>
+                <SearchableSelect
+                  value={filtroPrioridadProveedor}
+                  onChange={setFiltroPrioridadProveedor}
+                  placeholder="Seleccionar"
+                  className="w-full"
+                  options={[
+                    { value: "Crítico", label: "Crítico" },
+                    { value: "No crítico", label: "No crítico" }
+                  ]}
+                />
+              </div>
+            )}
+            </div>
+
+            {/* Tercera fila de filtros: proveedor */}
+            {tipoUsuario === "Control" && (
+              <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr 1fr 1fr" }}>
+                <div></div>
+                <div></div>
+                <div></div>
+                <div>
+                  <label className="block text-xs font-medium mb-1" style={{ color: PALETA.textoOscuro }}>
+                    Proveedor
+                  </label>
+                  <SearchableSelect
+                    value={filtroProveedor}
+                    onChange={setFiltroProveedor}
+                    placeholder="Seleccionar"
+                    className="w-full"
+                    options={proveedores.map(proveedor => ({
+                      value: proveedor.id,
+                      label: proveedor.nombre
+                    }))}
+                  />
+                </div>
+              </div>
             )}
           </div>
 
-          {/* Botón limpiar filtros - separado y a la derecha */}
-          <button
-            onClick={limpiarFiltros}
-            className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center hover:bg-black/10 transition-colors"
-            style={{
-              color: PALETA.textoOscuro
-            }}
-            title="Limpiar filtros"
-          >
-            ✕
-          </button>
+          {/* Botón limpiar filtros - extensión separada */}
+          <div className="absolute bottom-0 right-0 translate-y-full">
+            <button
+              onClick={limpiarFiltros}
+              className="px-3 py-1 text-xs font-medium hover:opacity-80 transition-opacity flex items-center gap-1"
+              style={{
+                backgroundColor: PALETA.headerTable,
+                color: PALETA.textoOscuro,
+                borderRadius: "0 0 4px 4px"
+              }}
+              title="Limpiar filtros"
+            >
+              <span className="text-xs">✕</span>
+              Limpiar filtros
+            </button>
+          </div>
         </div>
 
         {/* Tabla de incidencias */}
@@ -780,7 +1075,9 @@ export default function IncidenciasListado() {
           >
             <div className="font-medium text-sm">Número solicitud</div>
             <div className="font-medium text-sm">Fecha</div>
-            <div className="font-medium text-sm">Estado Cliente</div>
+            <div className="font-medium text-sm">
+              {tipoUsuario === "Control" ? "Estado Cliente" : "Estado"}
+            </div>
             {tipoUsuario === "Control" && (
               <div className="font-medium text-sm">Estado Proveedor</div>
             )}
@@ -792,11 +1089,7 @@ export default function IncidenciasListado() {
 
           {/* Contenido de la tabla */}
           <div className="min-h-[300px]">
-            {loading ? (
-              <div className="flex items-center justify-center h-64">
-                <span className="text-gray-500">Cargando incidencias...</span>
-              </div>
-            ) : incidenciasFiltradas.length === 0 ? (
+            {incidenciasFiltradas.length === 0 ? (
               <div className="flex items-center justify-center h-64">
                 <span className="text-gray-500">
                   {incidencias.length === 0 ? "No tienes incidencias registradas" : "No se encontraron incidencias con los filtros aplicados"}
@@ -991,22 +1284,19 @@ export default function IncidenciasListado() {
                   <label className="block text-sm font-medium mb-2" style={{ color: PALETA.textoOscuro }}>
                     Proveedor *
                   </label>
-                  <select
+                  <SearchableSelect
                     value={formularioProveedor.proveedor_id}
-                    onChange={(e) => setFormularioProveedor(prev => ({
+                    onChange={(value) => setFormularioProveedor(prev => ({
                       ...prev,
-                      proveedor_id: e.target.value
+                      proveedor_id: value
                     }))}
-                    className="w-full h-9 rounded border px-3 text-sm outline-none focus:ring-2 focus:ring-[#C9D7A7] appearance-none pr-6"
-                    required
-                  >
-                    <option value="">Seleccionar proveedor...</option>
-                    {proveedores.map(proveedor => (
-                      <option key={proveedor.id} value={proveedor.id}>
-                        {proveedor.nombre}
-                      </option>
-                    ))}
-                  </select>
+                    placeholder="Seleccionar proveedor..."
+                    className="w-full"
+                    options={proveedores.map(proveedor => ({
+                      value: proveedor.id,
+                      label: proveedor.nombre
+                    }))}
+                  />
                 </div>
 
                 {/* Descripción para el Proveedor */}
@@ -1030,19 +1320,19 @@ export default function IncidenciasListado() {
                   <label className="block text-sm font-medium mb-2" style={{ color: PALETA.textoOscuro }}>
                     Prioridad
                   </label>
-                  <select
+                  <SearchableSelect
                     value={formularioProveedor.prioridad}
-                    onChange={(e) => setFormularioProveedor(prev => ({
+                    onChange={(value) => setFormularioProveedor(prev => ({
                       ...prev,
-                      prioridad: e.target.value as 'Crítico' | 'No crítico'
+                      prioridad: value as 'Crítico' | 'No crítico'
                     }))}
-                    className="w-full h-9 rounded border px-3 text-sm outline-none focus:ring-2 focus:ring-[#C9D7A7] appearance-none pr-6"
-                    required
-                  >
-                    <option value="">Seleccionar prioridad...</option>
-                    <option value="No crítico">No crítico</option>
-                    <option value="Crítico">Crítico</option>
-                  </select>
+                    placeholder="Seleccionar prioridad..."
+                    className="w-full"
+                    options={[
+                      { value: "No crítico", label: "No crítico" },
+                      { value: "Crítico", label: "Crítico" }
+                    ]}
+                  />
                 </div>
               </div>
 

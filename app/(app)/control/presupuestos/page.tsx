@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { registrarCambioEstado } from "@/lib/historialEstados";
+import SearchableSelect from "@/components/SearchableSelect";
 
 // Paleta de colores consistente
 const PALETA = {
@@ -43,15 +44,25 @@ export default function PresupuestosPage() {
   const [presupuestos, setPresupuestos] = useState<Presupuesto[]>([]);
   const [loading, setLoading] = useState(true);
   const [enviando, setEnviando] = useState(false);
-  const [filtroEstado, setFiltroEstado] = useState("pendiente_revision");
+  const [filtroEstado, setFiltroEstado] = useState("");
   const [autorId, setAutorId] = useState<string | null>(null);
   const [presupuestoSeleccionado, setPresupuestoSeleccionado] = useState<Presupuesto | null>(null);
   const [mostrarModal, setMostrarModal] = useState(false);
   const [documentUrls, setDocumentUrls] = useState<Record<string, string>>({});
+  const [mostrarModalMotivoRevision, setMostrarModalMotivoRevision] = useState(false);
+  const [motivoRevision, setMotivoRevision] = useState('');
+  const [presupuestoParaRechazar, setPresupuestoParaRechazar] = useState<Presupuesto | null>(null);
+  const [filtroProveedor, setFiltroProveedor] = useState("");
+  const [filtroNumeroSolicitud, setFiltroNumeroSolicitud] = useState("");
+  const [proveedores, setProveedores] = useState<{id: string, nombre: string}[]>([]);
 
   useEffect(() => {
     cargarDatos();
-  }, [filtroEstado]);
+  }, [filtroEstado, filtroProveedor, filtroNumeroSolicitud]);
+
+  useEffect(() => {
+    cargarProveedores();
+  }, []);
 
   // Cargar URLs firmadas de documentos
   useEffect(() => {
@@ -83,16 +94,31 @@ export default function PresupuestosPage() {
       if (persona && persona.rol === 'Control') {
         setAutorId(persona.id);
 
-        // Cargar presupuestos con filtro
-        const { data: presupuestosData, error } = await supabase
+        // Cargar presupuestos con filtros
+        let query = supabase
           .from("presupuestos")
           .select(`
             *,
             instituciones(nombre),
             incidencias(num_solicitud, descripcion)
-          `)
-          .eq("estado", filtroEstado)
-          .order("creado_en", { ascending: false });
+          `);
+
+        // Aplicar filtro de estado si está seleccionado
+        if (filtroEstado) {
+          query = query.eq("estado", filtroEstado);
+        }
+
+        // Aplicar filtro de proveedor si está seleccionado
+        if (filtroProveedor) {
+          query = query.eq("proveedor_id", filtroProveedor);
+        }
+
+        // Aplicar filtro de número de solicitud si está seleccionado
+        if (filtroNumeroSolicitud) {
+          query = query.filter("incidencias.num_solicitud", "ilike", `%${filtroNumeroSolicitud}%`);
+        }
+
+        const { data: presupuestosData, error } = await query.order("creado_en", { ascending: false });
 
         if (error) {
           console.error("Error cargando presupuestos:", error);
@@ -206,7 +232,7 @@ export default function PresupuestosPage() {
         .from("comentarios")
         .insert({
           incidencia_id: presupuesto.incidencia_id,
-          ambito: 'ambos',
+          ambito: 'proveedor',
           autor_id: autorId,
           autor_email: userEmail,
           autor_rol: 'Control',
@@ -217,7 +243,6 @@ export default function PresupuestosPage() {
       // 5. Recargar datos
       cargarDatos();
       setMostrarModal(false);
-      alert('Presupuesto aprobado correctamente');
 
     } catch (error) {
       console.error("Error aprobando presupuesto:", error);
@@ -227,7 +252,17 @@ export default function PresupuestosPage() {
     }
   };
 
-  const rechazarPresupuesto = async (presupuesto: Presupuesto) => {
+  const abrirModalMotivoRevision = (presupuesto: Presupuesto) => {
+    setPresupuestoParaRechazar(presupuesto);
+    setMostrarModalMotivoRevision(true);
+  };
+
+  const rechazarPresupuesto = async () => {
+    if (!presupuestoParaRechazar || !motivoRevision.trim()) {
+      alert('Por favor, proporcione un motivo para la revisión');
+      return;
+    }
+
     try {
       setEnviando(true);
 
@@ -235,7 +270,7 @@ export default function PresupuestosPage() {
       const { error: presupuestoError } = await supabase
         .from("presupuestos")
         .update({ estado: "rechazado" })
-        .eq("id", presupuesto.id);
+        .eq("id", presupuestoParaRechazar.id);
 
       if (presupuestoError) {
         console.error("Error rechazando presupuesto:", presupuestoError);
@@ -246,7 +281,7 @@ export default function PresupuestosPage() {
       const { error: estadoError } = await supabase
         .from("proveedor_casos")
         .update({ estado_proveedor: "Oferta a revisar" })
-        .eq("incidencia_id", presupuesto.incidencia_id)
+        .eq("incidencia_id", presupuestoParaRechazar.incidencia_id)
         .eq("activo", true);
 
       if (estadoError) {
@@ -256,38 +291,69 @@ export default function PresupuestosPage() {
 
       // 3. Registrar cambio de estado en el historial
       await registrarCambioEstado({
-        incidenciaId: presupuesto.incidencia_id,
+        incidenciaId: presupuestoParaRechazar.incidencia_id,
         tipoEstado: 'proveedor',
         estadoAnterior: 'Ofertada',
         estadoNuevo: 'Oferta a revisar',
         autorId: autorId!,
-        motivo: 'Presupuesto mandado a revisar por Control',
+        motivo: `Presupuesto mandado a revisar por Control: ${motivoRevision}`,
         metadatos: {
-          presupuesto_id: presupuesto.id,
-          importe: presupuesto.importe_total_sin_iva,
-          accion: 'rechazar_presupuesto'
+          presupuesto_id: presupuestoParaRechazar.id,
+          importe: presupuestoParaRechazar.importe_total_sin_iva,
+          accion: 'rechazar_presupuesto',
+          justificacion: motivoRevision
         }
       });
 
-      // 4. Crear comentario del sistema
+      // 4. Crear comentario del sistema con justificación
       const { data: userData } = await supabase.auth.getUser();
       const userEmail = userData.user?.email;
 
       await supabase
         .from("comentarios")
         .insert({
-          incidencia_id: presupuesto.incidencia_id,
+          incidencia_id: presupuestoParaRechazar.incidencia_id,
           ambito: 'ambos',
           autor_id: autorId,
           autor_email: userEmail,
           autor_rol: 'Control',
-          cuerpo: `Control ha mandado la oferta de presupuesto a revisar. El proveedor debe enviar una nueva propuesta.`,
+          cuerpo: `Control ha mandado la oferta de presupuesto a revisar.
+
+Motivo: ${motivoRevision}
+
+El proveedor debe enviar una nueva propuesta.`,
           es_sistema: true
         });
 
-      // 5. Recargar datos
-      cargarDatos();
+      // 5. Crear notificación para el proveedor
+      const { data: proveedorCaso } = await supabase
+        .from("proveedor_casos")
+        .select("proveedor_id")
+        .eq("incidencia_id", presupuestoParaRechazar.incidencia_id)
+        .eq("activo", true)
+        .single();
+
+      if (proveedorCaso) {
+        await supabase
+          .from("proveedor_notificaciones")
+          .upsert({
+            proveedor_id: proveedorCaso.proveedor_id,
+            incidencia_id: presupuestoParaRechazar.incidencia_id,
+            tipo_notificacion: 'revision',
+            notificacion_vista: false
+          }, {
+            onConflict: 'proveedor_id,incidencia_id,tipo_notificacion'
+          });
+      }
+
+      // 6. Cerrar modales y limpiar estado
+      setMostrarModalMotivoRevision(false);
       setMostrarModal(false);
+      setMotivoRevision('');
+      setPresupuestoParaRechazar(null);
+
+      // 7. Recargar datos
+      cargarDatos();
       alert('Presupuesto mandado a revisar correctamente');
 
     } catch (error) {
@@ -303,14 +369,31 @@ export default function PresupuestosPage() {
     setMostrarModal(true);
   };
 
+  const cargarProveedores = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("instituciones")
+        .select("id, nombre")
+        .eq("tipo", "Proveedor")
+        .eq("activo", true)
+        .order("nombre");
+
+      if (!error && data) {
+        setProveedores(data);
+      }
+    } catch (error) {
+      console.error("Error cargando proveedores:", error);
+    }
+  };
+
   const getEstadoColor = (estado: string) => {
     switch (estado) {
       case 'pendiente_revision':
         return PALETA.filtros;
       case 'aprobado':
-        return '#10b981';
+        return PALETA.verdeClaro;
       case 'rechazado':
-        return '#ef4444';
+        return '#d4a574';
       default:
         return '#6b7280';
     }
@@ -347,22 +430,92 @@ export default function PresupuestosPage() {
       </div>
 
       {/* Filtros */}
-      <div className="px-6 mb-6">
-        <div
-          className="p-4 rounded-lg relative"
-          style={{ backgroundColor: PALETA.headerTable }}
-        >
-          <div className="flex gap-4 items-center">
-            <select
-              value={filtroEstado}
-              onChange={(e) => setFiltroEstado(e.target.value)}
-              className="px-3 py-2 rounded border text-sm h-10 bg-white appearance-none w-52"
-              style={{ backgroundImage: "url('data:image/svg+xml;charset=US-ASCII,<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"4\" height=\"5\"><path fill=\"%23666\" d=\"M2 0L0 2h4zm0 5L0 3h4z\"/></svg>')", backgroundRepeat: "no-repeat", backgroundPosition: "right 8px center", backgroundSize: "12px" }}
+      <div className="px-6 mb-12">
+        <div className="relative">
+          <div
+            className="p-4"
+            style={{
+              backgroundColor: PALETA.headerTable,
+              borderRadius: "4px 4px 0 4px"
+            }}
+          >
+            <div className="flex gap-4 items-end">
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: PALETA.textoOscuro }}>
+                  Estado del presupuesto
+                </label>
+                <SearchableSelect
+                  value={filtroEstado}
+                  onChange={setFiltroEstado}
+                  placeholder="Seleccionar"
+                  className="w-52"
+                  options={[
+                    { value: "", label: "Todos" },
+                    { value: "pendiente_revision", label: "Pendientes de revisión" },
+                    { value: "aprobado", label: "Aprobados" },
+                    { value: "rechazado", label: "Rechazados" }
+                  ]}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: PALETA.textoOscuro }}>
+                  Proveedor
+                </label>
+                <SearchableSelect
+                  value={filtroProveedor}
+                  onChange={setFiltroProveedor}
+                  placeholder="Seleccionar"
+                  className="w-52"
+                  options={proveedores.map(proveedor => ({
+                    value: proveedor.id,
+                    label: proveedor.nombre
+                  }))}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: PALETA.textoOscuro }}>
+                  Número de solicitud
+                </label>
+                <input
+                  type="text"
+                  value={filtroNumeroSolicitud}
+                  onChange={(e) => setFiltroNumeroSolicitud(e.target.value)}
+                  placeholder="Buscar"
+                  className="w-52 px-3 py-1.5 rounded border text-sm h-8 bg-white outline-none focus:ring-2"
+                  style={{
+                    '--tw-ring-color': PALETA.verdeClaro
+                  } as React.CSSProperties}
+                  onFocus={(e) => {
+                    e.target.style.boxShadow = `0 0 0 2px ${PALETA.verdeClaro}40`;
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.boxShadow = '';
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Botón limpiar filtros - extensión separada */}
+          <div className="absolute bottom-0 right-0 translate-y-full">
+            <button
+              onClick={() => {
+                setFiltroEstado("");
+                setFiltroProveedor("");
+                setFiltroNumeroSolicitud("");
+              }}
+              className="px-3 py-1 text-xs font-medium hover:opacity-80 transition-opacity flex items-center gap-1"
+              style={{
+                backgroundColor: PALETA.headerTable,
+                color: PALETA.textoOscuro,
+                borderRadius: "0 0 4px 4px"
+              }}
+              title="Limpiar filtros"
             >
-              <option value="pendiente_revision">Pendientes de revisión</option>
-              <option value="aprobado">Aprobados</option>
-              <option value="rechazado">Rechazados</option>
-            </select>
+              <span className="text-xs">✕</span>
+              Limpiar filtros
+            </button>
           </div>
         </div>
       </div>
@@ -372,7 +525,10 @@ export default function PresupuestosPage() {
         {presupuestos.length === 0 ? (
           <div className="bg-white rounded-lg p-8 text-center">
             <p className="text-gray-500">
-              No hay presupuestos con estado "{getEstadoTexto(filtroEstado)}"
+              {filtroEstado
+                ? `No hay presupuestos con estado "${getEstadoTexto(filtroEstado)}"`
+                : "No hay presupuestos disponibles"
+              }
             </p>
           </div>
         ) : (
@@ -462,7 +618,7 @@ export default function PresupuestosPage() {
                           {enviando ? 'Procesando...' : 'Aprobar'}
                         </button>
                         <button
-                          onClick={() => rechazarPresupuesto(presupuesto)}
+                          onClick={() => abrirModalMotivoRevision(presupuesto)}
                           disabled={enviando}
                           className="px-4 py-2 text-white rounded text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
                           style={{ backgroundColor: '#d4a574' }}
@@ -699,7 +855,7 @@ export default function PresupuestosPage() {
                     Cancelar
                   </button>
                   <button
-                    onClick={() => rechazarPresupuesto(presupuestoSeleccionado)}
+                    onClick={() => abrirModalMotivoRevision(presupuestoSeleccionado)}
                     disabled={enviando}
                     className="px-6 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity disabled:opacity-50"
                     style={{ backgroundColor: '#d4a574' }}
@@ -716,6 +872,81 @@ export default function PresupuestosPage() {
                   </button>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de motivo de revisión */}
+      {mostrarModalMotivoRevision && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div
+            className="rounded-lg shadow-lg border max-w-lg w-full"
+            style={{
+              backgroundColor: PALETA.card,
+              borderColor: PALETA.headerTable
+            }}
+          >
+            <div
+              className="px-6 py-4 border-b flex justify-between items-center"
+              style={{
+                backgroundColor: PALETA.headerTable,
+                color: PALETA.textoOscuro
+              }}
+            >
+              <h3 className="text-lg font-semibold">
+                MOTIVO DE REVISIÓN
+              </h3>
+              <button
+                onClick={() => {
+                  setMostrarModalMotivoRevision(false);
+                  setMotivoRevision('');
+                  setPresupuestoParaRechazar(null);
+                }}
+                className="text-2xl hover:opacity-70 transition-opacity"
+                style={{ color: PALETA.textoOscuro }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="p-6">
+              <p className="text-sm mb-4" style={{ color: PALETA.textoOscuro }}>
+                Por favor, indique el motivo por el cual este presupuesto requiere revisión:
+              </p>
+
+              <textarea
+                value={motivoRevision}
+                onChange={(e) => setMotivoRevision(e.target.value)}
+                placeholder="Escriba aquí el motivo de la revisión..."
+                className="w-full h-32 p-3 border rounded-lg resize-none focus:outline-none focus:ring-2"
+                style={{
+                  borderColor: PALETA.verdeSombra
+                }}
+              />
+
+              <div className="flex gap-3 justify-end mt-6">
+                <button
+                  onClick={() => {
+                    setMostrarModalMotivoRevision(false);
+                    setMotivoRevision('');
+                    setPresupuestoParaRechazar(null);
+                  }}
+                  className="px-4 py-2 text-sm rounded border hover:bg-gray-50 transition-colors"
+                  style={{ color: PALETA.textoOscuro, borderColor: '#d1d5db' }}
+                  disabled={enviando}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={rechazarPresupuesto}
+                  disabled={enviando || !motivoRevision.trim()}
+                  className="px-6 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity disabled:opacity-50"
+                  style={{ backgroundColor: '#d4a574' }}
+                >
+                  {enviando ? 'Enviando...' : 'Mandar a Revisar'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

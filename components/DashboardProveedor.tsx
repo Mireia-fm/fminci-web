@@ -26,6 +26,7 @@ type Notificacion = {
   descripcion: string;
   fecha_asignacion: string;
   institucion_nombre?: string;
+  tipo: 'nueva' | 'revision';
 };
 
 export default function DashboardProveedor() {
@@ -111,66 +112,125 @@ export default function DashboardProveedor() {
     try {
       if (!personaInst) return;
 
-      // Buscar incidencias asignadas en las últimas 48 horas que aún están en estado "Abierta"
-      // (sin acciones del proveedor)
-      const fechaLimite = new Date();
-      fechaLimite.setHours(fechaLimite.getHours() - 48);
-
-      const { data: casosRecientes } = await supabase
-        .from("proveedor_casos")
+      // Cargar notificaciones no vistas desde la tabla proveedor_notificaciones
+      const { data: notificacionesData } = await supabase
+        .from("proveedor_notificaciones")
         .select(`
-          id,
-          incidencia_id,
-          asignado_en,
-          estado_proveedor,
+          *,
           incidencias (
             num_solicitud,
             descripcion,
             centro,
             instituciones (nombre)
+          ),
+          proveedor_casos!inner (
+            descripcion_proveedor
           )
         `)
         .eq("proveedor_id", personaInst.institucion_id)
-        .eq("activo", true)
-        .eq("estado_proveedor", "Abierta")  // Solo incidencias que no han tenido acciones del proveedor
-        .gte("asignado_en", fechaLimite.toISOString())
-        .order("asignado_en", { ascending: false });
+        .eq("notificacion_vista", false)
+        .order("fecha_creacion", { ascending: false });
 
-      if (casosRecientes) {
-        // Filtrar también incidencias que ya tienen comentarios del proveedor
-        const incidenciasConComentarios = await Promise.all(
-          casosRecientes.map(async (caso) => {
-            const { count } = await supabase
-              .from("comentarios")
-              .select("*", { count: "exact", head: true })
-              .eq("incidencia_id", caso.incidencia_id)
-              .eq("ambito", "proveedor")
-              .not("cuerpo", "is", null);
-
-            return {
-              ...caso,
-              tieneComentarios: (count || 0) > 0
-            };
-          })
-        );
-
-        // Solo mostrar incidencias sin comentarios del proveedor
-        const incidenciasSinActividad = incidenciasConComentarios.filter(
-          caso => !caso.tieneComentarios
-        );
-
-        const notificacionesFormateadas = incidenciasSinActividad.map(caso => ({
-          id: caso.incidencia_id,
-          num_solicitud: caso.incidencias?.num_solicitud || "",
-          descripcion: caso.incidencias?.descripcion || "",
-          fecha_asignacion: caso.asignado_en,
-          institucion_nombre: caso.incidencias?.instituciones?.nombre || caso.incidencias?.centro
+      if (notificacionesData) {
+        const notificacionesFormateadas = notificacionesData.map(notif => ({
+          id: notif.incidencia_id,
+          num_solicitud: notif.incidencias?.num_solicitud || "",
+          descripcion: notif.proveedor_casos?.descripcion_proveedor || notif.incidencias?.descripcion || "",
+          fecha_asignacion: notif.fecha_creacion,
+          institucion_nombre: notif.incidencias?.instituciones?.nombre || notif.incidencias?.centro,
+          tipo: notif.tipo_notificacion as 'nueva' | 'revision'
         }));
 
         setNotificaciones(notificacionesFormateadas);
       }
     } catch (error) {
       console.error("Error cargando notificaciones:", error);
+    }
+  };
+
+  const marcarNotificacionVista = async (incidenciaId: string) => {
+    try {
+      // Obtener persona_id del usuario actual
+      const { data: userData } = await supabase.auth.getUser();
+      const userEmail = userData.user?.email;
+
+      if (!userEmail) return;
+
+      const { data: persona } = await supabase
+        .from("personas")
+        .select("id")
+        .eq("email", userEmail)
+        .maybeSingle();
+
+      if (!persona) return;
+
+      // Obtener institución del proveedor
+      const { data: personaInst } = await supabase
+        .from("personas_instituciones")
+        .select("institucion_id")
+        .eq("persona_id", persona.id)
+        .maybeSingle();
+
+      if (!personaInst) return;
+
+      // Marcar notificación como vista
+      await supabase
+        .from("proveedor_notificaciones")
+        .update({
+          notificacion_vista: true,
+          fecha_vista: new Date().toISOString()
+        })
+        .eq("proveedor_id", personaInst.institucion_id)
+        .eq("incidencia_id", incidenciaId);
+
+      // Navegar al chat
+      window.location.href = `/incidencias/${incidenciaId}/chat-proveedor`;
+    } catch (error) {
+      console.error("Error marcando notificación como vista:", error);
+      // Navegar anyway si hay error
+      window.location.href = `/incidencias/${incidenciaId}/chat-proveedor`;
+    }
+  };
+
+  const limpiarNotificaciones = async () => {
+    try {
+      // Obtener persona_id del usuario actual
+      const { data: userData } = await supabase.auth.getUser();
+      const userEmail = userData.user?.email;
+
+      if (!userEmail) return;
+
+      const { data: persona } = await supabase
+        .from("personas")
+        .select("id")
+        .eq("email", userEmail)
+        .maybeSingle();
+
+      if (!persona) return;
+
+      // Obtener institución del proveedor
+      const { data: personaInst } = await supabase
+        .from("personas_instituciones")
+        .select("institucion_id")
+        .eq("persona_id", persona.id)
+        .maybeSingle();
+
+      if (!personaInst) return;
+
+      // Marcar todas las notificaciones como vistas
+      await supabase
+        .from("proveedor_notificaciones")
+        .update({
+          notificacion_vista: true,
+          fecha_vista: new Date().toISOString()
+        })
+        .eq("proveedor_id", personaInst.institucion_id)
+        .eq("notificacion_vista", false);
+
+      // Recargar notificaciones
+      setNotificaciones([]);
+    } catch (error) {
+      console.error("Error limpiando notificaciones:", error);
     }
   };
 
@@ -203,7 +263,7 @@ export default function DashboardProveedor() {
         <section className="px-6 mb-8">
           <div className="mb-4">
             <h3 className="text-base font-semibold" style={{ color: PALETA.texto }}>
-              🔔 NUEVAS INCIDENCIAS ASIGNADAS ({notificaciones.length})
+              🔔 NOTIFICACIONES ({notificaciones.length})
             </h3>
           </div>
           <div className="space-y-3">
@@ -211,9 +271,9 @@ export default function DashboardProveedor() {
               <div
                 key={notif.id}
                 className="p-4 rounded-lg shadow-sm border-l-4"
-                style={{ 
+                style={{
                   backgroundColor: "rgba(255, 255, 255, 0.95)",
-                  borderLeftColor: PALETA.b1
+                  borderLeftColor: notif.tipo === 'revision' ? PALETA.b2 : PALETA.b1
                 }}
               >
                 <div className="flex justify-between items-start">
@@ -222,8 +282,12 @@ export default function DashboardProveedor() {
                       <span className="font-semibold text-gray-800">
                         #{notif.num_solicitud}
                       </span>
-                      <span className="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded">
-                        NUEVA
+                      <span className={`text-xs px-2 py-1 rounded ${
+                        notif.tipo === 'revision'
+                          ? 'bg-red-100 text-red-800'
+                          : 'bg-orange-100 text-orange-800'
+                      }`}>
+                        {notif.tipo === 'revision' ? 'REQUIERE REVISIÓN' : 'NUEVA'}
                       </span>
                     </div>
                     <p className="text-gray-700 text-sm mb-2">
@@ -233,7 +297,7 @@ export default function DashboardProveedor() {
                       <span>Centro: {notif.institucion_nombre || "Sin especificar"}</span>
                       <span className="mx-2">•</span>
                       <span>
-                        Asignada: {new Date(notif.fecha_asignacion).toLocaleDateString('es-ES', {
+                        {notif.tipo === 'revision' ? 'Fecha asignación' : 'Asignada'}: {new Date(notif.fecha_asignacion).toLocaleDateString('es-ES', {
                           day: 'numeric',
                           month: 'short',
                           hour: '2-digit',
@@ -243,7 +307,7 @@ export default function DashboardProveedor() {
                     </div>
                   </div>
                   <button
-                    onClick={() => window.location.href = `/incidencias/${notif.id}/chat-proveedor`}
+                    onClick={() => marcarNotificacionVista(notif.id)}
                     className="ml-4 px-3 py-1 text-xs font-medium rounded text-white hover:opacity-90"
                     style={{ backgroundColor: PALETA.bg }}
                   >
@@ -253,28 +317,58 @@ export default function DashboardProveedor() {
               </div>
             ))}
           </div>
+          <div className="mt-4 text-right">
+            <button
+              onClick={limpiarNotificaciones}
+              className="px-4 py-2 text-xs font-medium rounded text-white hover:opacity-90 transition-opacity"
+              style={{ backgroundColor: PALETA.verdeSombra }}
+            >
+              🗑️ Limpiar notificaciones
+            </button>
+          </div>
         </section>
       )}
 
-      <section className="px-6 pb-12">
+      <section className="px-6 pb-12 pt-16">
         {loading ? (
           <p className="text-white/80">Cargando…</p>
         ) : (
-          <div className="flex flex-wrap gap-6">
-            {cards.map(c => (
-              <div
-                key={c.key}
-                className="flex flex-col items-center justify-center rounded-full cursor-pointer transition-transform hover:scale-105"
-                style={{
-                  width: 190, height: 190, backgroundColor: c.color,
-                  boxShadow: "0 8px 20px rgba(0,0,0,0.08)",
-                }}
-                onClick={() => navegarAIncidencias(c.key)}
-              >
-                <div className="text-5xl font-semibold text-white">{c.n}</div>
-                <div className="mt-2 text-white/90">{c.key}</div>
-              </div>
-            ))}
+          <div className="max-w-6xl mx-auto">
+            {/* Primera fila - 5 contadores */}
+            <div className="flex justify-center gap-4 mb-4">
+              {cards.slice(0, 5).map(c => (
+                <div
+                  key={c.key}
+                  className="flex flex-col items-center justify-center rounded-full cursor-pointer transition-transform hover:scale-105"
+                  style={{
+                    width: 170, height: 170, backgroundColor: c.color,
+                    boxShadow: "0 8px 20px rgba(0,0,0,0.08)",
+                  }}
+                  onClick={() => navegarAIncidencias(c.key)}
+                >
+                  <div className="text-4xl font-semibold text-white">{c.n}</div>
+                  <div className="mt-2 text-white/90 text-sm text-center px-2">{c.key}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Segunda fila - 5 contadores */}
+            <div className="flex justify-center gap-4">
+              {cards.slice(5, 10).map(c => (
+                <div
+                  key={c.key}
+                  className="flex flex-col items-center justify-center rounded-full cursor-pointer transition-transform hover:scale-105"
+                  style={{
+                    width: 170, height: 170, backgroundColor: c.color,
+                    boxShadow: "0 8px 20px rgba(0,0,0,0.08)",
+                  }}
+                  onClick={() => navegarAIncidencias(c.key)}
+                >
+                  <div className="text-4xl font-semibold text-white">{c.n}</div>
+                  <div className="mt-2 text-white/90 text-sm text-center px-2">{c.key}</div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </section>

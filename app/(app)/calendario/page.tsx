@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
 // Paleta de colores consistente
@@ -17,6 +18,7 @@ const PALETA = {
 
 type Cita = {
   id: string;
+  incidencia_id: string;
   fecha: string;
   hora: string;
   proveedor_nombre: string;
@@ -26,9 +28,12 @@ type Cita = {
 };
 
 export default function CalendarioPage() {
+  const router = useRouter();
   const [citas, setCitas] = useState<Cita[]>([]);
   const [loading, setLoading] = useState(true);
   const [fechaSeleccionada, setFechaSeleccionada] = useState(new Date());
+  const [esProveedor, setEsProveedor] = useState(false);
+  const [tipoUsuario, setTipoUsuario] = useState<string | null>(null);
 
   useEffect(() => {
     cargarCitas();
@@ -42,11 +47,12 @@ export default function CalendarioPage() {
 
       if (!userEmail) return;
 
-      // Obtener las instituciones del usuario
+      // Obtener información del usuario y sus instituciones
       const { data: personaInstituciones } = await supabase
         .from("personas")
         .select(`
           id,
+          rol,
           personas_instituciones!inner(
             institucion_id,
             instituciones!inner(id, nombre, tipo)
@@ -55,40 +61,82 @@ export default function CalendarioPage() {
         .eq("email", userEmail);
 
       if (personaInstituciones && personaInstituciones.length > 0) {
-        const institucionId = personaInstituciones[0].personas_instituciones?.[0]?.institucion_id;
+        const persona = personaInstituciones[0];
+        const institucionId = persona.personas_instituciones?.[0]?.institucion_id;
+        const tipoInstitucion = persona.personas_instituciones?.[0]?.instituciones?.tipo;
+
+        // Detectar tipo de usuario
+        setTipoUsuario(persona.rol);
 
         if (institucionId) {
-          // Obtener citas de proveedores calendarizadas para incidencias del centro
-          const { data: citasData } = await supabase
-            .from("citas_proveedores")
-            .select(`
-              id,
-              fecha_visita,
-              horario,
-              estado,
-              incidencias!inner(
-                num_solicitud,
-                descripcion,
-                institucion_id
-              ),
-              instituciones!proveedor_id(
-                nombre
-              )
-            `)
-            .eq("incidencias.institucion_id", institucionId)
-            .eq("estado", "programada")
-            .order("fecha_visita", { ascending: true });
+          let citasData;
+
+          if (tipoInstitucion === 'Proveedor') {
+            setEsProveedor(true);
+            // Vista para proveedores: mostrar las visitas que HA calendarizado
+            const { data } = await supabase
+              .from("citas_proveedores")
+              .select(`
+                id,
+                fecha_visita,
+                horario,
+                estado,
+                incidencias!inner(
+                  id,
+                  num_solicitud,
+                  descripcion,
+                  instituciones!institucion_id(nombre)
+                )
+              `)
+              .eq("proveedor_id", institucionId)
+              .eq("estado", "programada")
+              .order("fecha_visita", { ascending: true });
+
+            citasData = data;
+          } else {
+            // Vista para clientes/centros: mostrar las visitas calendarizadas para sus incidencias
+            const { data } = await supabase
+              .from("citas_proveedores")
+              .select(`
+                id,
+                fecha_visita,
+                horario,
+                estado,
+                incidencias!inner(
+                  id,
+                  num_solicitud,
+                  descripcion,
+                  institucion_id
+                ),
+                instituciones!proveedor_id(
+                  nombre
+                )
+              `)
+              .eq("incidencias.institucion_id", institucionId)
+              .eq("estado", "programada")
+              .order("fecha_visita", { ascending: true });
+
+            citasData = data;
+          }
 
           if (citasData) {
-            const citasFormateadas: Cita[] = citasData.map((cita: any) => ({
+            const citasFormateadas: Cita[] = citasData.map((cita: any) => {
+              const fechaVisita = new Date(cita.fecha_visita);
+              const fechaLocal = `${fechaVisita.getFullYear()}-${(fechaVisita.getMonth() + 1).toString().padStart(2, '0')}-${fechaVisita.getDate().toString().padStart(2, '0')}`;
+
+              return {
               id: cita.id,
-              fecha: new Date(cita.fecha_visita).toISOString().split('T')[0],
+              incidencia_id: cita.incidencias?.id || '',
+              fecha: fechaLocal,
               hora: cita.horario === 'mañana' ? 'Horario de mañana' : 'Horario de tarde',
-              proveedor_nombre: cita.instituciones?.nombre || 'Proveedor desconocido',
+              proveedor_nombre: tipoInstitucion === 'Proveedor'
+                ? cita.incidencias?.instituciones?.nombre || 'Centro desconocido'
+                : cita.instituciones?.nombre || 'Proveedor desconocido',
               incidencia_num: cita.incidencias?.num_solicitud || '',
               descripcion: cita.incidencias?.descripcion || '',
               estado: cita.estado
-            }));
+            };
+            });
 
             setCitas(citasFormateadas);
           }
@@ -120,7 +168,7 @@ export default function CalendarioPage() {
   const obtenerCitasDelDia = (dia: number) => {
     const año = fechaSeleccionada.getFullYear();
     const mes = fechaSeleccionada.getMonth();
-    const fechaBuscada = new Date(año, mes, dia).toISOString().split('T')[0];
+    const fechaBuscada = `${año}-${(mes + 1).toString().padStart(2, '0')}-${dia.toString().padStart(2, '0')}`;
 
     return citas.filter(cita => cita.fecha === fechaBuscada);
   };
@@ -129,6 +177,19 @@ export default function CalendarioPage() {
     const nuevaFecha = new Date(fechaSeleccionada);
     nuevaFecha.setMonth(nuevaFecha.getMonth() + direccion);
     setFechaSeleccionada(nuevaFecha);
+  };
+
+  const irAlChatIncidencia = (incidenciaId: string) => {
+    if (esProveedor) {
+      router.push(`/incidencias/${incidenciaId}/chat-proveedor`);
+    } else if (tipoUsuario === 'Control') {
+      // Control no navega a ningún chat por ahora
+      console.log('Control no puede navegar al chat desde el calendario');
+      return;
+    } else {
+      // Cliente/Gestor navega al chat control-cliente
+      router.push(`/incidencias/${incidenciaId}/chat-control-cliente`);
+    }
   };
 
 
@@ -144,7 +205,7 @@ export default function CalendarioPage() {
     <div className="min-h-screen" style={{ backgroundColor: PALETA.fondo }}>
       <div className="px-6 py-6">
         <h1 className="text-lg tracking-[0.3em] mb-8" style={{ color: PALETA.texto }}>
-          CALENDARIO DE CITAS CON PROVEEDORES:
+          {esProveedor ? 'MIS VISITAS PROGRAMADAS:' : 'CALENDARIO DE CITAS CON PROVEEDORES:'}
         </h1>
 
         {/* Navegación del mes */}
@@ -201,9 +262,10 @@ export default function CalendarioPage() {
                   {citasDelDia.map(cita => (
                     <div
                       key={cita.id}
-                      className="text-xs p-1 mb-1 rounded text-white cursor-pointer"
+                      className="text-xs p-1 mb-1 rounded text-white cursor-pointer hover:opacity-80 transition-opacity"
                       style={{ backgroundColor: '#D4C5A9' }}
-                      title={`${cita.hora} - ${cita.proveedor_nombre}: ${cita.descripcion}`}
+                      title={`${cita.hora} - ${cita.proveedor_nombre}: ${cita.descripcion}${tipoUsuario !== 'Control' ? ' (Click para ir al chat)' : ''}`}
+                      onClick={() => irAlChatIncidencia(cita.incidencia_id)}
                     >
                       <div className="font-semibold">{cita.hora}</div>
                       <div className="truncate">{cita.proveedor_nombre}</div>
