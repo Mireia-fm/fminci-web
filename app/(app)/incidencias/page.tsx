@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { registrarCambiosEstado } from "@/lib/historialEstados";
 import SearchableSelect from "@/components/SearchableSelect";
+import NotificacionesProveedor from "@/components/NotificacionesProveedor";
 
 // Paleta similar a la imagen de Wix
 const PALETA = {
@@ -65,6 +66,7 @@ export default function IncidenciasListado() {
     return null;
   });
   const [tipoUsuarioConfirmado, setTipoUsuarioConfirmado] = useState(false);
+  const [proveedorId, setProveedorId] = useState<string | null>(null);
   const [mostrarModal, setMostrarModal] = useState(false);
   const [incidenciaSeleccionada, setIncidenciaSeleccionada] = useState<string | null>(null);
   const [tieneProveedorAsignado, setTieneProveedorAsignado] = useState(false);
@@ -195,6 +197,21 @@ export default function IncidenciasListado() {
 
       if (!personaError && persona) {
         setTipoUsuario(persona.rol);
+
+        // Si es proveedor, obtener su ID de la tabla instituciones
+        if (persona.rol === 'Proveedor') {
+          const { data: institucion } = await supabase
+            .from("instituciones")
+            .select("id")
+            .eq("email", userEmail)
+            .eq("tipo", "Proveedor")
+            .maybeSingle();
+
+          if (institucion) {
+            setProveedorId(institucion.id);
+          }
+        }
+
         // Guardar en sessionStorage para futuras cargas
         if (typeof window !== 'undefined') {
           sessionStorage.setItem('tipoUsuario', persona.rol);
@@ -980,7 +997,7 @@ export default function IncidenciasListado() {
             {/* Filtro de prioridad cliente */}
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: PALETA.textoOscuro }}>
-                Prioridad Cliente
+                Prioridad
               </label>
               <SearchableSelect
                 value={filtroPrioridadCliente}
@@ -1361,6 +1378,11 @@ export default function IncidenciasListado() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Notificaciones para proveedores */}
+      {tipoUsuario === 'Proveedor' && proveedorId && (
+        <NotificacionesProveedor proveedorId={proveedorId} />
       )}
     </div>
   );

@@ -1468,14 +1468,50 @@ Notas adicionales: ${notasAdicionales}`;
       const { data: userData } = await supabase.auth.getUser();
       const userEmail = userData.user?.email;
 
-      // 1. Cambiar solo estado_proveedor a "Anulada"
+      // 1. Obtener información del proveedor antes de anular
+      const { data: proveedorInfo } = await supabase
+        .from("proveedor_casos")
+        .select("proveedor_id")
+        .eq("incidencia_id", incidenciaId)
+        .eq("activo", true)
+        .single();
+
+      // 2. Marcar proveedor_caso como anulado e inactivo
       await supabase
         .from("proveedor_casos")
-        .update({ estado_proveedor: "Anulada" })
+        .update({
+          estado_proveedor: "Anulada",
+          activo: false,  // ← Permitir reasignación
+          fecha_anulacion: new Date().toISOString()
+        })
         .eq("incidencia_id", incidenciaId)
         .eq("activo", true);
 
-      // 2. Comentario solo para el proveedor
+      // 3. Guardar motivo de anulación en la incidencia
+      await supabase
+        .from("incidencias")
+        .update({
+          motivo_anulacion_proveedor: motivoAnulacion,
+          fecha_anulacion_proveedor: new Date().toISOString()
+        })
+        .eq("id", incidenciaId);
+
+      // 4. Crear notificación para el proveedor
+      if (proveedorInfo?.proveedor_id) {
+        await supabase
+          .from("notificaciones")
+          .insert({
+            proveedor_id: proveedorInfo.proveedor_id,
+            incidencia_id: incidenciaId,
+            tipo: 'anulacion',
+            titulo: 'Asignación anulada',
+            mensaje: `Tu asignación para la incidencia #${incidencia?.num_solicitud || incidenciaId} ha sido anulada. Motivo: ${motivoAnulacion}`,
+            leida: false,
+            fecha_creacion: new Date().toISOString()
+          });
+      }
+
+      // 5. Comentario en el chat del proveedor (mantener historial)
       const mensajeAnulacion = `Asignación anulada por Control. Motivo: ${motivoAnulacion}`;
 
       await supabase
@@ -3251,6 +3287,12 @@ Notas adicionales: ${notasAdicionales}`;
                   onChange={(e) => setMotivoAnulacion(e.target.value)}
                   className="w-full h-20 rounded border px-3 py-2 text-sm outline-none resize-none"
                   placeholder=""
+                  onFocus={(e) => {
+                    e.target.style.boxShadow = `0 0 0 2px ${PALETA.verdeClaro}80`;
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.boxShadow = '';
+                  }}
                   required
                 />
               </div>

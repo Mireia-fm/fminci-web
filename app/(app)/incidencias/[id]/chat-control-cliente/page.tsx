@@ -82,6 +82,7 @@ export default function ChatControlCliente() {
   const [commentAttachmentUrls, setCommentAttachmentUrls] = useState<Record<string, string>>({});
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [tieneProveedorAsignado, setTieneProveedorAsignado] = useState(false);
+  const [tieneProveedorAnulado, setTieneProveedorAnulado] = useState(false);
   const [mostrarModalProveedor, setMostrarModalProveedor] = useState(false);
   const [mostrarModalAnular, setMostrarModalAnular] = useState(false);
   const [motivoAnulacion, setMotivoAnulacion] = useState('');
@@ -246,11 +247,24 @@ export default function ChatControlCliente() {
         };
         setIncidencia(incidenciaCompleta);
 
-        // Verificar si tiene proveedor asignado
+        // Verificar si tiene proveedor asignado (solo activos)
         const tieneProveedor = incidenciaCompleta?.proveedor_casos &&
                               incidenciaCompleta.proveedor_casos.length > 0 &&
-                              incidenciaCompleta.proveedor_casos.some(pc => pc.activo && pc.estado_proveedor);
+                              incidenciaCompleta.proveedor_casos.some(pc =>
+                                pc.activo &&
+                                pc.estado_proveedor &&
+                                pc.estado_proveedor !== 'Anulada'
+                              );
         setTieneProveedorAsignado(!!tieneProveedor);
+
+        // Verificar si hay proveedores anulados (para mostrar botón reasignar)
+        const tieneProveedorAnuladoDetectado = incidenciaCompleta?.proveedor_casos &&
+                                             incidenciaCompleta.proveedor_casos.length > 0 &&
+                                             incidenciaCompleta.proveedor_casos.some(pc =>
+                                               !pc.activo &&
+                                               pc.estado_proveedor === 'Anulada'
+                                             );
+        setTieneProveedorAnulado(!!tieneProveedorAnuladoDetectado);
       }
 
       // Cargar comentarios del chat control/cliente con campos de archivos
@@ -963,13 +977,23 @@ export default function ChatControlCliente() {
               </h3>
 
               <div className="flex justify-center gap-4 flex-wrap">
-                {!tieneProveedorAsignado && (
+                {!tieneProveedorAsignado && incidencia.estado_cliente !== 'Anulada' && (
                   <button
                     onClick={abrirModalProveedor}
                     className="px-3 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity"
                     style={{ backgroundColor: PALETA.verdeClaro }}
                   >
                     Asignar Proveedor
+                  </button>
+                )}
+
+                {tieneProveedorAnulado && !tieneProveedorAsignado && incidencia.estado_cliente !== 'Anulada' && (
+                  <button
+                    onClick={abrirModalProveedor}
+                    className="px-3 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity"
+                    style={{ backgroundColor: PALETA.fondo }}
+                  >
+                    Reasignar Proveedor
                   </button>
                 )}
 
@@ -1003,8 +1027,8 @@ export default function ChatControlCliente() {
                   </button>
                 )}
 
-                {/* Botón Cambiar al Chat Proveedor - solo si hay proveedor asignado */}
-                {tieneProveedorAsignado && (
+                {/* Botón Cambiar al Chat Proveedor - solo si hay proveedor asignado y no está anulada */}
+                {tieneProveedorAsignado && incidencia.estado_cliente !== 'Anulada' && (
                   <button
                     onClick={() => router.push(`/incidencias/${incidenciaId}/chat-proveedor`)}
                     className="px-3 py-2 text-sm border bg-white rounded transition-colors"
@@ -1203,6 +1227,12 @@ export default function ChatControlCliente() {
               placeholder="Añadir comentario"
               className="w-full h-24 p-3 border rounded focus:outline-none resize-none text-sm"
               style={{ borderColor: PALETA.textoOscuro }}
+              onFocus={(e) => {
+                e.target.style.boxShadow = `0 0 0 2px ${PALETA.verdeClaro}80`;
+              }}
+              onBlur={(e) => {
+                e.target.style.boxShadow = '';
+              }}
               disabled={enviando}
             />
 
@@ -1370,6 +1400,12 @@ export default function ChatControlCliente() {
                   onChange={(e) => setMotivoAnulacion(e.target.value)}
                   className="w-full h-20 rounded border px-3 py-2 text-sm outline-none resize-none"
                   placeholder=""
+                  onFocus={(e) => {
+                    e.target.style.boxShadow = `0 0 0 2px ${PALETA.verdeClaro}80`;
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.boxShadow = '';
+                  }}
                   required
                 />
               </div>
@@ -1427,6 +1463,12 @@ export default function ChatControlCliente() {
                   onChange={(e) => setMotivoEspera(e.target.value)}
                   className="w-full h-20 rounded border px-3 py-2 text-sm outline-none resize-none"
                   placeholder=""
+                  onFocus={(e) => {
+                    e.target.style.boxShadow = `0 0 0 2px ${PALETA.verdeClaro}80`;
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.boxShadow = '';
+                  }}
                   required
                 />
               </div>
