@@ -271,7 +271,7 @@ export default function NuevaIncidenciaPage() {
   const inputBase =
     "w-full h-9 rounded border px-3 text-sm outline-none focus:ring-2 focus:ring-[#C9D7A7] placeholder:text-gray-500";
   const selectBase =
-    "w-full h-9 rounded border px-3 text-sm outline-none focus:ring-2 focus:ring-[#C9D7A7] appearance-none pr-6 text-gray-500 [&>option:not(:first-child)]:text-black [&>option:first-child]:text-gray-500";
+    "w-full h-9 rounded border px-3 text-sm outline-none focus:ring-2 focus:ring-[#C9D7A7] appearance-none pr-6 [&>option:not(:first-child)]:text-black [&>option:first-child]:text-gray-500";
   const textAreaBase =
     "min-h-[120px] w-full rounded border p-3 text-sm outline-none focus:ring-2 focus:ring-[#C9D7A7] placeholder:text-gray-500";
 
@@ -415,7 +415,7 @@ export default function NuevaIncidenciaPage() {
             ) : (
               <div className="relative">
                 <select
-                  className={`${selectBase} ${centro ? 'text-black' : ''}`}
+                  className={`${selectBase} ${centro ? 'text-black' : 'text-gray-500'}`}
                   value={centro}
                   onChange={(e) => setCentro(e.target.value)}
                   aria-label="Seleccione un centro"
@@ -438,7 +438,7 @@ export default function NuevaIncidenciaPage() {
               </label>
               <div className="relative">
                 <select
-                  className={`${selectBase} ${catalogacion ? 'text-black' : ''}`}
+                  className={`${selectBase} ${catalogacion ? 'text-black' : 'text-gray-500'}`}
                   value={catalogacion}
                   onChange={(e) => setCatalogacion(e.target.value)}
                   aria-label="Seleccione una catalogación"
@@ -458,7 +458,7 @@ export default function NuevaIncidenciaPage() {
               </label>
               <div className="relative">
                 <select
-                  className={`${selectBase} ${prioridad ? 'text-black' : ''}`}
+                  className={`${selectBase} ${prioridad ? 'text-black' : 'text-gray-500'}`}
                   value={prioridad}
                   onChange={(e) => setPrioridad(e.target.value)}
                 >
