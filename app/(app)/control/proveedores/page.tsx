@@ -89,7 +89,9 @@ export default function GestionProveedores() {
             if (casosResueltos.length > 0) {
               const totalDias = casosResueltos.reduce((sum, caso) => {
                 const fechaAsignacion = new Date(caso.asignado_en);
-                const fechaCreacion = new Date(caso.incidencias?.creado_en || caso.asignado_en);
+                const incidenciasData = caso.incidencias;
+                const creadoEn = Array.isArray(incidenciasData) ? incidenciasData[0]?.creado_en : (incidenciasData as { creado_en?: string })?.creado_en;
+                const fechaCreacion = new Date(creadoEn || caso.asignado_en);
                 const dias = Math.ceil((fechaAsignacion.getTime() - fechaCreacion.getTime()) / (1000 * 60 * 60 * 24));
                 return sum + Math.max(dias, 1);
               }, 0);

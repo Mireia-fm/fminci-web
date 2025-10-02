@@ -63,7 +63,8 @@ export default function CalendarioPage() {
       if (personaInstituciones && personaInstituciones.length > 0) {
         const persona = personaInstituciones[0];
         const institucionId = persona.personas_instituciones?.[0]?.institucion_id;
-        const tipoInstitucion = persona.personas_instituciones?.[0]?.instituciones?.tipo;
+        const institucionesData = persona.personas_instituciones?.[0]?.instituciones;
+        const tipoInstitucion = Array.isArray(institucionesData) ? institucionesData[0]?.tipo : (institucionesData as { tipo?: string })?.tipo;
 
         // Detectar tipo de usuario
         setTipoUsuario(persona.rol);
@@ -120,7 +121,7 @@ export default function CalendarioPage() {
           }
 
           if (citasData) {
-            const citasFormateadas: Cita[] = citasData.map((cita: any) => {
+            const citasFormateadas: Cita[] = citasData.map((cita: { id: string; fecha_visita: string; horario: string; estado: string; incidencias?: { id?: string; num_solicitud?: string; descripcion?: string; instituciones?: { nombre?: string } }; instituciones?: { nombre?: string } }) => {
               const fechaVisita = new Date(cita.fecha_visita);
               const fechaLocal = `${fechaVisita.getFullYear()}-${(fechaVisita.getMonth() + 1).toString().padStart(2, '0')}-${fechaVisita.getDate().toString().padStart(2, '0')}`;
 
@@ -153,7 +154,6 @@ export default function CalendarioPage() {
     const año = fechaSeleccionada.getFullYear();
     const mes = fechaSeleccionada.getMonth();
 
-    const primerDia = new Date(año, mes, 1);
     const ultimoDia = new Date(año, mes + 1, 0);
     const diasEnMes = ultimoDia.getDate();
 

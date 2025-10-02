@@ -1,3 +1,12 @@
+- Mes de cierre en casos proveedor para informacion de facturacion.
+
+
+
+
+
+
+
+
 
 - Arreglo de los any en el codigo. La opción que he implementado consiste en definir mis propios tipos y costear la respuesta. 
 Opción B (más pro): Tipar todo Supabase con el esquema

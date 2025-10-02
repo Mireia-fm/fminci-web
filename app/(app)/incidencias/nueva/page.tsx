@@ -176,11 +176,14 @@ export default function NuevaIncidenciaPage() {
         centrosPermitidos = (asignaciones || [])
           .map(a => a.instituciones)
           .filter(inst => inst && typeof inst === 'object' && 'id' in inst)
-          .map(inst => ({
-            id: inst.id as string,
-            nombre: inst.nombre as string,
-            tipo: inst.tipo as string
-          }))
+          .map(inst => {
+            const institucion = Array.isArray(inst) ? inst[0] : inst;
+            return {
+              id: (institucion as { id?: string }).id as string,
+              nombre: (institucion as { nombre?: string }).nombre as string,
+              tipo: (institucion as { tipo?: string }).tipo as string
+            };
+          })
           .sort((a, b) => a.nombre.localeCompare(b.nombre));
       } else {
         setErrorMsg("No se pudo identificar el usuario en el sistema.");

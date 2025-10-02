@@ -211,7 +211,7 @@ export default function ChatControlCliente() {
         .single();
 
       // La prioridad ya viene en incidenciaData
-      let prioridad = incidenciaData?.prioridad || null;
+      const prioridad = incidenciaData?.prioridad || null;
 
       // Cargar adjuntos principales (imágenes de la incidencia)
       let adjuntosPrincipales = [];
@@ -587,7 +587,7 @@ export default function ChatControlCliente() {
     setMostrarModalProveedor(false);
   };
 
-  const asignarProveedorCompleto = async (formularioProveedor: any) => {
+  const asignarProveedorCompleto = async (formularioProveedor: { proveedor_id: string; descripcion_proveedor: string; prioridad: string; estado_proveedor: string }) => {
     if (!formularioProveedor.proveedor_id) return;
 
     try {
@@ -827,7 +827,7 @@ export default function ChatControlCliente() {
                 {/* Tabla de datos técnicos */}
                 <div className={hasImages ? "lg:col-span-2" : ""}>
                   <table className="w-full text-sm">
-                    <tbody className="divide-y" style={{ divideColor: PALETA.headerTable }}>
+                    <tbody className="divide-y" style={{ borderColor: PALETA.headerTable }}>
                       <tr>
                         <td className="py-2 font-semibold w-1/3" style={{ color: PALETA.textoOscuro }}>
                           ID Solicitud:
@@ -928,7 +928,7 @@ export default function ChatControlCliente() {
                       </p>
 
                       <div className="space-y-3">
-                        {incidencia.adjuntos_principales.map((adjunto) => {
+                        {incidencia.adjuntos_principales?.map((adjunto) => {
                           const imageUrl = imageUrls[adjunto.id];
                           if (!imageUrl) return null;
                           return (

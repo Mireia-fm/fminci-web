@@ -94,7 +94,7 @@ export default function GestionCentros() {
             }
 
             // Obtener fecha de última incidencia
-            const ultimaIncidencia = incidencias?.length > 0
+            const ultimaIncidencia = incidencias && incidencias.length > 0
               ? incidencias.sort((a, b) => new Date(b.creado_en).getTime() - new Date(a.creado_en).getTime())[0].creado_en
               : undefined;
 

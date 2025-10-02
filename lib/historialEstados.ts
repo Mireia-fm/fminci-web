@@ -9,7 +9,7 @@ export interface CambioEstado {
   estadoNuevo: string;
   autorId?: string;
   motivo?: string;
-  metadatos?: Record<string, any>;
+  metadatos?: Record<string, string | number | boolean>;
 }
 
 /**

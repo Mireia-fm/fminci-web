@@ -120,16 +120,22 @@ export default function DashboardAlertas() {
               .gte("creado_en", caso.asignado_en);
 
             if ((count || 0) === 0) {
+              const incidenciasData = caso.incidencias;
+              const numSolicitud = Array.isArray(incidenciasData) ? incidenciasData[0]?.num_solicitud : (incidenciasData as { num_solicitud?: string })?.num_solicitud;
+
+              const institucionesData = caso.instituciones;
+              const nombreInstitucion = Array.isArray(institucionesData) ? institucionesData[0]?.nombre : (institucionesData as { nombre?: string })?.nombre;
+
               alertasGeneradas.push({
                 id: `proveedor-${caso.id}`,
                 tipo: 'proveedor',
                 titulo: `Proveedor sin respuesta +24h`,
-                descripcion: `${caso.incidencias?.num_solicitud} - Asignado a ${caso.instituciones?.nombre}`,
+                descripcion: `${numSolicitud} - Asignado a ${nombreInstitucion}`,
                 incidencia_id: caso.incidencia_id,
-                num_solicitud: caso.incidencias?.num_solicitud,
+                num_solicitud: numSolicitud,
                 prioridad: 'media',
                 fecha: caso.asignado_en,
-                proveedor: caso.instituciones?.nombre
+                proveedor: nombreInstitucion
               });
             }
           }

@@ -367,10 +367,14 @@ export default function IncidenciasListado() {
             if (todasInstituciones.length > 1) {
               // Cliente con múltiples centros - mostrar filtro de Centro
               setMostrarFiltroCentro(true);
-              const centros = todasInstituciones.map(inst => ({
-                id: inst.institucion_id,
-                nombre: inst.instituciones.nombre
-              }));
+              const centros = todasInstituciones.map(inst => {
+                const institucionesData = inst.instituciones;
+                const nombre = Array.isArray(institucionesData) ? institucionesData[0]?.nombre : (institucionesData as { nombre?: string })?.nombre;
+                return {
+                  id: inst.institucion_id,
+                  nombre: nombre || 'Sin nombre'
+                };
+              });
               setCentrosAsignados(centros);
 
               // Cargar incidencias de todos sus centros (filtrar por centro si está seleccionado)
@@ -444,7 +448,7 @@ export default function IncidenciasListado() {
       if (error) {
         console.error("Error cargando incidencias:", error);
       } else {
-        const incidenciasData = data || [];
+        const incidenciasData: Incidencia[] = (data as Incidencia[]) || [];
 
         // Deduplicar incidencias por ID y agrupar casos de proveedor
         const incidenciasUnicas = incidenciasData.reduce((acc, current) => {

@@ -99,7 +99,7 @@ export default function DashboardCliente() {
               // Para Gestores: cargar todas sus instituciones
               const todasInstituciones = personaInstituciones[0].personas_instituciones;
               const centrosData = [];
-              let contadoresGlobales = new Map<string, number>();
+              const contadoresGlobales = new Map<string, number>();
 
               for (const instituciones of todasInstituciones) {
                 const { data: incidenciasData } = await supabase
@@ -120,7 +120,7 @@ export default function DashboardCliente() {
                   }, [] as Row[]);
 
                   centrosData.push({
-                    nombre: (instituciones.instituciones as any)?.nombre || 'Centro sin nombre',
+                    nombre: (instituciones.instituciones as { nombre?: string })?.nombre || 'Centro sin nombre',
                     incidencias: contadoresCentro
                   });
 

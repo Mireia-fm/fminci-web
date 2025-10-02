@@ -131,7 +131,7 @@ export default function ChatProveedor() {
   const [mostrarModalValorarIncidencia, setMostrarModalValorarIncidencia] = useState(false);
   const [motivoAnulacion, setMotivoAnulacion] = useState('');
   const [motivoCierre, setMotivoCierre] = useState('');
-  const [presupuestoActual, setPresupuestoActual] = useState<any>(null);
+  const [presupuestoActual, setPresupuestoActual] = useState<{ id: string; importe_total: number; importe_total_sin_iva?: number; presupuesto_detallado_url?: string; estado: string; fecha_estimada_inicio?: string; duracion_estimada?: string; descripcion_breve?: string; instituciones?: { nombre: string }; incidencias?: { num_solicitud: string; descripcion: string } } | null>(null);
   const [tuvoOfertaAprobada, setTuvoOfertaAprobada] = useState(false);
   const [cargandoPresupuesto, setCargandoPresupuesto] = useState(false);
   const [nombreProveedor, setNombreProveedor] = useState<string | null>(null);
@@ -292,7 +292,7 @@ export default function ChatProveedor() {
   useEffect(() => {
     if (tieneOfertaAprobada && presupuestoActual && importeSinIva) {
       const importeActual = parseFloat(importeSinIva) || 0;
-      const importeOferta = presupuestoActual?.importe_total_sin_iva ? parseFloat(presupuestoActual.importe_total_sin_iva) : 0;
+      const importeOferta = presupuestoActual?.importe_total_sin_iva ? parseFloat(String(presupuestoActual.importe_total_sin_iva)) : 0;
       const importeCoincide = importeActual > 0 && importeActual === importeOferta;
 
       if (importeCoincide && documentoJustificativo) {
@@ -378,6 +378,7 @@ export default function ChatProveedor() {
           hora,
           imagen_url,
           catalogacion,
+          institucion_id,
           instituciones(nombre, direccion)
         `)
         .eq("id", incidenciaId)
@@ -956,7 +957,9 @@ export default function ChatProveedor() {
           descripcion_breve: descripcionPresupuesto,
           estado: 'pendiente_revision',
           creado_por: autorId
-        });
+        })
+        .select()
+        .single();
 
       if (presupuestoError) {
         console.error("Error creando presupuesto:", presupuestoError);
@@ -979,7 +982,7 @@ export default function ChatProveedor() {
         autorId,
         motivo: 'Presupuesto detallado ofertado',
         metadatos: {
-          presupuesto_id: presupuestoCreado?.[0]?.id,
+          presupuesto_id: presupuestoCreado?.id || '',
           importe_total_sin_iva: parseFloat(importeTotalSinIva),
           fecha_estimada_inicio: fechaEstimadaInicio,
           duracion_estimada: duracionEstimada,
@@ -1116,7 +1119,7 @@ Documento adjunto: ${documentoPresupuesto.name}`;
         .eq("id", incidenciaId);
 
       // 4. Registrar cambios de estado en el historial
-      const metadatosResolucion: any = {
+      const metadatosResolucion: Record<string, string | number | boolean> = {
         solucion_aplicada: solucionAplicada,
         tiene_oferta_aprobada: tieneOfertaAprobada,
         accion: 'resolver_incidencia'
@@ -1366,7 +1369,7 @@ Notas adicionales: ${notasAdicionales}`;
   const valoracionEconomica = async () => {
     // Validar si el documento es requerido
     const importeActual = parseFloat(importeSinIva) || 0;
-    const importeOferta = presupuestoActual?.importe_total_sin_iva ? parseFloat(presupuestoActual.importe_total_sin_iva) : 0;
+    const importeOferta = presupuestoActual?.importe_total_sin_iva ? parseFloat(String(presupuestoActual.importe_total_sin_iva)) : 0;
     const importeHaCambiado = tieneOfertaAprobada && importeActual !== importeOferta;
     const importeCoincide = tieneOfertaAprobada && !importeHaCambiado && importeActual > 0;
     const documentoRequerido = !tieneOfertaAprobada || importeHaCambiado;
@@ -1652,7 +1655,7 @@ Notas adicionales: ${notasAdicionales}`;
         motivo: `Presupuesto aprobado desde chat-proveedor. Importe: ${presupuestoActual.importe_total_sin_iva}€ (sin IVA)`,
         metadatos: {
           presupuesto_id: presupuestoActual.id,
-          importe: presupuestoActual.importe_total_sin_iva,
+          importe: presupuestoActual.importe_total_sin_iva || 0,
           accion: 'aprobar_presupuesto'
         }
       });
@@ -1850,7 +1853,7 @@ Notas adicionales: ${notasAdicionales}`;
               {visitaCalendarizada.horario}
             </p>
             <p className="text-sm text-gray-500 mt-3">
-              El estado se ha actualizado a "En resolución".
+              El estado se ha actualizado a &quot;En resolución&quot;.
             </p>
           </div>
 
@@ -2035,7 +2038,7 @@ Notas adicionales: ${notasAdicionales}`;
                       </p>
 
                       <div className="space-y-3">
-                        {incidencia.adjuntos_principales.map((adjunto) => {
+                        {incidencia.adjuntos_principales?.map((adjunto) => {
                           const imageUrl = imageUrls[adjunto.id];
                           if (!imageUrl) return null;
                           return (
@@ -2117,8 +2120,8 @@ Notas adicionales: ${notasAdicionales}`;
                   )}
 
 
-                  {/* Botón Valorar Incidencia - solo para proveedores si está Resuelta */}
-                  {tipoUsuario === 'Proveedor' && estado === "Resuelta" && (
+                  {/* Botón Valorar Incidencia - solo si está Resuelta */}
+                  {estado === "Resuelta" && (
                     <button
                       type="button"
                       onClick={() => setMostrarModalValorarIncidencia(true)}
@@ -2623,9 +2626,6 @@ Notas adicionales: ${notasAdicionales}`;
                   onChange={(e) => setFechaVisita(e.target.value)}
                   min={new Date().toISOString().split('T')[0]}
                   className="w-full h-9 rounded border px-3 text-sm outline-none"
-                  style={{
-                    '--focus-border-color': PALETA.verdeClaro,
-                  } as any}
                   onFocus={(e) => {
                     e.target.style.borderColor = PALETA.verdeClaro;
                     e.target.style.boxShadow = `0 0 0 2px ${PALETA.verdeClaro}40`;
@@ -3056,9 +3056,6 @@ Notas adicionales: ${notasAdicionales}`;
                     setImporteConIva(conIva);
                   }}
                   className="w-full h-9 rounded border px-3 text-sm outline-none"
-                  style={{
-                    '--focus-border-color': PALETA.verdeClaro,
-                  } as any}
                   onFocus={(e) => {
                     e.target.style.borderColor = PALETA.verdeClaro;
                     e.target.style.boxShadow = `0 0 0 2px ${PALETA.verdeClaro}40`;
@@ -3143,9 +3140,6 @@ Notas adicionales: ${notasAdicionales}`;
                   value={importeConIva}
                   onChange={(e) => setImporteConIva(e.target.value)}
                   className="w-full h-9 rounded border px-3 text-sm outline-none"
-                  style={{
-                    '--focus-border-color': PALETA.verdeClaro,
-                  } as any}
                   onFocus={(e) => {
                     e.target.style.borderColor = PALETA.verdeClaro;
                     e.target.style.boxShadow = `0 0 0 2px ${PALETA.verdeClaro}40`;
@@ -3166,7 +3160,7 @@ Notas adicionales: ${notasAdicionales}`;
               {(() => {
                 // Determinar si el importe ha cambiado respecto a la oferta aprobada
                 const importeActual = parseFloat(importeSinIva) || 0;
-                const importeOferta = presupuestoActual?.importe_total_sin_iva ? parseFloat(presupuestoActual.importe_total_sin_iva) : 0;
+                const importeOferta = presupuestoActual?.importe_total_sin_iva ? parseFloat(String(presupuestoActual.importe_total_sin_iva)) : 0;
                 const importeHaCambiado = tieneOfertaAprobada && importeActual !== importeOferta;
                 const mostrarCampo = !tieneOfertaAprobada || importeHaCambiado;
 
@@ -3240,7 +3234,7 @@ Notas adicionales: ${notasAdicionales}`;
                 onClick={valoracionEconomica}
                 disabled={(() => {
                   const importeActual = parseFloat(importeSinIva) || 0;
-                  const importeOferta = presupuestoActual?.importe_total_sin_iva ? parseFloat(presupuestoActual.importe_total_sin_iva) : 0;
+                  const importeOferta = presupuestoActual?.importe_total_sin_iva ? parseFloat(String(presupuestoActual.importe_total_sin_iva)) : 0;
                   const importeHaCambiado = tieneOfertaAprobada && importeActual !== importeOferta;
                   const importeCoincide = tieneOfertaAprobada && !importeHaCambiado && importeActual > 0;
                   const documentoRequerido = !tieneOfertaAprobada || importeHaCambiado;
