@@ -4,6 +4,9 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+
 const PALETA = {
   fondo: "#5D6D52",
   headerTable: "#D9B6A9",

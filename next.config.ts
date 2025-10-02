@@ -1,8 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: 'standalone',
-  outputFileTracingRoot: '/Users/mireia/Desktop/fminci-web',
+  // Removed standalone output and absolute path for Vercel deployment
 };
 
 export default nextConfig;

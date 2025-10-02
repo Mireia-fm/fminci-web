@@ -141,6 +141,17 @@ export default function ChatProveedor() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
+  // Estado para historial de proveedores
+  type ProveedorHistorico = {
+    proveedor_nombre: string;
+    fecha_asignacion: string;
+    fecha_anulacion?: string | null;
+    motivo_anulacion?: string | null;
+    estado_proveedor: string;
+    activo: boolean;
+  };
+  const [historialProveedores, setHistorialProveedores] = useState<ProveedorHistorico[]>([]);
+
   const incidenciaId = params.id as string;
 
   // Función para hacer scroll al último mensaje
@@ -511,6 +522,48 @@ export default function ChatProveedor() {
         registro.tipo_estado === 'proveedor' && registro.estado_nuevo === 'Oferta aprobada'
       );
       setTuvoOfertaAprobada(tuvoOfertaAprobadaEnHistorial);
+
+      // Cargar historial de proveedores (solo para Control)
+      if (persona?.rol === 'Control') {
+        const { data: proveedoresHistoricos } = await supabase
+          .from("proveedor_casos")
+          .select(`
+            proveedor_id,
+            asignado_en,
+            fecha_anulacion,
+            estado_proveedor,
+            activo,
+            incidencias!inner(
+              motivo_anulacion_proveedor
+            )
+          `)
+          .eq("incidencia_id", incidenciaId)
+          .order("asignado_en", { ascending: false });
+
+        if (proveedoresHistoricos && proveedoresHistoricos.length > 0) {
+          // Obtener nombres de proveedores
+          const proveedorIds = proveedoresHistoricos.map(p => p.proveedor_id);
+          const { data: proveedoresData } = await supabase
+            .from("instituciones")
+            .select("id, nombre")
+            .in("id", proveedorIds);
+
+          const proveedoresMap = new Map(
+            (proveedoresData || []).map(p => [p.id, p.nombre])
+          );
+
+          const historialFormateado: ProveedorHistorico[] = proveedoresHistoricos.map(p => ({
+            proveedor_nombre: proveedoresMap.get(p.proveedor_id) || 'Proveedor desconocido',
+            fecha_asignacion: p.asignado_en,
+            fecha_anulacion: p.fecha_anulacion,
+            motivo_anulacion: (p.incidencias as unknown as { motivo_anulacion_proveedor?: string })?.motivo_anulacion_proveedor,
+            estado_proveedor: p.estado_proveedor || 'Sin estado',
+            activo: p.activo
+          }));
+
+          setHistorialProveedores(historialFormateado);
+        }
+      }
 
     } catch (error) {
       console.error("Error:", error);
@@ -2070,6 +2123,104 @@ Notas adicionales: ${notasAdicionales}`;
           })()}
         </div>
       </div>
+
+      {/* Historial de Proveedores - Solo para Control */}
+      {tipoUsuario === "Control" && historialProveedores.length > 0 && (
+        <div className="px-6 mb-6">
+          <div
+            className="rounded-lg shadow-lg"
+            style={{ backgroundColor: PALETA.card }}
+          >
+            <div
+              className="px-6 py-4 border-b rounded-t-lg"
+              style={{
+                backgroundColor: PALETA.headerTable,
+                color: PALETA.textoOscuro
+              }}
+            >
+              <h2 className="text-lg font-semibold">HISTORIAL DE PROVEEDORES</h2>
+            </div>
+
+            <div className="px-6 py-4">
+              <div className="space-y-4">
+                {historialProveedores.map((prov, index) => (
+                  <div
+                    key={index}
+                    className="border-l-4 pl-4 py-3 rounded-r"
+                    style={{
+                      borderColor: prov.activo ? PALETA.fondo : '#9ca3af',
+                      backgroundColor: prov.activo ? `${PALETA.fondo}10` : '#f9fafb'
+                    }}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="font-semibold" style={{ color: PALETA.textoOscuro }}>
+                            {prov.proveedor_nombre}
+                          </span>
+                          {prov.activo && (
+                            <span
+                              className="px-2 py-1 text-xs rounded text-white font-medium"
+                              style={{ backgroundColor: PALETA.fondo }}
+                            >
+                              ACTIVO
+                            </span>
+                          )}
+                          {!prov.activo && (
+                            <span className="px-2 py-1 text-xs rounded bg-gray-400 text-white font-medium">
+                              ANULADO
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="text-sm space-y-1" style={{ color: PALETA.textoOscuro }}>
+                          <div>
+                            <span className="font-medium">Asignado:</span>{' '}
+                            {new Date(prov.fecha_asignacion).toLocaleString('es-ES', {
+                              year: 'numeric',
+                              month: '2-digit',
+                              day: '2-digit',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </div>
+
+                          {prov.fecha_anulacion && (
+                            <div>
+                              <span className="font-medium">Anulado:</span>{' '}
+                              {new Date(prov.fecha_anulacion).toLocaleString('es-ES', {
+                                year: 'numeric',
+                                month: '2-digit',
+                                day: '2-digit',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </div>
+                          )}
+
+                          <div>
+                            <span className="font-medium">Estado final:</span>{' '}
+                            <span className="px-2 py-0.5 text-xs rounded bg-gray-200">
+                              {prov.estado_proveedor}
+                            </span>
+                          </div>
+
+                          {prov.motivo_anulacion && (
+                            <div className="mt-2 p-2 rounded bg-red-50 border border-red-200">
+                              <span className="font-medium text-red-700">Motivo de anulación:</span>
+                              <p className="text-red-600 mt-1">{prov.motivo_anulacion}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Panel de acciones para Control */}
       {tipoUsuario === "Control" && (
