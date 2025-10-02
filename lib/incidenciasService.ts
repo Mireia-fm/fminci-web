@@ -206,7 +206,7 @@ export async function obtenerConteoPorEstado(
       return [];
     }
 
-    return (data || []).map(row => ({
+    return (data || []).map((row: { estado: string; n: number }) => ({
       estado: row.estado,
       n: Number(row.n),
     }));
@@ -254,7 +254,7 @@ export async function obtenerConteoPorEstado(
     return [];
   }
 
-  return (data || []).map(row => ({
+  return (data || []).map((row: { estado: string; n: number }) => ({
     estado: row.estado,
     n: Number(row.n),
   }));
