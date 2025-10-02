@@ -193,33 +193,31 @@ export async function obtenerConteoPorEstado(
     return Object.entries(conteo).map(([estado, n]) => ({ estado, n }));
   }
 
-  // Vista cliente: hacer COUNT directamente en la base de datos
-  // Esto evita el límite de 1000 filas de supabase-js
+  // Vista cliente: usar RPC para contar (evita límite de 1000 filas)
 
-  // Control: contar TODAS las incidencias
+  // Control o acceso todos los centros: contar TODAS
   if (perfil.rol === "Control" || perfil.acceso_todos_centros) {
-    const { data, error } = await supabase
-      .from("incidencias")
-      .select("estado_cliente", { count: "exact", head: false });
+    const { data, error } = await supabase.rpc("contar_incidencias_por_estado", {
+      p_rol: "Control",
+    });
 
-    if (error || !data) {
-      console.error("Error contando incidencias:", error);
+    if (error) {
+      console.error("Error contando incidencias (RPC):", error);
       return [];
     }
 
-    const conteo: Record<string, number> = {};
-    data.forEach(inc => {
-      const estado = inc.estado_cliente || "Sin estado";
-      conteo[estado] = (conteo[estado] || 0) + 1;
-    });
-
-    return Object.entries(conteo).map(([estado, n]) => ({ estado, n }));
+    return (data || []).map(row => ({
+      estado: row.estado,
+      n: Number(row.n),
+    }));
   }
 
-  // Proveedor: contar incidencias asignadas
-  if (perfil.rol === "Proveedor") {
-    const proveedorId = perfil.instituciones?.[0]?.institucion_id;
-    if (!proveedorId) return [];
+  // Gestor/Cliente: contar incidencias de sus instituciones
+  const institucionIds = perfil.instituciones?.map(i => i.institucion_id) || [];
+
+  // Proveedor: necesita lógica diferente (filtrar por proveedor_casos)
+  if (perfil.rol === "Proveedor" && institucionIds.length > 0) {
+    const proveedorId = institucionIds[0];
 
     const { data, error } = await supabase
       .from("incidencias")
@@ -241,29 +239,25 @@ export async function obtenerConteoPorEstado(
     return Object.entries(conteo).map(([estado, n]) => ({ estado, n }));
   }
 
-  // Gestor/Cliente: contar incidencias de sus instituciones
-  const institucionIds = perfil.instituciones?.map(i => i.institucion_id) || [];
+  // Gestor/Cliente con instituciones
   if (institucionIds.length === 0) {
     return [];
   }
 
-  const { data, error } = await supabase
-    .from("incidencias")
-    .select("estado_cliente")
-    .in("institucion_id", institucionIds);
+  const { data, error } = await supabase.rpc("contar_incidencias_por_estado", {
+    p_rol: perfil.rol,
+    p_institucion_ids: institucionIds,
+  });
 
-  if (error || !data) {
-    console.error("Error contando incidencias por instituciones:", error);
+  if (error) {
+    console.error("Error contando incidencias por instituciones (RPC):", error);
     return [];
   }
 
-  const conteo: Record<string, number> = {};
-  data.forEach(inc => {
-    const estado = inc.estado_cliente || "Sin estado";
-    conteo[estado] = (conteo[estado] || 0) + 1;
-  });
-
-  return Object.entries(conteo).map(([estado, n]) => ({ estado, n }));
+  return (data || []).map(row => ({
+    estado: row.estado,
+    n: Number(row.n),
+  }));
 }
 
 /**
