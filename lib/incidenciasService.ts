@@ -169,22 +169,32 @@ export async function obtenerConteoPorEstado(
   perfil: Perfil,
   tipoEstado: "cliente" | "proveedor" = "cliente"
 ): Promise<{ estado: string; n: number }[]> {
-  const incidencias = await obtenerIncidenciasPorPerfil(perfil);
-
   if (tipoEstado === "proveedor") {
-    // Contar por estado de proveedor
+    // Para vista proveedor: contar CASOS de proveedor activos, no incidencias
+    // Esto permite que una incidencia tenga múltiples proveedores
+    const { data, error } = await supabase
+      .from("proveedor_casos")
+      .select("estado_proveedor")
+      .eq("activo", true);
+
+    if (error || !data) {
+      console.error("Error cargando casos de proveedor:", error);
+      return [];
+    }
+
+    // Contar por estado
     const conteo: Record<string, number> = {};
-    incidencias.forEach(inc => {
-      const casoActivo = inc.proveedor_casos?.find(pc => pc.activo);
-      if (casoActivo?.estado_proveedor) {
-        const estado = casoActivo.estado_proveedor;
-        conteo[estado] = (conteo[estado] || 0) + 1;
-      }
+    data.forEach(caso => {
+      const estado = caso.estado_proveedor || "Sin estado";
+      conteo[estado] = (conteo[estado] || 0) + 1;
     });
+
     return Object.entries(conteo).map(([estado, n]) => ({ estado, n }));
   }
 
-  // Contar por estado de cliente
+  // Vista cliente: contar incidencias por estado_cliente
+  const incidencias = await obtenerIncidenciasPorPerfil(perfil);
+
   const conteo: Record<string, number> = {};
   incidencias.forEach(inc => {
     const estado = inc.estado_cliente || "Sin estado";
