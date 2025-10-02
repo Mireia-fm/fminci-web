@@ -1,24 +1,12 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/contexts/AuthContext";
+import { obtenerConteoPorEstado } from "@/lib/incidenciasService";
+import { PALETA, COLORES_ESTADOS_PROVEEDOR, ESTADOS_PROVEEDOR } from "@/lib/theme";
 import { supabase } from "@/lib/supabaseClient";
 
-type Row = { estado_proveedor: string | null; n: number };
-
-const PALETA = {
-  bg: "#5D6D52",
-  texto: "#EDF0E9",
-  b1: "#E8D36A", // Abierta
-  b2: "#E8B5A8", // En resolución
-  b3: "#A9B88C", // Ofertada / Aprobada
-  b4: "#8F9B83", // Resuelta
-  b5: "#D4C65A", // Oferta a revisar (variación de b1)
-  b6: "#C7A88F", // Cerrada (variación de b2)
-  b7: "#9AAD7F", // Anulada (variación de b3)
-  b8: "#7A8A6F", // Valorada (variación de b4)
-  b9: "#B8C99D", // Pendiente valoración (variación clara de b3)
-  b10: "#6B7A60", // Estado adicional (variación oscura de bg)
-};
+type Row = { estado: string; n: number };
 
 type Notificacion = {
   id: string;
@@ -31,75 +19,30 @@ type Notificacion = {
 
 export default function DashboardProveedor() {
   const router = useRouter();
+  const { perfil, loading: loadingAuth, proveedorId } = useAuth();
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [notificaciones, setNotificaciones] = useState<Notificacion[]>([]);
   const [loadingNotificaciones, setLoadingNotificaciones] = useState(true);
 
   useEffect(() => {
-    cargarDatos();
-  }, []);
+    if (!loadingAuth && perfil) {
+      cargarDatos();
+    }
+  }, [loadingAuth, perfil]);
 
   const cargarDatos = async () => {
+    if (!perfil) return;
+
     try {
-      // Obtener email del usuario actual
-      const { data: userData } = await supabase.auth.getUser();
-      const userEmail = userData.user?.email;
-      
-      if (!userEmail) {
-        setLoading(false);
-        return;
+      // Usar el servicio centralizado
+      const conteos = await obtenerConteoPorEstado(perfil, "proveedor");
+      setRows(conteos);
+
+      // Cargar notificaciones
+      if (proveedorId) {
+        await cargarNotificaciones(proveedorId);
       }
-
-      // Obtener persona_id del usuario
-      const { data: persona } = await supabase
-        .from("personas")
-        .select("id")
-        .eq("email", userEmail)
-        .maybeSingle();
-
-      if (!persona) {
-        setLoading(false);
-        return;
-      }
-
-      // Obtener institución del proveedor
-      const { data: personaInst } = await supabase
-        .from("personas_instituciones")
-        .select("institucion_id")
-        .eq("persona_id", persona.id)
-        .maybeSingle();
-
-      if (!personaInst) {
-        setLoading(false);
-        return;
-      }
-
-      // Cargar resumen de casos para este proveedor específico
-      const { data } = await supabase
-        .from("proveedor_casos")
-        .select("estado_proveedor")
-        .eq("proveedor_id", personaInst.institucion_id)
-        .eq("activo", true);
-
-      // Contar casos por estado
-      const conteoEstados = (data || []).reduce((acc: Record<string, number>, caso) => {
-        const estado = caso.estado_proveedor || "Sin estado";
-        acc[estado] = (acc[estado] || 0) + 1;
-        return acc;
-      }, {});
-
-      // Convertir a formato Row[]
-      const rowsData = Object.entries(conteoEstados).map(([estado, count]) => ({
-        estado_proveedor: estado,
-        n: count
-      }));
-      
-      setRows(rowsData as Row[]);
-      
-      // Cargar notificaciones de nuevas incidencias (últimas 48 horas)
-      await cargarNotificaciones(personaInst);
-      
     } catch (error) {
       console.error("Error cargando datos:", error);
     } finally {
@@ -108,11 +51,8 @@ export default function DashboardProveedor() {
     }
   };
 
-  const cargarNotificaciones = async (personaInst: { institucion_id: string } | null) => {
+  const cargarNotificaciones = async (proveedorIdParam: string) => {
     try {
-      if (!personaInst) return;
-
-      // Cargar notificaciones no vistas desde la tabla proveedor_notificaciones
       const { data: notificacionesData } = await supabase
         .from("proveedor_notificaciones")
         .select(`
@@ -127,7 +67,7 @@ export default function DashboardProveedor() {
             descripcion_proveedor
           )
         `)
-        .eq("proveedor_id", personaInst.institucion_id)
+        .eq("proveedor_id", proveedorIdParam)
         .eq("notificacion_vista", false)
         .order("fecha_creacion", { ascending: false });
 
@@ -155,85 +95,38 @@ export default function DashboardProveedor() {
   };
 
   const marcarNotificacionVista = async (incidenciaId: string) => {
+    if (!proveedorId) return;
+
     try {
-      // Obtener persona_id del usuario actual
-      const { data: userData } = await supabase.auth.getUser();
-      const userEmail = userData.user?.email;
-
-      if (!userEmail) return;
-
-      const { data: persona } = await supabase
-        .from("personas")
-        .select("id")
-        .eq("email", userEmail)
-        .maybeSingle();
-
-      if (!persona) return;
-
-      // Obtener institución del proveedor
-      const { data: personaInst } = await supabase
-        .from("personas_instituciones")
-        .select("institucion_id")
-        .eq("persona_id", persona.id)
-        .maybeSingle();
-
-      if (!personaInst) return;
-
-      // Marcar notificación como vista
       await supabase
         .from("proveedor_notificaciones")
         .update({
           notificacion_vista: true,
           fecha_vista: new Date().toISOString()
         })
-        .eq("proveedor_id", personaInst.institucion_id)
+        .eq("proveedor_id", proveedorId)
         .eq("incidencia_id", incidenciaId);
 
-      // Navegar al chat
-      window.location.href = `/incidencias/${incidenciaId}/chat-proveedor`;
+      router.push(`/incidencias/${incidenciaId}/chat-proveedor`);
     } catch (error) {
       console.error("Error marcando notificación como vista:", error);
-      // Navegar anyway si hay error
-      window.location.href = `/incidencias/${incidenciaId}/chat-proveedor`;
+      router.push(`/incidencias/${incidenciaId}/chat-proveedor`);
     }
   };
 
   const limpiarNotificaciones = async () => {
+    if (!proveedorId) return;
+
     try {
-      // Obtener persona_id del usuario actual
-      const { data: userData } = await supabase.auth.getUser();
-      const userEmail = userData.user?.email;
-
-      if (!userEmail) return;
-
-      const { data: persona } = await supabase
-        .from("personas")
-        .select("id")
-        .eq("email", userEmail)
-        .maybeSingle();
-
-      if (!persona) return;
-
-      // Obtener institución del proveedor
-      const { data: personaInst } = await supabase
-        .from("personas_instituciones")
-        .select("institucion_id")
-        .eq("persona_id", persona.id)
-        .maybeSingle();
-
-      if (!personaInst) return;
-
-      // Marcar todas las notificaciones como vistas
       await supabase
         .from("proveedor_notificaciones")
         .update({
           notificacion_vista: true,
           fecha_vista: new Date().toISOString()
         })
-        .eq("proveedor_id", personaInst.institucion_id)
+        .eq("proveedor_id", proveedorId)
         .eq("notificacion_vista", false);
 
-      // Recargar notificaciones
       setNotificaciones([]);
     } catch (error) {
       console.error("Error limpiando notificaciones:", error);
@@ -241,25 +134,26 @@ export default function DashboardProveedor() {
   };
 
   const cards = useMemo(() => {
-    const by = new Map(rows.map(r => [r.estado_proveedor ?? "—", r.n]));
-    return [
-      { key: "Abierta",              color: PALETA.b1, n: by.get("Abierta") ?? 0 },              // Amarillo FMinci
-      { key: "En resolución",        color: PALETA.b2, n: by.get("En resolución") ?? 0 },        // Rosa FMinci
-      { key: "Ofertada",             color: PALETA.b3, n: by.get("Ofertada") ?? 0 },             // Verde FMinci
-      { key: "Oferta aprobada",      color: PALETA.b4, n: by.get("Oferta aprobada") ?? 0 },      // Verde oscuro FMinci
-      { key: "Oferta a revisar",     color: PALETA.b5, n: by.get("Oferta a revisar") ?? 0 },     // Amarillo variación
-      { key: "Resuelta",             color: PALETA.b4, n: by.get("Resuelta") ?? 0 },             // Verde oscuro FMinci
-      { key: "Cerrada",              color: PALETA.b6, n: by.get("Cerrada") ?? 0 },              // Rosa variación
-      { key: "Anulada",              color: PALETA.b7, n: by.get("Anulada") ?? 0 },              // Verde variación
-      { key: "Valorada",             color: PALETA.b8, n: by.get("Valorada") ?? 0 },             // Verde oscuro variación
-      { key: "Pendiente valoración", color: PALETA.b9, n: by.get("Pendiente valoración") ?? 0 }, // Verde claro
-    ];
+    const estadosMap = new Map(rows.map(r => [r.estado, r.n]));
+
+    return ESTADOS_PROVEEDOR.map(estado => ({
+      key: estado,
+      color: COLORES_ESTADOS_PROVEEDOR[estado],
+      n: estadosMap.get(estado) ?? 0
+    }));
   }, [rows]);
 
   const navegarAIncidencias = (estado: string) => {
-    // Navegar a la página de incidencias con filtro por estado_proveedor
     router.push(`/incidencias?estado_proveedor=${encodeURIComponent(estado)}`);
   };
+
+  if (loadingAuth || loading) {
+    return (
+      <main className="min-h-[calc(100vh-80px)] flex items-center justify-center" style={{ backgroundColor: PALETA.bg }}>
+        <p className="text-white/80">Cargando…</p>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-[calc(100vh-80px)]" style={{ backgroundColor: PALETA.bg }}>
@@ -336,47 +230,43 @@ export default function DashboardProveedor() {
       )}
 
       <section className="px-6 pb-12 pt-16">
-        {loading ? (
-          <p className="text-white/80">Cargando…</p>
-        ) : (
-          <div className="max-w-6xl mx-auto">
-            {/* Primera fila - 5 contadores */}
-            <div className="flex justify-center gap-4 mb-4">
-              {cards.slice(0, 5).map(c => (
-                <div
-                  key={c.key}
-                  className="flex flex-col items-center justify-center rounded-full cursor-pointer transition-transform hover:scale-105"
-                  style={{
-                    width: 170, height: 170, backgroundColor: c.color,
-                    boxShadow: "0 8px 20px rgba(0,0,0,0.08)",
-                  }}
-                  onClick={() => navegarAIncidencias(c.key)}
-                >
-                  <div className="text-4xl font-semibold text-white">{c.n}</div>
-                  <div className="mt-2 text-white/90 text-sm text-center px-2">{c.key}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* Segunda fila - 5 contadores */}
-            <div className="flex justify-center gap-4">
-              {cards.slice(5, 10).map(c => (
-                <div
-                  key={c.key}
-                  className="flex flex-col items-center justify-center rounded-full cursor-pointer transition-transform hover:scale-105"
-                  style={{
-                    width: 170, height: 170, backgroundColor: c.color,
-                    boxShadow: "0 8px 20px rgba(0,0,0,0.08)",
-                  }}
-                  onClick={() => navegarAIncidencias(c.key)}
-                >
-                  <div className="text-4xl font-semibold text-white">{c.n}</div>
-                  <div className="mt-2 text-white/90 text-sm text-center px-2">{c.key}</div>
-                </div>
-              ))}
-            </div>
+        <div className="max-w-6xl mx-auto">
+          {/* Primera fila - 5 contadores */}
+          <div className="flex justify-center gap-4 mb-4">
+            {cards.slice(0, 5).map(c => (
+              <div
+                key={c.key}
+                className="flex flex-col items-center justify-center rounded-full cursor-pointer transition-transform hover:scale-105"
+                style={{
+                  width: 170, height: 170, backgroundColor: c.color,
+                  boxShadow: "0 8px 20px rgba(0,0,0,0.08)",
+                }}
+                onClick={() => navegarAIncidencias(c.key)}
+              >
+                <div className="text-4xl font-semibold text-white">{c.n}</div>
+                <div className="mt-2 text-white/90 text-sm text-center px-2">{c.key}</div>
+              </div>
+            ))}
           </div>
-        )}
+
+          {/* Segunda fila - 5 contadores */}
+          <div className="flex justify-center gap-4">
+            {cards.slice(5, 10).map(c => (
+              <div
+                key={c.key}
+                className="flex flex-col items-center justify-center rounded-full cursor-pointer transition-transform hover:scale-105"
+                style={{
+                  width: 170, height: 170, backgroundColor: c.color,
+                  boxShadow: "0 8px 20px rgba(0,0,0,0.08)",
+                }}
+                onClick={() => navegarAIncidencias(c.key)}
+              >
+                <div className="text-4xl font-semibold text-white">{c.n}</div>
+                <div className="mt-2 text-white/90 text-sm text-center px-2">{c.key}</div>
+              </div>
+            ))}
+          </div>
+        </div>
       </section>
     </main>
   );

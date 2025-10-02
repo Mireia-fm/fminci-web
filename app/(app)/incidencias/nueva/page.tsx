@@ -39,7 +39,7 @@ export default function NuevaIncidenciaPage() {
   const [opcionesCentros, setOpcionesCentros] = useState<Opcion[]>([]);
   const [opcionesCatalogacion, setOpcionesCatalogacion] = useState<Opcion[]>([]);
   const opcionesPrioridad: Opcion[] = [
-    { value: "", label: "Selecciona prioridad" },
+    { value: "", label: "Seleccione la prioridad" },
     { value: "Urgente", label: "Urgente" },
     { value: "Crítico", label: "Crítico" },
     { value: "Normal", label: "Normal" },
@@ -193,7 +193,7 @@ export default function NuevaIncidenciaPage() {
 
       // Configurar opciones de centros
       setOpcionesCentros([
-        { value: "", label: "Selecciona un centro" },
+        { value: "", label: "Seleccione un centro" },
         ...centrosPermitidos.map((c) => ({ value: c.id, label: c.nombre })),
       ]);
 
@@ -206,7 +206,7 @@ export default function NuevaIncidenciaPage() {
       if (!catErr && catData) {
         const filas: CatalogacionRow[] = (catData ?? []) as CatalogacionRow[];
         setOpcionesCatalogacion([
-          { value: "", label: "Selecciona una catalogación" },
+          { value: "", label: "Seleccione una catalogación" },
           // Guardamos texto en incidencias.catalogacion:
           ...filas.map((x) => ({ value: x.nombre, label: x.nombre })),
         ]);
@@ -328,11 +328,11 @@ export default function NuevaIncidenciaPage() {
 
   // Estilos
   const inputBase =
-    "w-full h-9 rounded border px-3 text-sm outline-none focus:ring-2 focus:ring-[#C9D7A7]";
+    "w-full h-9 rounded border px-3 text-sm outline-none focus:ring-2 focus:ring-[#C9D7A7] placeholder:text-gray-500";
   const selectBase =
-    "w-full h-9 rounded border px-3 text-sm outline-none focus:ring-2 focus:ring-[#C9D7A7] appearance-none pr-6";
+    "w-full h-9 rounded border px-3 text-sm outline-none focus:ring-2 focus:ring-[#C9D7A7] appearance-none pr-6 text-gray-500 [&>option:not(:first-child)]:text-black [&>option:first-child]:text-gray-500";
   const textAreaBase =
-    "min-h-[120px] w-full rounded border p-3 text-sm outline-none focus:ring-2 focus:ring-[#C9D7A7]";
+    "min-h-[120px] w-full rounded border p-3 text-sm outline-none focus:ring-2 focus:ring-[#C9D7A7] placeholder:text-gray-500";
 
   // Si la incidencia fue creada exitosamente, mostrar pantalla de éxito
   if (incidenciaCreada) {
@@ -448,7 +448,7 @@ export default function NuevaIncidenciaPage() {
               </label>
               <input
                 className={inputBase}
-                placeholder="Escribe tu nombre"
+                placeholder="Escriba su nombre"
                 value={nombre}
                 onChange={(e) => setNombre(e.target.value)}
                 readOnly={nombreAsignado}
@@ -474,10 +474,10 @@ export default function NuevaIncidenciaPage() {
             ) : (
               <div className="relative">
                 <select
-                  className={selectBase}
+                  className={`${selectBase} ${centro ? 'text-black' : ''}`}
                   value={centro}
                   onChange={(e) => setCentro(e.target.value)}
-                  aria-label="Selecciona un centro"
+                  aria-label="Seleccione un centro"
                 >
                   {opcionesCentros.map((o) => (
                     <option key={o.value} value={o.value}>
@@ -497,10 +497,10 @@ export default function NuevaIncidenciaPage() {
               </label>
               <div className="relative">
                 <select
-                  className={selectBase}
+                  className={`${selectBase} ${catalogacion ? 'text-black' : ''}`}
                   value={catalogacion}
                   onChange={(e) => setCatalogacion(e.target.value)}
-                  aria-label="Selecciona una catalogación"
+                  aria-label="Seleccione una catalogación"
                 >
                   {opcionesCatalogacion.map((o) => (
                     <option key={o.value} value={o.value}>
@@ -517,7 +517,7 @@ export default function NuevaIncidenciaPage() {
               </label>
               <div className="relative">
                 <select
-                  className={selectBase}
+                  className={`${selectBase} ${prioridad ? 'text-black' : ''}`}
                   value={prioridad}
                   onChange={(e) => setPrioridad(e.target.value)}
                 >
@@ -551,7 +551,7 @@ export default function NuevaIncidenciaPage() {
               className={textAreaBase}
               value={descripcion}
               onChange={(e) => setDescripcion(e.target.value)}
-              placeholder="Describe brevemente la incidencia…"
+              placeholder="Describa brevemente la incidencia"
             />
           </div>
 
