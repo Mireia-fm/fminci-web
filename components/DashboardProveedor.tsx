@@ -132,13 +132,19 @@ export default function DashboardProveedor() {
         .order("fecha_creacion", { ascending: false });
 
       if (notificacionesData) {
-        const notificacionesFormateadas = notificacionesData.map(notif => ({
-          id: notif.incidencia_id,
+        const notificacionesFormateadas: Notificacion[] = notificacionesData.map((notif: {
+          incidencia_id?: string;
+          fecha_creacion?: string;
+          tipo_notificacion?: string;
+          incidencias?: { num_solicitud?: string; descripcion?: string; centro?: string; instituciones?: { nombre?: string } };
+          proveedor_casos?: { descripcion_proveedor?: string };
+        }) => ({
+          id: notif.incidencia_id || '',
           num_solicitud: notif.incidencias?.num_solicitud || "",
           descripcion: notif.proveedor_casos?.descripcion_proveedor || notif.incidencias?.descripcion || "",
-          fecha_asignacion: notif.fecha_creacion,
+          fecha_asignacion: notif.fecha_creacion || '',
           institucion_nombre: notif.incidencias?.instituciones?.nombre || notif.incidencias?.centro,
-          tipo: notif.tipo_notificacion as 'nueva' | 'revision'
+          tipo: (notif.tipo_notificacion === 'revision' ? 'revision' : 'nueva') as 'nueva' | 'revision'
         }));
 
         setNotificaciones(notificacionesFormateadas);
@@ -321,7 +327,7 @@ export default function DashboardProveedor() {
             <button
               onClick={limpiarNotificaciones}
               className="px-4 py-2 text-xs font-medium rounded text-white hover:opacity-90 transition-opacity"
-              style={{ backgroundColor: PALETA.verdeSombra }}
+              style={{ backgroundColor: PALETA.b10 }}
             >
               🗑️ Limpiar notificaciones
             </button>

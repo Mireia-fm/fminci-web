@@ -456,9 +456,11 @@ export default function IncidenciasListado() {
           if (existing) {
             // Si ya existe, combinar los casos de proveedor
             if (current.proveedor_casos && current.proveedor_casos.length > 0) {
-              existing.proveedor_casos = existing.proveedor_casos || [];
+              if (!existing.proveedor_casos) {
+                existing.proveedor_casos = [];
+              }
               current.proveedor_casos.forEach(caso => {
-                if (!existing.proveedor_casos.some(existingCaso =>
+                if (existing.proveedor_casos && !existing.proveedor_casos.some(existingCaso =>
                   existingCaso.estado_proveedor === caso.estado_proveedor &&
                   existingCaso.activo === caso.activo
                 )) {
@@ -484,7 +486,7 @@ export default function IncidenciasListado() {
         const centros = [...new Set(
           incidenciasUnicas
             .map(inc => inc.instituciones?.[0]?.nombre || inc.centro)
-            .filter(Boolean)
+            .filter((c): c is string => Boolean(c))
         )].sort((a, b) => a.localeCompare(b));
         setCentrosUnicos(centros);
 
@@ -492,7 +494,7 @@ export default function IncidenciasListado() {
         const catalogaciones = [...new Set(
           incidenciasUnicas
             .map(inc => inc.catalogacion)
-            .filter(Boolean)
+            .filter((c): c is string => Boolean(c))
         )];
         setCatalogacionesUnicas(catalogaciones);
       }
@@ -642,9 +644,10 @@ export default function IncidenciasListado() {
           motivo: 'Asignación a proveedor',
           metadatos: {
             proveedor_id: formularioProveedor.proveedor_id,
-            proveedor_nombre: proveedores.find(p => p.id === formularioProveedor.proveedor_id)?.nombre,
+            proveedor_nombre: proveedores.find(p => p.id === formularioProveedor.proveedor_id)?.nombre || '',
             prioridad: formularioProveedor.prioridad,
-            accion: 'asignar_proveedor'
+            accion: 'asignar_proveedor',
+            descripcion_proveedor: formularioProveedor.descripcion_proveedor || ''
           }
         },
         {
@@ -656,9 +659,9 @@ export default function IncidenciasListado() {
           motivo: 'Asignación inicial',
           metadatos: {
             proveedor_id: formularioProveedor.proveedor_id,
-            proveedor_nombre: proveedores.find(p => p.id === formularioProveedor.proveedor_id)?.nombre,
+            proveedor_nombre: proveedores.find(p => p.id === formularioProveedor.proveedor_id)?.nombre || '',
             prioridad: formularioProveedor.prioridad,
-            descripcion_proveedor: formularioProveedor.descripcion_proveedor,
+            descripcion_proveedor: formularioProveedor.descripcion_proveedor || '',
             accion: 'asignar_proveedor'
           }
         }

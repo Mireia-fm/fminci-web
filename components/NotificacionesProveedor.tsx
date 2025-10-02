@@ -54,7 +54,21 @@ export default function NotificacionesProveedor({ proveedorId }: NotificacionesP
         .order("fecha_creacion", { ascending: false });
 
       if (!error && data) {
-        setNotificaciones(data);
+        // Transformar datos para que coincidan con el tipo Notificacion
+        const notificacionesTransformadas: Notificacion[] = data.map((item: {
+          id: string;
+          incidencia_id: string;
+          tipo: string;
+          titulo: string;
+          mensaje: string;
+          leida: boolean;
+          fecha_creacion: string;
+          incidencias?: { num_solicitud: string }[] | { num_solicitud: string };
+        }) => ({
+          ...item,
+          incidencias: Array.isArray(item.incidencias) ? item.incidencias[0] : item.incidencias
+        }));
+        setNotificaciones(notificacionesTransformadas);
       }
     } catch (error) {
       console.error("Error cargando notificaciones:", error);
