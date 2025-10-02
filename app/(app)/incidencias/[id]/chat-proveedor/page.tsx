@@ -519,12 +519,10 @@ export default function ChatProveedor() {
           .select(`
             proveedor_id,
             asignado_en,
-            fecha_anulacion,
+            anulado_en,
+            motivo_anulacion,
             estado_proveedor,
-            activo,
-            incidencias!inner(
-              motivo_anulacion_proveedor
-            )
+            activo
           `)
           .eq("incidencia_id", incidenciaId)
           .order("asignado_en", { ascending: false });
@@ -544,8 +542,8 @@ export default function ChatProveedor() {
           const historialFormateado: ProveedorHistorico[] = proveedoresHistoricos.map(p => ({
             proveedor_nombre: proveedoresMap.get(p.proveedor_id) || 'Proveedor desconocido',
             fecha_asignacion: p.asignado_en,
-            fecha_anulacion: p.fecha_anulacion,
-            motivo_anulacion: (p.incidencias as unknown as { motivo_anulacion_proveedor?: string })?.motivo_anulacion_proveedor,
+            fecha_anulacion: p.anulado_en,
+            motivo_anulacion: p.motivo_anulacion,
             estado_proveedor: p.estado_proveedor || 'Sin estado',
             activo: p.activo
           }));
@@ -1522,41 +1520,37 @@ Notas adicionales: ${notasAdicionales}`;
         .single();
 
       // 2. Marcar proveedor_caso como anulado e inactivo
-      await supabase
+      const { error: updateError } = await supabase
         .from("proveedor_casos")
         .update({
           estado_proveedor: "Anulada",
-          activo: false,  // ← Permitir reasignación
-          fecha_anulacion: new Date().toISOString()
+          activo: false,
+          motivo_anulacion: motivoAnulacion,
+          anulado_en: new Date().toISOString(),
+          anulado_por: autorId
         })
         .eq("incidencia_id", incidenciaId)
         .eq("activo", true);
 
-      // 3. Guardar motivo de anulación en la incidencia
-      await supabase
-        .from("incidencias")
-        .update({
-          motivo_anulacion_proveedor: motivoAnulacion,
-          fecha_anulacion_proveedor: new Date().toISOString()
-        })
-        .eq("id", incidenciaId);
+      if (updateError) {
+        console.error("Error updating proveedor_casos:", updateError);
+        throw updateError;
+      }
 
-      // 4. Crear notificación para el proveedor
+      // 3. Crear notificación para el proveedor usando la tabla correcta
       if (proveedorInfo?.proveedor_id) {
         await supabase
-          .from("notificaciones")
+          .from("proveedor_notificaciones")
           .insert({
             proveedor_id: proveedorInfo.proveedor_id,
             incidencia_id: incidenciaId,
-            tipo: 'anulacion',
-            titulo: 'Asignación anulada',
-            mensaje: `Tu asignación para la incidencia #${incidencia?.num_solicitud || incidenciaId} ha sido anulada. Motivo: ${motivoAnulacion}`,
-            leida: false,
+            tipo_notificacion: 'anulacion',
+            notificacion_vista: false,
             fecha_creacion: new Date().toISOString()
           });
       }
 
-      // 5. Comentario en el chat del proveedor (mantener historial)
+      // 4. Comentario en el chat del proveedor (mantener historial)
       const mensajeAnulacion = `Asignación anulada por Control. Motivo: ${motivoAnulacion}`;
 
       await supabase
@@ -2232,6 +2226,18 @@ Notas adicionales: ${notasAdicionales}`;
                       className="px-3 py-2 text-sm border border-red-500 text-red-600 bg-white rounded hover:bg-red-50 transition-colors"
                     >
                       Anular Proveedor
+                    </button>
+                  )}
+
+                  {/* Botón Reasignar - disponible cuando está anulada */}
+                  {estado === "Anulada" && (
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/control/incidencias?asignar=${incidenciaId}`)}
+                      className="px-4 py-2 text-white rounded hover:opacity-90 transition-opacity"
+                      style={{ backgroundColor: PALETA.verdeClaro }}
+                    >
+                      Reasignar Proveedor
                     </button>
                   )}
 
