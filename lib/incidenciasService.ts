@@ -313,9 +313,11 @@ export async function obtenerConteoPorCentro(
 
 /**
  * Deduplicar incidencias por ID y consolidar casos de proveedor
+ * IMPORTANTE: Mantiene el orden original de la query
  */
 function deduplicarIncidencias(incidencias: Incidencia[]): Incidencia[] {
   const mapa = new Map<string, Incidencia>();
+  const orden: string[] = []; // Mantener orden original
 
   incidencias.forEach(inc => {
     const existente = mapa.get(inc.id);
@@ -338,8 +340,10 @@ function deduplicarIncidencias(incidencias: Incidencia[]): Incidencia[] {
       }
     } else {
       mapa.set(inc.id, inc);
+      orden.push(inc.id); // Guardar orden de primera aparición
     }
   });
 
-  return Array.from(mapa.values());
+  // Retornar en el mismo orden que llegaron
+  return orden.map(id => mapa.get(id)!);
 }
