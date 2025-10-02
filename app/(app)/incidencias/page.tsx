@@ -6,16 +6,9 @@ import { supabase } from "@/lib/supabaseClient";
 import { registrarCambiosEstado } from "@/lib/historialEstados";
 import SearchableSelect from "@/components/SearchableSelect";
 import NotificacionesProveedor from "@/components/NotificacionesProveedor";
-
-// Paleta similar a la imagen de Wix
-const PALETA = {
-  fondo: "#5D6D52",
-  headerTable: "#D9B6A9",
-  card: "#F9FAF8",
-  filtros: "#E8B5A8",
-  texto: "#EDF0E9",
-  textoOscuro: "#4b4b4b",
-};
+import { PALETA } from "@/lib/theme";
+import { useAuth } from "@/contexts/AuthContext";
+import { obtenerIncidenciasPorPerfil } from "@/lib/incidenciasService";
 
 type Incidencia = {
   id: string;
@@ -47,6 +40,7 @@ type Proveedor = {
 export default function IncidenciasListado() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { perfil, loading: loadingAuth, proveedorId } = useAuth();
   const [incidencias, setIncidencias] = useState<Incidencia[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtroEstado, setFiltroEstado] = useState("");
@@ -58,15 +52,6 @@ export default function IncidenciasListado() {
   const [filtroPrioridadCliente, setFiltroPrioridadCliente] = useState("");
   const [filtroPrioridadProveedor, setFiltroPrioridadProveedor] = useState("");
   const [filtroProveedor, setFiltroProveedor] = useState("");
-  const [tipoUsuario, setTipoUsuario] = useState<string | null>(() => {
-    // Intentar obtener el tipo de usuario del sessionStorage
-    if (typeof window !== 'undefined') {
-      return sessionStorage.getItem('tipoUsuario');
-    }
-    return null;
-  });
-  const [tipoUsuarioConfirmado, setTipoUsuarioConfirmado] = useState(false);
-  const [proveedorId, setProveedorId] = useState<string | null>(null);
   const [mostrarModal, setMostrarModal] = useState(false);
   const [incidenciaSeleccionada, setIncidenciaSeleccionada] = useState<string | null>(null);
   const [tieneProveedorAsignado, setTieneProveedorAsignado] = useState(false);
@@ -106,12 +91,14 @@ export default function IncidenciasListado() {
 
   // Cargar incidencias del usuario actual
   useEffect(() => {
-    // Solo cargar si no hay filtro de número específico
-    if (!filtroNumero || filtroNumero.length < 4) {
-      cargarIncidencias();
+    if (!loadingAuth && perfil) {
+      // Solo cargar si no hay filtro de número específico
+      if (!filtroNumero || filtroNumero.length < 4) {
+        cargarIncidencias();
+      }
+      cargarProveedores();
     }
-    cargarProveedores();
-  }, []);
+  }, [loadingAuth, perfil]);
 
   // Búsqueda específica cuando se busca un número exacto
   useEffect(() => {
@@ -124,24 +111,12 @@ export default function IncidenciasListado() {
   }, [filtroNumero]);
 
   const buscarIncidenciaEspecifica = async (numeroSolicitud: string) => {
+    if (!perfil) return;
+
     try {
       setLoading(true);
-      const { data: userData } = await supabase.auth.getUser();
-      const userEmail = userData.user?.email;
 
-      if (!userEmail) {
-        setLoading(false);
-        return;
-      }
-
-      // Obtener tipo de usuario
-      const { data: persona } = await supabase
-        .from("personas")
-        .select("rol, id")
-        .eq("email", userEmail)
-        .maybeSingle();
-
-      if (persona?.rol === "Control") {
+      if (perfil.rol === "Control") {
         // Búsqueda específica para Control
         const { data, error } = await supabase
           .from("incidencias")
@@ -179,325 +154,38 @@ export default function IncidenciasListado() {
   };
 
   const cargarIncidencias = async () => {
+    if (!perfil) return;
+
     try {
-      const { data: userData } = await supabase.auth.getUser();
-      const userEmail = userData.user?.email;
+      // Usar el servicio centralizado
+      const data = await obtenerIncidenciasPorPerfil(perfil);
 
-      if (!userEmail) {
-        setLoading(false);
-        return;
+      setIncidencias(data);
+
+      // Configurar filtros según perfil
+      if (perfil.rol === 'Cliente' && perfil.instituciones && perfil.instituciones.length > 1) {
+        setMostrarFiltroCentro(true);
+        setCentrosAsignados(perfil.instituciones.map(inst => ({
+          id: inst.institucion_id,
+          nombre: inst.nombre
+        })));
       }
 
-      // Obtener tipo de usuario de la tabla personas
-      const { data: persona, error: personaError } = await supabase
-        .from("personas")
-        .select("rol, id")
-        .eq("email", userEmail)
-        .maybeSingle();
+      // Calcular centros únicos
+      const centros = [...new Set(
+        data
+          .map(inc => inc.instituciones?.[0]?.nombre || inc.centro)
+          .filter((c): c is string => Boolean(c))
+      )].sort((a, b) => a.localeCompare(b));
+      setCentrosUnicos(centros);
 
-      if (!personaError && persona) {
-        setTipoUsuario(persona.rol);
-
-        // Si es proveedor, obtener su ID de la tabla instituciones
-        if (persona.rol === 'Proveedor') {
-          const { data: institucion } = await supabase
-            .from("instituciones")
-            .select("id")
-            .eq("email", userEmail)
-            .eq("tipo", "Proveedor")
-            .maybeSingle();
-
-          if (institucion) {
-            setProveedorId(institucion.id);
-          }
-        }
-
-        // Guardar en sessionStorage para futuras cargas
-        if (typeof window !== 'undefined') {
-          sessionStorage.setItem('tipoUsuario', persona.rol);
-        }
-      }
-      setTipoUsuarioConfirmado(true);
-
-      let data, error;
-
-      if (persona?.rol === "Proveedor") {
-        // Para proveedores: obtener institución y mostrar TODAS las incidencias asignadas a esa institución
-        const { data: personaInst } = await supabase
-          .from("personas_instituciones")
-          .select("institucion_id")
-          .eq("persona_id", persona.id)
-          .maybeSingle();
-
-        if (!personaInst) {
-          setLoading(false);
-          return;
-        }
-
-        // Consulta para proveedores: mostrar todas las incidencias asignadas a la institución del proveedor
-        const result = await supabase
-          .from("incidencias")
-          .select(`
-            id,
-            num_solicitud,
-            fecha,
-            estado_cliente,
-            centro,
-            descripcion,
-            catalogacion,
-            institucion_id,
-            instituciones(nombre),
-            proveedor_casos!inner(
-              estado_proveedor,
-              prioridad,
-              activo
-            )
-          `)
-          .eq("proveedor_casos.proveedor_id", personaInst.institucion_id)
-          .eq("proveedor_casos.activo", true)
-          .order("fecha_creacion", { ascending: false });
-        
-        data = result.data;
-        error = result.error;
-      } else if (persona?.rol === "Control") {
-        // Para Control: mostrar TODAS las incidencias del sistema
-        const result = await supabase
-          .from("incidencias")
-          .select(`
-            id,
-            num_solicitud,
-            fecha,
-            estado_cliente,
-            centro,
-            descripcion,
-            catalogacion,
-            prioridad,
-            institucion_id,
-            email,
-            instituciones(nombre),
-            proveedor_casos(estado_proveedor, prioridad, activo, proveedor_id)
-          `)
-          .order("fecha_creacion", { ascending: false });
-
-        data = result.data;
-        error = result.error;
-
-        // Debug - solo para búsqueda
-        if (data && data.length < 100) {
-          console.log("Carga completa - incidencias encontradas:", data.length);
-        }
-      } else {
-        // Para otros usuarios: verificar si es Gestor o Cliente
-        // Primero obtener datos del usuario y verificar acceso_todos_centros
-        const { data: personaData } = await supabase
-          .from("personas")
-          .select("id, rol, acceso_todos_centros")
-          .eq("email", userEmail)
-          .maybeSingle();
-
-        if (personaData?.acceso_todos_centros) {
-          // Usuario con acceso a todos los centros - cargar todas las incidencias
-          const result = await supabase
-            .from("incidencias")
-            .select(`
-              id,
-              num_solicitud,
-              fecha,
-              estado_cliente,
-              centro,
-              descripcion,
-              catalogacion,
-              prioridad,
-              institucion_id,
-              email,
-              instituciones(nombre),
-              proveedor_casos(estado_proveedor, prioridad, activo)
-            `)
-            .order("fecha_creacion", { ascending: false });
-
-          data = result.data;
-          error = result.error;
-        } else if (personaData) {
-          // Usuario con instituciones específicas
-          const { data: personaInstituciones } = await supabase
-            .from("personas")
-            .select(`
-              id,
-              rol,
-              personas_instituciones!inner(
-                institucion_id,
-                instituciones!inner(id, nombre, tipo)
-              )
-            `)
-            .eq("email", userEmail);
-
-          if (personaInstituciones && personaInstituciones.length > 0) {
-          const esGestor = personaInstituciones[0].rol === 'Gestor';
-
-          if (esGestor) {
-            // Para Gestores: cargar incidencias de TODAS sus instituciones
-            const todasInstituciones = personaInstituciones[0].personas_instituciones;
-            const institucionIds = todasInstituciones.map(inst => inst.institucion_id);
-
-            const result = await supabase
-              .from("incidencias")
-              .select(`
-                id,
-                num_solicitud,
-                fecha,
-                estado_cliente,
-                centro,
-                descripcion,
-                catalogacion,
-                prioridad,
-                institucion_id,
-                email,
-                instituciones(nombre),
-                proveedor_casos(estado_proveedor, prioridad, activo)
-              `)
-              .in("institucion_id", institucionIds)
-              .order("fecha_creacion", { ascending: false });
-
-            data = result.data;
-            error = result.error;
-          } else {
-            // Para Clientes: verificar si tiene múltiples centros
-            const todasInstituciones = personaInstituciones[0].personas_instituciones;
-
-            if (todasInstituciones.length > 1) {
-              // Cliente con múltiples centros - mostrar filtro de Centro
-              setMostrarFiltroCentro(true);
-              const centros = todasInstituciones.map(inst => {
-                const institucionesData = inst.instituciones;
-                const nombre = Array.isArray(institucionesData) ? institucionesData[0]?.nombre : (institucionesData as { nombre?: string })?.nombre;
-                return {
-                  id: inst.institucion_id,
-                  nombre: nombre || 'Sin nombre'
-                };
-              });
-              setCentrosAsignados(centros);
-
-              // Cargar incidencias de todos sus centros (filtrar por centro si está seleccionado)
-              const institucionIds = todasInstituciones.map(inst => inst.institucion_id);
-              let query = supabase
-                .from("incidencias")
-                .select(`
-                  id,
-                  num_solicitud,
-                  fecha,
-                  estado_cliente,
-                  centro,
-                  descripcion,
-                  catalogacion,
-                  prioridad,
-                  institucion_id,
-                  email,
-                  instituciones(nombre),
-                  proveedor_casos(estado_proveedor, prioridad, activo)
-                `)
-                .in("institucion_id", institucionIds);
-
-              // Aplicar filtro de centro si está seleccionado
-              if (filtroCentro) {
-                query = query.eq("institucion_id", filtroCentro);
-              }
-
-              const result = await query.order("fecha_creacion", { ascending: false });
-              data = result.data;
-              error = result.error;
-            } else {
-              // Cliente con un solo centro - comportamiento actual
-              setMostrarFiltroCentro(false);
-              const institucionId = todasInstituciones[0]?.institucion_id;
-
-              if (institucionId) {
-                const result = await supabase
-                  .from("incidencias")
-                  .select(`
-                    id,
-                    num_solicitud,
-                    fecha,
-                    estado_cliente,
-                    centro,
-                    descripcion,
-                    catalogacion,
-                    prioridad,
-                    institucion_id,
-                    email,
-                    instituciones(nombre),
-                    proveedor_casos(estado_proveedor, prioridad, activo)
-                  `)
-                  .eq("institucion_id", institucionId)
-                  .order("fecha_creacion", { ascending: false });
-
-                data = result.data;
-                error = result.error;
-              } else {
-                data = [];
-                error = null;
-              }
-            }
-          }
-          }
-        } else {
-          data = [];
-          error = null;
-        }
-      }
-
-      if (error) {
-        console.error("Error cargando incidencias:", error);
-      } else {
-        const incidenciasData: Incidencia[] = (data as Incidencia[]) || [];
-
-        // Deduplicar incidencias por ID y agrupar casos de proveedor
-        const incidenciasUnicas = incidenciasData.reduce((acc, current) => {
-          const existing = acc.find(item => item.id === current.id);
-          if (existing) {
-            // Si ya existe, combinar los casos de proveedor
-            if (current.proveedor_casos && current.proveedor_casos.length > 0) {
-              if (!existing.proveedor_casos) {
-                existing.proveedor_casos = [];
-              }
-              current.proveedor_casos.forEach(caso => {
-                if (existing.proveedor_casos && !existing.proveedor_casos.some(existingCaso =>
-                  existingCaso.estado_proveedor === caso.estado_proveedor &&
-                  existingCaso.activo === caso.activo
-                )) {
-                  existing.proveedor_casos.push(caso);
-                }
-              });
-            }
-          } else {
-            acc.push(current);
-          }
-          return acc;
-        }, [] as Incidencia[]);
-
-        setIncidencias(incidenciasUnicas);
-
-        // Debug para proveedores
-        if (persona?.rol === "Proveedor") {
-          console.log("Incidencias cargadas para proveedor:", incidenciasUnicas.length);
-          console.log("Muestra de incidencias:", incidenciasUnicas.slice(0, 2));
-        }
-
-        // Calcular centros únicos para mostrar/ocultar filtro de centro
-        const centros = [...new Set(
-          incidenciasUnicas
-            .map(inc => inc.instituciones?.[0]?.nombre || inc.centro)
-            .filter((c): c is string => Boolean(c))
-        )].sort((a, b) => a.localeCompare(b));
-        setCentrosUnicos(centros);
-
-        // Calcular catalogaciones únicas
-        const catalogaciones = [...new Set(
-          incidenciasUnicas
-            .map(inc => inc.catalogacion)
-            .filter((c): c is string => Boolean(c))
-        )];
-        setCatalogacionesUnicas(catalogaciones);
-      }
+      // Calcular catalogaciones únicas
+      const catalogaciones = [...new Set(
+        data
+          .map(inc => inc.catalogacion)
+          .filter((c): c is string => Boolean(c))
+      )];
+      setCatalogacionesUnicas(catalogaciones);
     } catch (error) {
       console.error("Error:", error);
     } finally {
@@ -700,16 +388,16 @@ export default function IncidenciasListado() {
   const incidenciasFiltradas = incidencias.filter((inc) => {
     // Para proveedores: usar filtroEstadoProveedor O filtroEstado (cualquiera que tenga valor)
     // Para otros usuarios: usar solo filtroEstado para estado_cliente
-    const estadoAFiltrar = tipoUsuario === "Proveedor" ? (filtroEstadoProveedor || filtroEstado) : filtroEstado;
+    const estadoAFiltrar = perfil?.rol === "Proveedor" ? (filtroEstadoProveedor || filtroEstado) : filtroEstado;
 
     // Debug para proveedores cuando hay filtro activo
-    if (tipoUsuario === "Proveedor" && estadoAFiltrar) {
+    if (perfil?.rol === "Proveedor" && estadoAFiltrar) {
       console.log("Filtrando con estado:", estadoAFiltrar);
       console.log("Incidencia:", inc.num_solicitud, "Casos proveedor:", inc.proveedor_casos);
     }
 
     const coincideEstado = !estadoAFiltrar ||
-      (tipoUsuario === "Proveedor" ?
+      (perfil?.rol === "Proveedor" ?
         (inc.proveedor_casos && inc.proveedor_casos.some(pc => pc.activo && pc.estado_proveedor === estadoAFiltrar)) :
         inc.estado_cliente?.trim() === estadoAFiltrar?.trim()
       );
@@ -726,7 +414,7 @@ export default function IncidenciasListado() {
     const coincideCatalogacion = !filtroCatalogacion ||
       inc.catalogacion === filtroCatalogacion;
     const coincidePrioridadCliente = !filtroPrioridadCliente ||
-      (tipoUsuario === "Cliente" || tipoUsuario === "Gestor" ?
+      (perfil?.rol === "Cliente" || perfil?.rol === "Gestor" ?
         inc.prioridad === filtroPrioridadCliente :
         (inc.proveedor_casos && inc.proveedor_casos.some(pc => pc.activo && pc.prioridad === filtroPrioridadCliente)));
     const coincidePrioridadProveedor = !filtroPrioridadProveedor ||
@@ -735,7 +423,7 @@ export default function IncidenciasListado() {
       (inc.proveedor_casos && inc.proveedor_casos.some(pc => pc.activo && pc.proveedor_id === filtroProveedor));
 
     // Para proveedores: no verificar filtroEstadoProveedor por separado si ya se verificó en coincideEstado
-    const verificarEstadoProveedorSeparado = tipoUsuario !== "Proveedor" && filtroEstadoProveedor;
+    const verificarEstadoProveedorSeparado = perfil?.rol !== "Proveedor" && filtroEstadoProveedor;
 
     return coincideEstado && coincideCentro && coincideNumero &&
            (!verificarEstadoProveedorSeparado || coincideEstadoProveedor) &&
@@ -786,7 +474,7 @@ export default function IncidenciasListado() {
   };
 
   const manejarClickIncidencia = async (incidenciaId: string) => {
-    if (tipoUsuario === "Control") {
+    if (perfil?.rol === "Control") {
       // Si es Control, verificar si tiene proveedor asignado y mostrar modal
       const incidencia = incidencias.find(inc => inc.id === incidenciaId);
       const tieneProveedor = incidencia?.proveedor_casos &&
@@ -798,7 +486,7 @@ export default function IncidenciasListado() {
       setMostrarModal(true);
     } else {
       // Para otros tipos, redirigir directamente
-      redirigirAChat(incidenciaId, tipoUsuario);
+      redirigirAChat(incidenciaId, perfil?.rol || null);
     }
   };
 
@@ -832,21 +520,21 @@ export default function IncidenciasListado() {
   };
 
   // Mostrar loading si el tipo de usuario no está confirmado o si está cargando
-  if (!tipoUsuarioConfirmado || loading) {
+  if (loadingAuth || loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: PALETA.fondo }}>
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: PALETA.bg }}>
         <div className="text-white">Cargando incidencias...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen w-full" style={{ backgroundColor: PALETA.fondo }}>
+    <div className="min-h-screen w-full" style={{ backgroundColor: PALETA.bg }}>
 
       {/* Contenido principal */}
       <div className="px-6 pb-6">
         {/* Título */}
-        {tipoUsuario !== "Control" && (
+        {perfil?.rol !== "Control" && (
           <h1 className="text-lg tracking-[0.3em] mb-8" style={{ color: PALETA.texto }}>
             MIS INCIDENCIAS:
           </h1>
@@ -862,7 +550,7 @@ export default function IncidenciasListado() {
             }}
           >
             {/* Primera fila de filtros: número solicitud, fecha, estado cliente, estado proveedor */}
-            <div className="grid gap-4 mb-4" style={{ gridTemplateColumns: `repeat(${tipoUsuario === "Control" ? 4 : 3}, minmax(0, 1fr))` }}>
+            <div className="grid gap-4 mb-4" style={{ gridTemplateColumns: `repeat(${perfil?.rol === "Control" ? 4 : 3}, minmax(0, 1fr))` }}>
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: PALETA.textoOscuro }}>
                 Número solicitud
@@ -890,7 +578,7 @@ export default function IncidenciasListado() {
 
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: PALETA.textoOscuro }}>
-                {tipoUsuario === "Control" ? "Estado Cliente" : "Estado"}
+                {perfil?.rol === "Control" ? "Estado Cliente" : "Estado"}
               </label>
               <SearchableSelect
                 value={filtroEstado}
@@ -898,7 +586,7 @@ export default function IncidenciasListado() {
                 placeholder="Seleccionar"
                 className="w-full"
                 options={
-                  tipoUsuario === "Proveedor" ? [
+                  perfil?.rol === "Proveedor" ? [
                     { value: "Abierta", label: "Abierta" },
                     { value: "En resolución", label: "En resolución" },
                     { value: "Ofertada", label: "Ofertada" },
@@ -921,7 +609,7 @@ export default function IncidenciasListado() {
               />
             </div>
 
-            {tipoUsuario === "Control" && (
+            {perfil?.rol === "Control" && (
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: PALETA.textoOscuro }}>
                   Estado Proveedor
@@ -950,12 +638,12 @@ export default function IncidenciasListado() {
 
             {/* Segunda fila de filtros: centro, catalogación, prioridad cliente, proveedor */}
             <div className="grid gap-4 mb-4" style={{
-              gridTemplateColumns: tipoUsuario === "Control"
+              gridTemplateColumns: perfil?.rol === "Control"
                 ? "repeat(4, minmax(0, 1fr))"
                 : "repeat(3, minmax(0, 1fr))"
             }}>
             {/* Centro como desplegable - para Control, Proveedor y Cliente con múltiples centros */}
-            {(tipoUsuario !== "Cliente" || mostrarFiltroCentro) ? (
+            {(perfil?.rol !== "Cliente" || mostrarFiltroCentro) ? (
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: PALETA.textoOscuro }}>
                   Centro
@@ -1012,7 +700,7 @@ export default function IncidenciasListado() {
                 placeholder="Seleccionar"
                 className="w-full"
                 options={
-                  tipoUsuario === "Cliente" || tipoUsuario === "Gestor" ? [
+                  perfil?.rol === "Cliente" || perfil?.rol === "Gestor" ? [
                     { value: "Urgente", label: "Urgente" },
                     { value: "Crítico", label: "Crítico" },
                     { value: "Normal", label: "Normal" }
@@ -1025,7 +713,7 @@ export default function IncidenciasListado() {
             </div>
 
             {/* Filtro de prioridad proveedor */}
-            {tipoUsuario === "Control" && (
+            {perfil?.rol === "Control" && (
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: PALETA.textoOscuro }}>
                   Prioridad Proveedor
@@ -1045,7 +733,7 @@ export default function IncidenciasListado() {
             </div>
 
             {/* Tercera fila de filtros: proveedor */}
-            {tipoUsuario === "Control" && (
+            {perfil?.rol === "Control" && (
               <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr 1fr 1fr" }}>
                 <div></div>
                 <div></div>
@@ -1094,19 +782,19 @@ export default function IncidenciasListado() {
             className="grid gap-4 p-4 rounded-t-lg"
             style={{
               backgroundColor: PALETA.headerTable,
-              gridTemplateColumns: tipoUsuario === "Control" ? "0.9fr 0.8fr 1fr 1fr 1.2fr 2fr" : "0.9fr 0.8fr 1fr 1.2fr 2fr"
+              gridTemplateColumns: perfil?.rol === "Control" ? "0.9fr 0.8fr 1fr 1fr 1.2fr 2fr" : "0.9fr 0.8fr 1fr 1.2fr 2fr"
             }}
           >
             <div className="font-medium text-sm">Número solicitud</div>
             <div className="font-medium text-sm">Fecha</div>
             <div className="font-medium text-sm">
-              {tipoUsuario === "Control" ? "Estado Cliente" : "Estado"}
+              {perfil?.rol === "Control" ? "Estado Cliente" : "Estado"}
             </div>
-            {tipoUsuario === "Control" && (
+            {perfil?.rol === "Control" && (
               <div className="font-medium text-sm">Estado Proveedor</div>
             )}
             <div className="font-medium text-sm">
-              {tipoUsuario === "Cliente" ? "Catalogación" : "Centro"}
+              {perfil?.rol === "Cliente" ? "Catalogación" : "Centro"}
             </div>
             <div className="font-medium text-sm">Descripción</div>
           </div>
@@ -1125,23 +813,23 @@ export default function IncidenciasListado() {
                   key={incidencia.id}
                   onClick={() => manejarClickIncidencia(incidencia.id)}
                   className="grid gap-4 p-4 border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors"
-                  style={{ gridTemplateColumns: tipoUsuario === "Control" ? "0.9fr 0.8fr 1fr 1fr 1.2fr 2fr" : "0.9fr 0.8fr 1fr 1.2fr 2fr" }}
+                  style={{ gridTemplateColumns: perfil?.rol === "Control" ? "0.9fr 0.8fr 1fr 1fr 1.2fr 2fr" : "0.9fr 0.8fr 1fr 1.2fr 2fr" }}
                 >
                   <div className="text-sm">{incidencia.num_solicitud}</div>
                   <div className="text-sm">{incidencia.fecha}</div>
                   <div className="text-sm">
-                    {tipoUsuario === "Proveedor" ?
+                    {perfil?.rol === "Proveedor" ?
                       (incidencia.proveedor_casos?.find(pc => pc.activo)?.estado_proveedor || incidencia.estado_cliente) :
                       incidencia.estado_cliente
                     }
                   </div>
-                  {tipoUsuario === "Control" && (
+                  {perfil?.rol === "Control" && (
                     <div className="text-sm">
                       {incidencia.proveedor_casos?.find(pc => pc.activo)?.estado_proveedor || "-"}
                     </div>
                   )}
                   <div className="text-sm">
-                    {tipoUsuario === "Cliente"
+                    {perfil?.rol === "Cliente"
                       ? (incidencia.catalogacion || "-")
                       : (incidencia.instituciones?.[0]?.nombre || incidencia.centro || "-")
                     }
@@ -1168,7 +856,7 @@ export default function IncidenciasListado() {
                 disabled={paginaActual === 1}
                 className="px-3 py-2 rounded text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ 
-                  backgroundColor: paginaActual === 1 ? '#d1d5db' : PALETA.fondo,
+                  backgroundColor: paginaActual === 1 ? '#d1d5db' : PALETA.bg,
                   color: paginaActual === 1 ? '#6b7280' : 'white'
                 }}
               >
@@ -1197,7 +885,7 @@ export default function IncidenciasListado() {
                           onClick={() => irAPagina(pagina)}
                           className="px-3 py-2 rounded text-sm font-medium transition-colors"
                           style={{
-                            backgroundColor: pagina === paginaActual ? PALETA.fondo : 'transparent',
+                            backgroundColor: pagina === paginaActual ? PALETA.bg : 'transparent',
                             color: pagina === paginaActual ? 'white' : PALETA.textoOscuro,
                             border: pagina === paginaActual ? 'none' : '1px solid #d1d5db'
                           }}
@@ -1215,7 +903,7 @@ export default function IncidenciasListado() {
                 disabled={paginaActual === totalPaginas}
                 className="px-3 py-2 rounded text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ 
-                  backgroundColor: paginaActual === totalPaginas ? '#d1d5db' : PALETA.fondo,
+                  backgroundColor: paginaActual === totalPaginas ? '#d1d5db' : PALETA.bg,
                   color: paginaActual === totalPaginas ? '#6b7280' : 'white'
                 }}
               >
@@ -1252,7 +940,7 @@ export default function IncidenciasListado() {
               <button
                 onClick={() => elegirChatControl("control-cliente")}
                 className="w-full py-3 px-4 rounded text-white text-sm font-medium hover:opacity-90 transition-opacity"
-                style={{ backgroundColor: PALETA.fondo }}
+                style={{ backgroundColor: PALETA.bg }}
               >
                 Chat Cliente
               </button>
@@ -1375,7 +1063,7 @@ export default function IncidenciasListado() {
                   disabled={!formularioProveedor.proveedor_id || !formularioProveedor.prioridad || accionEnCurso === incidenciaSeleccionada}
                   className="px-6 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity disabled:opacity-50"
                   style={{
-                    backgroundColor: PALETA.fondo,
+                    backgroundColor: PALETA.bg,
                     opacity: (!formularioProveedor.proveedor_id || !formularioProveedor.prioridad || accionEnCurso === incidenciaSeleccionada) ? 0.5 : 1
                   }}
                 >
@@ -1388,7 +1076,7 @@ export default function IncidenciasListado() {
       )}
 
       {/* Notificaciones para proveedores */}
-      {tipoUsuario === 'Proveedor' && proveedorId && (
+      {perfil?.rol === 'Proveedor' && proveedorId && (
         <NotificacionesProveedor proveedorId={proveedorId} />
       )}
     </div>

@@ -1,76 +1,29 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabaseClient";
-
-const PALETA = {
-  fondo: "#5D6D52",
-  headerTable: "#D9B6A9",
-  card: "#F9FAF8",
-  filtros: "#E8B5A8",
-  texto: "#EDF0E9",
-  textoOscuro: "#4b4b4b",
-};
+import { useAuth } from "@/contexts/AuthContext";
+import { PALETA } from "@/lib/theme";
 
 export default function PanelControl() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
-  const [tipoUsuario, setTipoUsuario] = useState<string | null>(null);
+  const { perfil, loading: loadingAuth } = useAuth();
 
-  useEffect(() => {
-    verificarAcceso();
-  }, []);
+  // Verificar acceso: solo usuarios Control
+  if (!loadingAuth && (!perfil || perfil.rol !== "Control")) {
+    router.replace("/");
+    return null;
+  }
 
-
-  const verificarAcceso = async () => {
-    try {
-      const { data: userData } = await supabase.auth.getUser();
-      const userEmail = userData.user?.email;
-
-      if (!userEmail) {
-        router.replace("/login");
-        return;
-      }
-
-      // Obtener tipo de usuario de la tabla personas
-      const { data: persona, error: personaError } = await supabase
-        .from("personas")
-        .select("rol")
-        .eq("email", userEmail)
-        .maybeSingle();
-
-      if (personaError || !persona || persona.rol !== "Control") {
-        // Si no es usuario Control, redirigir al dashboard
-        router.replace("/");
-        return;
-      }
-
-      setTipoUsuario(persona.rol);
-    } catch (error) {
-      console.error("Error verificando acceso:", error);
-      router.replace("/login");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-
-
-  if (loading) {
+  if (loadingAuth) {
     return (
-      <div className="min-h-screen w-full flex items-center justify-center" style={{ backgroundColor: PALETA.fondo }}>
+      <div className="min-h-screen w-full flex items-center justify-center" style={{ backgroundColor: PALETA.bg }}>
         <span className="text-white">Verificando acceso...</span>
       </div>
     );
   }
 
-  if (tipoUsuario !== "Control") {
-    return null;
-  }
-
   return (
-    <div className="min-h-screen w-full" style={{ backgroundColor: PALETA.fondo }}>
+    <div className="min-h-screen w-full" style={{ backgroundColor: PALETA.bg }}>
       {/* Contenido principal */}
       <div className="px-6 py-6">
         {/* Título */}

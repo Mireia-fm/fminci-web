@@ -5,18 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { registrarCambioEstado } from "@/lib/historialEstados";
 import SearchableSelect from "@/components/SearchableSelect";
-
-// Paleta de colores consistente
-const PALETA = {
-  fondo: "#5D6D52",
-  headerTable: "#D9B6A9",
-  card: "#F9FAF8",
-  filtros: "#E8B5A8",
-  texto: "#EDF0E9",
-  textoOscuro: "#4b4b4b",
-  verdeClaro: "#A9B88C",
-  verdeSombra: "#7A8A6F",
-};
+import { PALETA } from "@/lib/theme";
 
 type Presupuesto = {
   id: string;
@@ -414,14 +403,14 @@ El proveedor debe enviar una nueva propuesta.`,
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: PALETA.fondo }}>
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: PALETA.bg }}>
         <div className="text-white">Cargando presupuestos...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: PALETA.fondo }}>
+    <div className="min-h-screen" style={{ backgroundColor: PALETA.bg }}>
       {/* Header */}
       <div className="flex items-center justify-center p-6">
         <h1 className="text-lg tracking-[0.3em] text-white font-semibold">
@@ -581,7 +570,7 @@ El proveedor debe enviar una nueva propuesta.`,
 
                   {/* Detalles financieros */}
                   <div className="lg:col-span-3">
-                    <p className="text-2xl font-bold mb-1" style={{ color: PALETA.fondo }}>
+                    <p className="text-2xl font-bold mb-1" style={{ color: PALETA.bg }}>
                       {presupuesto.importe_total_sin_iva}€
                     </p>
                     <p className="text-xs text-gray-500 mb-2">Sin IVA</p>
@@ -717,7 +706,7 @@ El proveedor debe enviar una nueva propuesta.`,
                         <td className="py-2 font-semibold" style={{ color: PALETA.textoOscuro }}>
                           Importe sin IVA:
                         </td>
-                        <td className="py-2 font-bold text-base" style={{ color: PALETA.fondo }}>
+                        <td className="py-2 font-bold text-base" style={{ color: PALETA.bg }}>
                           {presupuestoSeleccionado.importe_total_sin_iva}€
                         </td>
                       </tr>
@@ -819,7 +808,7 @@ El proveedor debe enviar una nueva propuesta.`,
                           className="inline-flex items-center gap-2 px-4 py-2 rounded border transition-colors text-sm"
                           style={{
                             borderColor: PALETA.verdeSombra,
-                            color: PALETA.fondo
+                            color: PALETA.bg
                           }}
                           onMouseEnter={(e) => {
                             e.currentTarget.style.backgroundColor = PALETA.headerTable;

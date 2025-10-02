@@ -2,6 +2,7 @@
 import Topbar from "@/components/Topbar";
 import Sidebar from "@/components/Sidebar";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
@@ -33,16 +34,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   if (!ready) return null; // evita parpadeo sin sesión
 
   return (
-    <AuthProvider>
-      <div className="min-h-screen" style={{ backgroundColor: "var(--fm-bg)" }}>
-        <Topbar onToggleSidebar={toggleSidebar} />
-        <div className="flex">
-          {sidebarVisible && <Sidebar />}
-          <main className={`flex-1 bg-transparent p-4 md:p-8 transition-all duration-300 ${!sidebarVisible ? 'ml-0' : ''}`}>
-            {children}
-          </main>
+    <ErrorBoundary>
+      <AuthProvider>
+        <div className="min-h-screen" style={{ backgroundColor: "var(--fm-bg)" }}>
+          <Topbar onToggleSidebar={toggleSidebar} />
+          <div className="flex">
+            {sidebarVisible && <Sidebar />}
+            <main className={`flex-1 bg-transparent p-4 md:p-8 transition-all duration-300 ${!sidebarVisible ? 'ml-0' : ''}`}>
+              {children}
+            </main>
+          </div>
         </div>
-      </div>
-    </AuthProvider>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }

@@ -11,6 +11,7 @@ export type Perfil = {
   instituciones?: Array<{
     institucion_id: string;
     nombre: string;
+    tipo: string;
   }>;
 };
 
@@ -73,6 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const instituciones = personaInstituciones?.map(pi => ({
         institucion_id: pi.institucion_id,
         nombre: (pi.instituciones as { nombre?: string })?.nombre || "Sin nombre",
+        tipo: (pi.instituciones as { tipo?: string })?.tipo || "",
       })) || [];
 
       const perfilData: Perfil = {

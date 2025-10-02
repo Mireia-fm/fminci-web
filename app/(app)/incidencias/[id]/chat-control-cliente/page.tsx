@@ -4,18 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import ModalAsignarProveedor from "@/components/ModalAsignarProveedor";
-
-// Paleta de colores consistente
-const PALETA = {
-  fondo: "#5D6D52",
-  headerTable: "#D9B6A9",
-  card: "#F9FAF8",
-  filtros: "#E8B5A8",
-  texto: "#EDF0E9",
-  textoOscuro: "#4b4b4b",
-  verdeClaro: "#A9B88C", // Verde claro del dashboard para incidencias cerradas
-  verdeSombra: "#7A8A6F", // Verde más claro que el fondo para sombra
-};
+import { PALETA } from "@/lib/theme";
 
 type Adjunto = {
   id: string;
@@ -769,7 +758,7 @@ export default function ChatControlCliente() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: PALETA.fondo }}>
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: PALETA.bg }}>
         <div className="text-white">Cargando...</div>
       </div>
     );
@@ -777,14 +766,14 @@ export default function ChatControlCliente() {
 
   if (!incidencia) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: PALETA.fondo }}>
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: PALETA.bg }}>
         <div className="text-white">No se encontró la incidencia</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: PALETA.fondo }}>
+    <div className="min-h-screen" style={{ backgroundColor: PALETA.bg }}>
       {/* Header con logo */}
       <div className="flex justify-between items-center p-6 relative">
         <button
@@ -935,7 +924,7 @@ export default function ChatControlCliente() {
                             <div key={adjunto.id} className="text-center">
                               <div
                                 className="cursor-pointer border-2 rounded-lg overflow-hidden hover:shadow-lg transition-shadow"
-                                style={{ borderColor: PALETA.fondo }}
+                                style={{ borderColor: PALETA.bg }}
                                 onClick={() => window.open(imageUrl, '_blank')}
                               >
                                 <img
@@ -991,7 +980,7 @@ export default function ChatControlCliente() {
                   <button
                     onClick={abrirModalProveedor}
                     className="px-3 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity"
-                    style={{ backgroundColor: PALETA.fondo }}
+                    style={{ backgroundColor: PALETA.bg }}
                   >
                     Reasignar Proveedor
                   </button>
@@ -1033,11 +1022,11 @@ export default function ChatControlCliente() {
                     onClick={() => router.push(`/incidencias/${incidenciaId}/chat-proveedor`)}
                     className="px-3 py-2 text-sm border bg-white rounded transition-colors"
                     style={{
-                      borderColor: PALETA.fondo,
-                      color: PALETA.fondo
+                      borderColor: PALETA.bg,
+                      color: PALETA.bg
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = `${PALETA.fondo}20`;
+                      e.currentTarget.style.backgroundColor = `${PALETA.bg}20`;
                     }}
                     onMouseLeave={(e) => {
                       e.currentTarget.style.backgroundColor = 'white';
@@ -1115,7 +1104,7 @@ export default function ChatControlCliente() {
                   >
                     {!comentario.es_sistema && (
                       <div className="text-xs font-medium mb-1" style={{
-                        color: PALETA.fondo
+                        color: PALETA.bg
                       }}>
                         {`${comentario.autor_email} (${comentario.autor_rol})`}
                       </div>
@@ -1251,7 +1240,7 @@ export default function ChatControlCliente() {
                         transition: 'color 0.2s'
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.color = PALETA.fondo;
+                        e.currentTarget.style.color = PALETA.bg;
                       }}
                       onMouseLeave={(e) => {
                         e.currentTarget.style.color = PALETA.textoOscuro;
@@ -1273,7 +1262,7 @@ export default function ChatControlCliente() {
                         transition: 'color 0.2s'
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.color = PALETA.fondo;
+                        e.currentTarget.style.color = PALETA.bg;
                       }}
                       onMouseLeave={(e) => {
                         e.currentTarget.style.color = PALETA.textoOscuro;
@@ -1351,7 +1340,7 @@ export default function ChatControlCliente() {
                 type="submit"
                 disabled={!nuevoComentario.trim() || enviando}
                 className="px-6 py-2 text-white rounded disabled:opacity-50 hover:opacity-90 transition-opacity"
-                style={{ backgroundColor: PALETA.fondo }}
+                style={{ backgroundColor: PALETA.bg }}
               >
                 {enviando ? "Enviando..." : "Enviar"}
               </button>
@@ -1429,7 +1418,7 @@ export default function ChatControlCliente() {
                 onClick={anularIncidencia}
                 disabled={!motivoAnulacion.trim() || enviando}
                 className="px-6 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity disabled:opacity-50"
-                style={{ backgroundColor: PALETA.fondo }}
+                style={{ backgroundColor: PALETA.bg }}
               >
                 {enviando ? 'Anulando...' : 'Anular Incidencia'}
               </button>
@@ -1492,7 +1481,7 @@ export default function ChatControlCliente() {
                 onClick={ponerEnEspera}
                 disabled={!motivoEspera.trim() || enviando}
                 className="px-6 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity disabled:opacity-50"
-                style={{ backgroundColor: PALETA.fondo }}
+                style={{ backgroundColor: PALETA.bg }}
               >
                 {enviando ? 'Poniendo en espera...' : 'Poner en Espera'}
               </button>

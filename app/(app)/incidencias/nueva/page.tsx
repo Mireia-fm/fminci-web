@@ -3,15 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-
-// Paleta
-const PALETA = {
-  fondo: "#5D6D52",
-  card: "#F9FAF8",
-  titulo: "#D9B6A9",
-  boton: "#E8B5A8", // mismo color que "En tramitación"
-  textoSuave: "#4b4b4b",
-};
+import { PALETA } from "@/lib/theme";
+import { useAuth } from "@/contexts/AuthContext";
 
 // Tipos
 type Opcion = { value: string; label: string };
@@ -20,6 +13,7 @@ type CatalogacionRow = { id: string; nombre: string };
 
 export default function NuevaIncidenciaPage() {
   const router = useRouter();
+  const { perfil, loading: loadingAuth } = useAuth();
 
   // Campos del formulario
   const [fecha, setFecha] = useState<string>("");
@@ -60,87 +54,58 @@ export default function NuevaIncidenciaPage() {
     setHora(`${pad(now.getHours())}:${pad(now.getMinutes())}`);
   }, []);
 
-  // Email y nombre (si existe en personas) desde sesión
+  // Email y nombre desde el perfil
   useEffect(() => {
-    (async () => {
-      const { data: userData } = await supabase.auth.getUser();
-      const userEmail = userData.user?.email ?? "";
-      setEmail(userEmail);
+    if (!loadingAuth && perfil) {
+      setEmail(perfil.email);
 
-      if (userEmail) {
-        // Obtener datos de la persona
+      (async () => {
+        // Obtener nombre de la persona
         const { data: persona } = await supabase
           .from("personas")
-          .select("id, nombre, acceso_todos_centros")
-          .eq("email", userEmail)
+          .select("nombre")
+          .eq("id", perfil.persona_id)
           .maybeSingle();
 
-        // Configurar nombre si existe y no es null
         if (persona?.nombre && persona.nombre.trim() !== "") {
           setNombre(persona.nombre);
           setNombreAsignado(true);
         }
 
-        if (persona?.id) {
-          // Obtener centros asignados desde personas_instituciones usando persona_id
-          const { data: asignaciones, error: asignacionesError } = await supabase
-            .from("personas_instituciones")
-            .select(`
-              institucion_id,
-              instituciones!inner(id, nombre, tipo)
-            `)
-            .eq("persona_id", persona.id)
-            .eq("instituciones.tipo", "Centro");
+        // Usar instituciones desde perfil (ya cargadas en AuthContext)
+        const centrosAsignados = perfil.instituciones?.filter(inst => inst.tipo === "Centro") || [];
 
-          if (asignacionesError) {
-            console.error("Error cargando asignaciones:", asignacionesError);
-          }
-
-          const centrosAsignados = asignaciones || [];
-
-          // Lógica para el campo centro
-          if (persona?.acceso_todos_centros) {
-            // Si acceso_todos_centros es TRUE, mostrar lista para seleccionar
-            setCentroAsignado(false);
-          } else if (centrosAsignados.length === 1) {
-            // Si tiene exactamente 1 centro, preseleccionarlo y hacerlo readonly
-            const centroUnico = centrosAsignados[0]?.instituciones;
-            if (centroUnico && typeof centroUnico === 'object' && 'id' in centroUnico) {
-              setCentro(centroUnico.id as string);
-              setCentroAsignado(true);
-            }
-          } else {
-            // Si tiene 0 o múltiples centros, mostrar lista para seleccionar
-            setCentroAsignado(false);
-          }
+        // Lógica para el campo centro
+        if (perfil.acceso_todos_centros) {
+          // Si acceso_todos_centros es TRUE, mostrar lista para seleccionar
+          setCentroAsignado(false);
+        } else if (centrosAsignados.length === 1) {
+          // Si tiene exactamente 1 centro, preseleccionarlo y hacerlo readonly
+          const centroUnico = centrosAsignados[0];
+          setCentro(centroUnico.institucion_id);
+          setCentroAsignado(true);
+        } else {
+          // Si tiene 0 o múltiples centros, mostrar lista para seleccionar
+          setCentroAsignado(false);
         }
-      }
-    })();
-  }, []);
+      })();
+    }
+  }, [loadingAuth, perfil]);
 
   // Cargar opciones Centros + Catalogaciones
   useEffect(() => {
+    if (!loadingAuth && !perfil) {
+      setErrorMsg("No se pudo obtener el perfil del usuario.");
+      setLoading(false);
+      return;
+    }
+
+    if (!perfil) return;
+
     (async () => {
-      // Obtener email del usuario para cargar sus centros permitidos
-      const { data: userData } = await supabase.auth.getUser();
-      const userEmail = userData.user?.email;
-
-      if (!userEmail) {
-        setErrorMsg("No se pudo obtener el email del usuario.");
-        setLoading(false);
-        return;
-      }
-
-      // Obtener datos de la persona
-      const { data: persona } = await supabase
-        .from("personas")
-        .select("id, acceso_todos_centros")
-        .eq("email", userEmail)
-        .maybeSingle();
-
       let centrosPermitidos: CentroRow[] = [];
 
-      if (persona?.acceso_todos_centros) {
+      if (perfil.acceso_todos_centros) {
         // Si tiene acceso a todos los centros, mostrar todos
         const { data: cData, error: cErr } = await supabase
           .from("instituciones")
@@ -155,40 +120,16 @@ export default function NuevaIncidenciaPage() {
           setErrorMsg("No se pudieron cargar los centros.");
           return;
         }
-      } else if (persona?.id) {
-        // Obtener solo los centros asignados al gestor
-        const { data: asignaciones, error: asignacionesError } = await supabase
-          .from("personas_instituciones")
-          .select(`
-            institucion_id,
-            instituciones!inner(id, nombre, tipo)
-          `)
-          .eq("persona_id", persona.id)
-          .eq("instituciones.tipo", "Centro");
-
-        if (asignacionesError) {
-          console.error("Error cargando asignaciones:", asignacionesError);
-          setErrorMsg("No se pudieron cargar los centros asignados.");
-          return;
-        }
-
-        // Extraer los centros de las asignaciones
-        centrosPermitidos = (asignaciones || [])
-          .map(a => a.instituciones)
-          .filter(inst => inst && typeof inst === 'object' && 'id' in inst)
-          .map(inst => {
-            const institucion = Array.isArray(inst) ? inst[0] : inst;
-            return {
-              id: (institucion as { id?: string }).id as string,
-              nombre: (institucion as { nombre?: string }).nombre as string,
-              tipo: (institucion as { tipo?: string }).tipo as string
-            };
-          })
-          .sort((a, b) => a.nombre.localeCompare(b.nombre));
       } else {
-        setErrorMsg("No se pudo identificar el usuario en el sistema.");
-        setLoading(false);
-        return;
+        // Usar instituciones ya cargadas desde AuthContext
+        centrosPermitidos = (perfil.instituciones || [])
+          .filter(inst => inst.tipo === "Centro")
+          .map(inst => ({
+            id: inst.institucion_id,
+            nombre: inst.nombre,
+            tipo: inst.tipo
+          }))
+          .sort((a, b) => a.nombre.localeCompare(b.nombre));
       }
 
       // Configurar opciones de centros
@@ -218,7 +159,7 @@ export default function NuevaIncidenciaPage() {
       // Indicar que la carga ha terminado
       setLoading(false);
     })();
-  }, []);
+  }, [loadingAuth, perfil]);
 
 
   // Validación: Imagen es OPCIONAL
@@ -337,7 +278,7 @@ export default function NuevaIncidenciaPage() {
   // Si la incidencia fue creada exitosamente, mostrar pantalla de éxito
   if (incidenciaCreada) {
     return (
-      <div className="min-h-screen w-full py-12" style={{ backgroundColor: PALETA.fondo }}>
+      <div className="min-h-screen w-full py-12" style={{ backgroundColor: PALETA.bg }}>
         <div
           className="mx-auto w-full max-w-2xl rounded-lg p-8 shadow text-center"
           style={{ backgroundColor: PALETA.card }}
@@ -351,7 +292,7 @@ export default function NuevaIncidenciaPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h1 className="text-3xl font-semibold mb-2" style={{ color: PALETA.titulo }}>
+            <h1 className="text-3xl font-semibold mb-2" style={{ color: PALETA.headerTable }}>
               ¡Incidencia creada exitosamente!
             </h1>
             <p className="text-gray-600 mb-6">
@@ -360,10 +301,10 @@ export default function NuevaIncidenciaPage() {
           </div>
 
           <div className="bg-gray-50 rounded-lg p-6 mb-8">
-            <h2 className="text-lg font-medium mb-2" style={{ color: PALETA.textoSuave }}>
+            <h2 className="text-lg font-medium mb-2" style={{ color: PALETA.textoOscuro }}>
               Número de solicitud asignado:
             </h2>
-            <div className="text-2xl font-bold" style={{ color: PALETA.titulo }}>
+            <div className="text-2xl font-bold" style={{ color: PALETA.headerTable }}>
               #{incidenciaCreada.num_solicitud}
             </div>
             <p className="text-sm text-gray-500 mt-2">
@@ -375,7 +316,7 @@ export default function NuevaIncidenciaPage() {
             <button
               onClick={() => router.push(`/incidencias/${incidenciaCreada.id}/chat-control-cliente`)}
               className="w-full rounded px-6 py-3 text-white font-medium"
-              style={{ backgroundColor: PALETA.boton }}
+              style={{ backgroundColor: PALETA.filtros }}
             >
               Ir al chat
             </button>
@@ -406,7 +347,7 @@ export default function NuevaIncidenciaPage() {
   }
 
   return (
-    <div className="min-h-screen w-full py-4" style={{ backgroundColor: PALETA.fondo }}>
+    <div className="min-h-screen w-full py-4" style={{ backgroundColor: PALETA.bg }}>
       {/* Botón volver atrás - arriba a la izquierda */}
       <div className="px-8 mb-4">
         <button
@@ -423,7 +364,7 @@ export default function NuevaIncidenciaPage() {
         className="mx-auto w-full max-w-3xl rounded-lg p-6 shadow"
         style={{ backgroundColor: PALETA.card }}
       >
-        <h1 className="mb-6 text-center text-3xl font-semibold" style={{ color: PALETA.titulo }}>
+        <h1 className="mb-6 text-center text-3xl font-semibold" style={{ color: PALETA.headerTable }}>
           Nueva incidencia
         </h1>
 
@@ -561,11 +502,11 @@ export default function NuevaIncidenciaPage() {
               type="submit"
               disabled={faltanObligatorios || enviando}
               className="mx-auto block w-full max-w-sm rounded px-6 py-2 text-white disabled:opacity-60 transition-colors"
-              style={{ backgroundColor: PALETA.boton }}
+              style={{ backgroundColor: PALETA.filtros }}
             >
               {enviando ? "Enviando…" : "Enviar"}
             </button>
-            <p className="mt-2 text-center text-xs" style={{ color: PALETA.textoSuave }}>
+            <p className="mt-2 text-center text-xs" style={{ color: PALETA.textoOscuro }}>
               * Los campos marcados son obligatorios
             </p>
           </div>

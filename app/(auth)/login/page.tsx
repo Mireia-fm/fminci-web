@@ -4,16 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import Image from "next/image";
-
-const PALETA = {
-  fondo: "#5D6D52",
-  headerTable: "#D9B6A9",
-  card: "#F9FAF8",
-  filtros: "#E8B5A8",
-  texto: "#EDF0E9",
-  textoOscuro: "#4b4b4b",
-  verdeClaro: "#A9B88C",
-};
+import { PALETA } from "@/lib/theme";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -74,12 +65,12 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="min-h-screen flex items-center justify-center" style={{ backgroundColor: PALETA.fondo }}>
+    <main className="min-h-screen flex items-center justify-center" style={{ backgroundColor: PALETA.bg }}>
       <div className="flex w-full max-w-4xl relative">
         {/* Banda lateral con logo y marca */}
         <aside 
           className="hidden md:flex flex-col justify-center items-center"
-          style={{ backgroundColor: PALETA.fondo, width: '120px' }}
+          style={{ backgroundColor: PALETA.bg, width: '120px' }}
         >
           {/* Nombre de la aplicación en vertical - más cerca del logo */}
           <div className="flex items-center justify-center" style={{ transform: 'translateX(15px) translateY(-10px)' }}>
@@ -124,13 +115,13 @@ export default function LoginPage() {
         <section className="flex-1 bg-white p-12 shadow-xl relative">
           <div className="max-w-md mx-auto">
             <h1 className="text-3xl font-bold text-center mb-2" style={{ 
-              color: PALETA.fondo,
+              color: PALETA.bg,
               fontFamily: 'Montserrat, Poppins, sans-serif'
             }}>
               Inicio de sesión
             </h1>
             <p className="text-center mb-8" style={{ 
-              color: PALETA.fondo,
+              color: PALETA.bg,
               fontFamily: 'Montserrat, Poppins, sans-serif'
             }}>
               Software de gestión de incidencias
@@ -139,7 +130,7 @@ export default function LoginPage() {
             <form onSubmit={handleLogin} className="space-y-6">
               <div>
                 <label className="block text-base font-medium mb-2" style={{ 
-                  color: PALETA.fondo,
+                  color: PALETA.bg,
                   fontFamily: 'Montserrat, Poppins, sans-serif'
                 }}>
                   Usuario *
@@ -150,7 +141,7 @@ export default function LoginPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full px-4 py-3 border-b-2 focus:outline-none focus:border-2 text-base"
                   style={{ 
-                    borderBottomColor: email ? PALETA.fondo : '#d1d5db',
+                    borderBottomColor: email ? PALETA.bg : '#d1d5db',
                     fontFamily: 'Montserrat, Poppins, sans-serif',
                     color: '#A9B88C',
                     borderRadius: '0'
@@ -162,7 +153,7 @@ export default function LoginPage() {
 
               <div>
                 <label className="block text-base font-medium mb-2" style={{ 
-                  color: PALETA.fondo,
+                  color: PALETA.bg,
                   fontFamily: 'Montserrat, Poppins, sans-serif'
                 }}>
                   Contraseña *
@@ -173,7 +164,7 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full px-4 py-3 border-b-2 focus:outline-none focus:border-2"
                   style={{ 
-                    borderBottomColor: password ? PALETA.fondo : '#d1d5db',
+                    borderBottomColor: password ? PALETA.bg : '#d1d5db',
                     fontFamily: 'Montserrat, Poppins, sans-serif',
                     color: '#A9B88C',
                     borderRadius: '0',
@@ -200,7 +191,7 @@ export default function LoginPage() {
                 disabled={loading}
                 className="w-full py-3 rounded-md text-white font-medium transition-all duration-200 hover:opacity-90 disabled:opacity-50"
                 style={{ 
-                  backgroundColor: PALETA.fondo,
+                  backgroundColor: PALETA.bg,
                   fontFamily: 'Montserrat, Poppins, sans-serif'
                 }}
               >
@@ -212,7 +203,7 @@ export default function LoginPage() {
                 onClick={handleReset}
                 className="block mx-auto text-sm underline mt-4 hover:opacity-80"
                 style={{ 
-                  color: PALETA.fondo,
+                  color: PALETA.bg,
                   fontFamily: 'Montserrat, Poppins, sans-serif'
                 }}
               >

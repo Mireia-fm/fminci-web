@@ -11,6 +11,10 @@ export const PALETA = {
   card: "#F9FAF8",         // Fondo de tarjetas
   filtros: "#E8B5A8",      // Fondo de filtros
 
+  // Colores adicionales
+  verdeClaro: "#A9B88C",   // Verde claro (usado en dashboard)
+  verdeSombra: "#7A8A6F",  // Verde sombra (usado en calendario)
+
   // Colores para estados (badges circulares)
   b1: "#E8D36A",   // Amarillo - Estados iniciales/abiertos
   b2: "#E8B5A8",   // Rosa - Estados en progreso

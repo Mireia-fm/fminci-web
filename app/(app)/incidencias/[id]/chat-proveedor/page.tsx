@@ -5,18 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { registrarCambioEstado, obtenerHistorialEstados } from "@/lib/historialEstados";
 import SearchableSelect from "@/components/SearchableSelect";
-
-// Paleta de colores consistente
-const PALETA = {
-  fondo: "#5D6D52",
-  headerTable: "#D9B6A9",
-  card: "#F9FAF8",
-  filtros: "#E8B5A8",
-  texto: "#EDF0E9",
-  textoOscuro: "#4b4b4b",
-  verdeClaro: "#A9B88C", // Verde claro del dashboard para incidencias cerradas
-  verdeSombra: "#7A8A6F", // Verde más claro que el fondo para sombra
-};
+import { PALETA } from "@/lib/theme";
 
 type Adjunto = {
   id: string;
@@ -1826,7 +1815,7 @@ Notas adicionales: ${notasAdicionales}`;
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: PALETA.fondo }}>
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: PALETA.bg }}>
         <div className="text-white">Cargando...</div>
       </div>
     );
@@ -1834,7 +1823,7 @@ Notas adicionales: ${notasAdicionales}`;
 
   if (!incidencia) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: PALETA.fondo }}>
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: PALETA.bg }}>
         <div className="text-white">No se encontró la incidencia</div>
       </div>
     );
@@ -1843,7 +1832,7 @@ Notas adicionales: ${notasAdicionales}`;
   // Verificar si la incidencia ha sido asignada a un proveedor
   if (!loading && !proveedorAsignado) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center" style={{ backgroundColor: PALETA.fondo }}>
+      <div className="min-h-screen flex flex-col items-center justify-center" style={{ backgroundColor: PALETA.bg }}>
         <div className="text-center text-white max-w-md">
           <h2 className="text-xl font-semibold mb-4">Chat no disponible</h2>
           <p className="mb-6">
@@ -1873,7 +1862,7 @@ Notas adicionales: ${notasAdicionales}`;
   // Si la visita fue calendarizada exitosamente, mostrar pantalla de éxito
   if (visitaCalendarizada) {
     return (
-      <div className="min-h-[calc(100vh-80px)] px-6 py-12" style={{ backgroundColor: PALETA.fondo }}>
+      <div className="min-h-[calc(100vh-80px)] px-6 py-12" style={{ backgroundColor: PALETA.bg }}>
         <div
           className="mx-auto w-full max-w-2xl rounded-lg p-8 shadow text-center"
           style={{ backgroundColor: PALETA.card }}
@@ -1899,7 +1888,7 @@ Notas adicionales: ${notasAdicionales}`;
             <h2 className="text-lg font-medium mb-2" style={{ color: PALETA.textoOscuro }}>
               Detalles de la visita:
             </h2>
-            <p className="text-2xl font-bold mb-2" style={{ color: PALETA.fondo }}>
+            <p className="text-2xl font-bold mb-2" style={{ color: PALETA.bg }}>
               {visitaCalendarizada.fecha}
             </p>
             <p className="text-gray-600">
@@ -1914,7 +1903,7 @@ Notas adicionales: ${notasAdicionales}`;
             <button
               onClick={() => setVisitaCalendarizada(null)}
               className="w-full rounded px-6 py-3 text-white font-medium"
-              style={{ backgroundColor: PALETA.fondo }}
+              style={{ backgroundColor: PALETA.bg }}
             >
               Continuar
             </button>
@@ -1931,7 +1920,7 @@ Notas adicionales: ${notasAdicionales}`;
   }
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: PALETA.fondo }}>
+    <div className="min-h-screen" style={{ backgroundColor: PALETA.bg }}>
       {/* Header */}
       <div className="flex items-center justify-between p-6">
         <button
@@ -1997,7 +1986,7 @@ Notas adicionales: ${notasAdicionales}`;
                                   window.open(direccionCentro || '', '_blank');
                                 }}
                                 className="px-2 py-1 text-xs rounded text-white hover:opacity-90 transition-opacity"
-                                style={{ backgroundColor: PALETA.fondo }}
+                                style={{ backgroundColor: PALETA.bg }}
                                 title="Ir a la dirección"
                               >
                                 📍 Ir a la dirección
@@ -2098,7 +2087,7 @@ Notas adicionales: ${notasAdicionales}`;
                             <div key={adjunto.id} className="text-center">
                               <div
                                 className="cursor-pointer border-2 rounded-lg overflow-hidden hover:shadow-lg transition-shadow"
-                                style={{ borderColor: PALETA.fondo }}
+                                style={{ borderColor: PALETA.bg }}
                                 onClick={() => window.open(imageUrl, '_blank')}
                               >
                                 <img
@@ -2148,8 +2137,8 @@ Notas adicionales: ${notasAdicionales}`;
                     key={index}
                     className="border-l-4 pl-4 py-3 rounded-r"
                     style={{
-                      borderColor: prov.activo ? PALETA.fondo : '#9ca3af',
-                      backgroundColor: prov.activo ? `${PALETA.fondo}10` : '#f9fafb'
+                      borderColor: prov.activo ? PALETA.bg : '#9ca3af',
+                      backgroundColor: prov.activo ? `${PALETA.bg}10` : '#f9fafb'
                     }}
                   >
                     <div className="flex items-start justify-between">
@@ -2161,7 +2150,7 @@ Notas adicionales: ${notasAdicionales}`;
                           {prov.activo && (
                             <span
                               className="px-2 py-1 text-xs rounded text-white font-medium"
-                              style={{ backgroundColor: PALETA.fondo }}
+                              style={{ backgroundColor: PALETA.bg }}
                             >
                               ACTIVO
                             </span>
@@ -2290,8 +2279,8 @@ Notas adicionales: ${notasAdicionales}`;
                       onClick={() => router.push(`/incidencias/${incidenciaId}/chat-control-cliente`)}
                       className="px-4 py-2 text-sm border rounded hover:bg-gray-50 transition-colors"
                       style={{
-                        borderColor: PALETA.fondo,
-                        color: PALETA.fondo
+                        borderColor: PALETA.bg,
+                        color: PALETA.bg
                       }}
                     >
                       Cambiar al Chat Cliente
@@ -2513,7 +2502,7 @@ Notas adicionales: ${notasAdicionales}`;
                   >
                     {!comentario.es_sistema && (
                       <div className="text-xs font-medium mb-1" style={{ 
-                        color: PALETA.fondo 
+                        color: PALETA.bg 
                       }}>
                         {`${comentario.autor_email} (${comentario.autor_rol})`}
                       </div>
@@ -2648,7 +2637,7 @@ Notas adicionales: ${notasAdicionales}`;
                         transition: 'color 0.2s'
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.color = PALETA.fondo;
+                        e.currentTarget.style.color = PALETA.bg;
                       }}
                       onMouseLeave={(e) => {
                         e.currentTarget.style.color = PALETA.textoOscuro;
@@ -2670,7 +2659,7 @@ Notas adicionales: ${notasAdicionales}`;
                         transition: 'color 0.2s'
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.color = PALETA.fondo;
+                        e.currentTarget.style.color = PALETA.bg;
                       }}
                       onMouseLeave={(e) => {
                         e.currentTarget.style.color = PALETA.textoOscuro;
@@ -2745,7 +2734,7 @@ Notas adicionales: ${notasAdicionales}`;
                 type="submit"
                 disabled={!nuevoComentario.trim() || enviando}
                 className="px-4 py-2 text-white rounded disabled:opacity-50 hover:opacity-90 transition-opacity ml-auto"
-                style={{ backgroundColor: PALETA.fondo }}
+                style={{ backgroundColor: PALETA.bg }}
               >
                 {enviando ? "Enviando..." : "Enviar"}
               </button>
@@ -3461,7 +3450,7 @@ Notas adicionales: ${notasAdicionales}`;
                 onClick={anularIncidencia}
                 disabled={!motivoAnulacion.trim() || enviando}
                 className="px-6 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity disabled:opacity-50"
-                style={{ backgroundColor: PALETA.fondo }}
+                style={{ backgroundColor: PALETA.bg }}
               >
                 {enviando ? 'Anulando...' : 'Anular Proveedor'}
               </button>
@@ -3623,7 +3612,7 @@ Notas adicionales: ${notasAdicionales}`;
                             <td className="py-2 font-semibold" style={{ color: PALETA.textoOscuro }}>
                               Importe sin IVA:
                             </td>
-                            <td className="py-2 font-bold text-base" style={{ color: PALETA.fondo }}>
+                            <td className="py-2 font-bold text-base" style={{ color: PALETA.bg }}>
                               {presupuestoActual.importe_total_sin_iva}€
                             </td>
                           </tr>
@@ -3725,7 +3714,7 @@ Notas adicionales: ${notasAdicionales}`;
                               className="inline-flex items-center gap-2 px-4 py-2 rounded border transition-colors text-sm"
                               style={{
                                 borderColor: PALETA.verdeSombra,
-                                color: PALETA.fondo
+                                color: PALETA.bg
                               }}
                               onMouseEnter={(e) => {
                                 e.currentTarget.style.backgroundColor = PALETA.headerTable;

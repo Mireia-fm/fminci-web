@@ -3,15 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-
-const PALETA = {
-  fondo: "#5D6D52",
-  headerTable: "#D9B6A9",
-  card: "#F9FAF8",
-  filtros: "#E8B5A8",
-  texto: "#EDF0E9",
-  textoOscuro: "#4b4b4b",
-};
+import { PALETA } from "@/lib/theme";
 
 type Proveedor = {
   id: string;
@@ -195,7 +187,7 @@ export default function GestionProveedores() {
   };
 
   return (
-    <div className="min-h-screen w-full" style={{ backgroundColor: PALETA.fondo }}>
+    <div className="min-h-screen w-full" style={{ backgroundColor: PALETA.bg }}>
       <div className="px-6 py-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">

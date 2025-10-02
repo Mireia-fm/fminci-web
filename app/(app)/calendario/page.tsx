@@ -3,18 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-
-// Paleta de colores consistente
-const PALETA = {
-  fondo: "#5D6D52",
-  headerTable: "#D9B6A9",
-  card: "#F9FAF8",
-  filtros: "#E8B5A8",
-  texto: "#EDF0E9",
-  textoOscuro: "#4b4b4b",
-  verdeClaro: "#A9B88C",
-  verdeSombra: "#7A8A6F",
-};
+import { useAuth } from "@/contexts/AuthContext";
+import { PALETA } from "@/lib/theme";
 
 type Cita = {
   id: string;
@@ -29,118 +19,97 @@ type Cita = {
 
 export default function CalendarioPage() {
   const router = useRouter();
+  const { perfil, loading: loadingAuth, proveedorId } = useAuth();
   const [citas, setCitas] = useState<Cita[]>([]);
   const [loading, setLoading] = useState(true);
   const [fechaSeleccionada, setFechaSeleccionada] = useState(new Date());
   const [esProveedor, setEsProveedor] = useState(false);
-  const [tipoUsuario, setTipoUsuario] = useState<string | null>(null);
 
   useEffect(() => {
-    cargarCitas();
-  }, []);
+    if (!loadingAuth && perfil) {
+      cargarCitas();
+    }
+  }, [loadingAuth, perfil]);
 
   const cargarCitas = async () => {
+    if (!perfil) return;
+
     try {
-      // Obtener datos del usuario actual
-      const { data: userData } = await supabase.auth.getUser();
-      const userEmail = userData.user?.email;
+      // Usar instituciones ya cargadas desde AuthContext
+      const institucionId = perfil.instituciones?.[0]?.institucion_id;
+      const tipoInstitucion = perfil.instituciones?.[0]?.tipo;
 
-      if (!userEmail) return;
+      if (institucionId) {
+        let citasData;
 
-      // Obtener información del usuario y sus instituciones
-      const { data: personaInstituciones } = await supabase
-        .from("personas")
-        .select(`
-          id,
-          rol,
-          personas_instituciones!inner(
-            institucion_id,
-            instituciones!inner(id, nombre, tipo)
-          )
-        `)
-        .eq("email", userEmail);
-
-      if (personaInstituciones && personaInstituciones.length > 0) {
-        const persona = personaInstituciones[0];
-        const institucionId = persona.personas_instituciones?.[0]?.institucion_id;
-        const institucionesData = persona.personas_instituciones?.[0]?.instituciones;
-        const tipoInstitucion = Array.isArray(institucionesData) ? institucionesData[0]?.tipo : (institucionesData as { tipo?: string })?.tipo;
-
-        // Detectar tipo de usuario
-        setTipoUsuario(persona.rol);
-
-        if (institucionId) {
-          let citasData;
-
-          if (tipoInstitucion === 'Proveedor') {
-            setEsProveedor(true);
-            // Vista para proveedores: mostrar las visitas que HA calendarizado
-            const { data } = await supabase
-              .from("citas_proveedores")
-              .select(`
+        if (tipoInstitucion === 'Proveedor') {
+          setEsProveedor(true);
+          // Vista para proveedores: mostrar las visitas que HA calendarizado
+          const { data } = await supabase
+            .from("citas_proveedores")
+            .select(`
+              id,
+              fecha_visita,
+              horario,
+              estado,
+              incidencias!inner(
                 id,
-                fecha_visita,
-                horario,
-                estado,
-                incidencias!inner(
-                  id,
-                  num_solicitud,
-                  descripcion,
-                  instituciones!institucion_id(nombre)
-                )
-              `)
-              .eq("proveedor_id", institucionId)
-              .eq("estado", "programada")
-              .order("fecha_visita", { ascending: true });
+                num_solicitud,
+                descripcion,
+                instituciones!institucion_id(nombre)
+              )
+            `)
+            .eq("proveedor_id", institucionId)
+            .eq("estado", "programada")
+            .order("fecha_visita", { ascending: true });
 
-            citasData = data;
-          } else {
-            // Vista para clientes/centros: mostrar las visitas calendarizadas para sus incidencias
-            const { data } = await supabase
-              .from("citas_proveedores")
-              .select(`
+          citasData = data;
+        } else {
+          // Vista para clientes/centros: mostrar las visitas calendarizadas para sus incidencias
+          const { data } = await supabase
+            .from("citas_proveedores")
+            .select(`
+              id,
+              fecha_visita,
+              horario,
+              estado,
+              incidencias!inner(
                 id,
-                fecha_visita,
-                horario,
-                estado,
-                incidencias!inner(
-                  id,
-                  num_solicitud,
-                  descripcion,
-                  institucion_id
-                ),
-                instituciones!proveedor_id(
-                  nombre
-                )
-              `)
-              .eq("incidencias.institucion_id", institucionId)
-              .eq("estado", "programada")
-              .order("fecha_visita", { ascending: true });
+                num_solicitud,
+                descripcion,
+                institucion_id
+              ),
+              instituciones!proveedor_id(
+                nombre
+              )
+            `)
+            .eq("incidencias.institucion_id", institucionId)
+            .eq("estado", "programada")
+            .order("fecha_visita", { ascending: true });
 
-            citasData = data;
-          }
+          citasData = data;
+        }
 
-          if (citasData) {
-            const citasFormateadas: Cita[] = citasData.map((cita: { id: string; fecha_visita: string; horario: string; estado: string; incidencias?: { id?: string; num_solicitud?: string; descripcion?: string; instituciones?: { nombre?: string } }; instituciones?: { nombre?: string } }) => {
-              const fechaVisita = new Date(cita.fecha_visita);
-              const fechaLocal = `${fechaVisita.getFullYear()}-${(fechaVisita.getMonth() + 1).toString().padStart(2, '0')}-${fechaVisita.getDate().toString().padStart(2, '0')}`;
+        if (citasData) {
+          const citasFormateadas: Cita[] = citasData.map((cita: { id: string; fecha_visita: string; horario: string; estado: string; incidencias?: { id?: string; num_solicitud?: string; descripcion?: string; instituciones?: { nombre?: string } }; instituciones?: { nombre?: string } }) => {
+            const fechaVisita = new Date(cita.fecha_visita);
+            const fechaLocal = `${fechaVisita.getFullYear()}-${(fechaVisita.getMonth() + 1).toString().padStart(2, '0')}-${fechaVisita.getDate().toString().padStart(2, '0')}`;
 
-              return {
-              id: cita.id,
-              incidencia_id: cita.incidencias?.id || '',
-              fecha: fechaLocal,
-              hora: cita.horario === 'mañana' ? 'Horario de mañana' : 'Horario de tarde',
-              proveedor_nombre: tipoInstitucion === 'Proveedor'
-                ? cita.incidencias?.instituciones?.nombre || 'Centro desconocido'
-                : cita.instituciones?.nombre || 'Proveedor desconocido',
-              incidencia_num: cita.incidencias?.num_solicitud || '',
-              descripcion: cita.incidencias?.descripcion || '',
-              estado: cita.estado
-            };
-            });
+            return {
+            id: cita.id,
+            incidencia_id: cita.incidencias?.id || '',
+            fecha: fechaLocal,
+            hora: cita.horario === 'mañana' ? 'Horario de mañana' : 'Horario de tarde',
+            proveedor_nombre: tipoInstitucion === 'Proveedor'
+              ? cita.incidencias?.instituciones?.nombre || 'Centro desconocido'
+              : cita.instituciones?.nombre || 'Proveedor desconocido',
+            incidencia_num: cita.incidencias?.num_solicitud || '',
+            descripcion: cita.incidencias?.descripcion || '',
+            estado: cita.estado
+          };
+          });
 
-            setCitas(citasFormateadas);
-          }
+          setCitas(citasFormateadas);
         }
       }
     } catch (error) {
@@ -182,7 +151,7 @@ export default function CalendarioPage() {
   const irAlChatIncidencia = (incidenciaId: string) => {
     if (esProveedor) {
       router.push(`/incidencias/${incidenciaId}/chat-proveedor`);
-    } else if (tipoUsuario === 'Control') {
+    } else if (perfil?.rol === 'Control') {
       // Control no navega a ningún chat por ahora
       console.log('Control no puede navegar al chat desde el calendario');
       return;
@@ -195,14 +164,14 @@ export default function CalendarioPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: PALETA.fondo }}>
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: PALETA.bg }}>
         <div className="text-white">Cargando calendario...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: PALETA.fondo }}>
+    <div className="min-h-screen" style={{ backgroundColor: PALETA.bg }}>
       <div className="px-6 py-6">
         <h1 className="text-lg tracking-[0.3em] mb-8" style={{ color: PALETA.texto }}>
           {esProveedor ? 'MIS VISITAS PROGRAMADAS:' : 'CALENDARIO DE CITAS CON PROVEEDORES:'}
@@ -264,7 +233,7 @@ export default function CalendarioPage() {
                       key={cita.id}
                       className="text-xs p-1 mb-1 rounded text-white cursor-pointer hover:opacity-80 transition-opacity"
                       style={{ backgroundColor: '#D4C5A9' }}
-                      title={`${cita.hora} - ${cita.proveedor_nombre}: ${cita.descripcion}${tipoUsuario !== 'Control' ? ' (Click para ir al chat)' : ''}`}
+                      title={`${cita.hora} - ${cita.proveedor_nombre}: ${cita.descripcion}${perfil?.rol !== 'Control' ? ' (Click para ir al chat)' : ''}`}
                       onClick={() => irAlChatIncidencia(cita.incidencia_id)}
                     >
                       <div className="font-semibold">{cita.hora}</div>
