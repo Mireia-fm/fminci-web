@@ -453,8 +453,7 @@ export default function CalendarioPage() {
                   onChange={(e) => setFormularioVisita({ ...formularioVisita, incidencia_id: e.target.value })}
                   className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2"
                   style={{
-                    borderColor: PALETA.verdeSombra,
-                    focusRingColor: PALETA.verdeClaro
+                    borderColor: PALETA.verdeSombra
                   }}
                 >
                   <option value="">Seleccione una incidencia</option>
