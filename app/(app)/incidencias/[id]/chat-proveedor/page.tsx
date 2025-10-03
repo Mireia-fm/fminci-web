@@ -1475,7 +1475,7 @@ Notas adicionales: ${notasAdicionales}`;
           autor_rol: 'Proveedor',
           cuerpo: mensajeValoracion,
           documento_url: documentoUrl,
-          es_sistema: true
+          es_sistema: false
         },
         {
           incidencia_id: incidenciaId,
