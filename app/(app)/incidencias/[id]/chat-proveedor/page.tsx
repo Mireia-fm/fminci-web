@@ -44,6 +44,7 @@ type Incidencia = {
   hora?: string;
   imagen_url?: string;
   catalogacion?: string;
+  fecha_creacion?: string;
   instituciones?: {
     nombre: string;
   }[] | null;
