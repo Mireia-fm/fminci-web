@@ -379,6 +379,7 @@ export default function ChatProveedor() {
           imagen_url,
           catalogacion,
           institucion_id,
+          fecha_creacion,
           instituciones(nombre, direccion)
         `)
         .eq("id", incidenciaId)
@@ -2102,6 +2103,36 @@ Notas adicionales: ${notasAdicionales}`;
                           >
                             {incidencia.estado_proveedor || "Sin asignar"}
                           </span>
+                        </td>
+                      </tr>
+
+                      <tr>
+                        <td className="py-2 font-semibold" style={{ color: PALETA.textoOscuro }}>
+                          Fecha de Creación:
+                        </td>
+                        <td className="py-2" style={{ color: PALETA.textoOscuro }}>
+                          {incidencia.fecha_creacion ? new Date(incidencia.fecha_creacion).toLocaleString('es-ES', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          }) : '-'}
+                        </td>
+                      </tr>
+
+                      <tr style={{ backgroundColor: `${PALETA.headerTable}20` }}>
+                        <td className="py-2 font-semibold" style={{ color: PALETA.textoOscuro }}>
+                          Fecha de Asignación:
+                        </td>
+                        <td className="py-2" style={{ color: PALETA.textoOscuro }}>
+                          {fechaAsignacionProveedor ? new Date(fechaAsignacionProveedor).toLocaleString('es-ES', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          }) : '-'}
                         </td>
                       </tr>
 
