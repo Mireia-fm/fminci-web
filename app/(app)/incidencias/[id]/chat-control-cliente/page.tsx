@@ -15,7 +15,6 @@ import { obtenerProveedorActivo, tieneProveedorActivo as checkProveedorActivo } 
 import { useSignedUrls, useComentarioUrls } from "@/shared/hooks/useSignedUrls";
 import { useChatFileUpload } from "@/shared/hooks/useFileUpload";
 import DatosTecnicosIncidencia from "@/shared/components/DatosTecnicosIncidencia";
-import ChatContainer from "@/shared/components/ChatContainer";
 
 type Adjunto = {
   id: string;
@@ -113,6 +112,19 @@ export default function ChatControlCliente() {
   useEffect(() => {
     cargarDatos();
   }, [incidenciaId]);
+
+  const getColorEmisor = (emisor: string) => {
+    switch (emisor.toLowerCase()) {
+      case 'cliente':
+        return "#E8D36A";
+      case 'control':
+        return "#A9B88C";
+      case 'gestor':
+        return "#8F9B83";
+      default:
+        return PALETA.headerTable;
+    }
+  };
 
   const cargarDatos = async () => {
     try {
@@ -590,20 +602,256 @@ ${documentosUrls.length > 0 ? `**Documentos adjuntos:** ${documentosUrls.length}
           </div>
         )}
 
-        {/* Chat Container - Componente Refactorizado */}
-        <ChatContainer
-          title="CHAT CON CLIENTE"
-          mensajes={comentarios}
-          nuevoMensaje={nuevoComentario}
-          onMensajeChange={setNuevoComentario}
-          onEnviar={handleEnviarComentario}
-          attachmentUrls={commentAttachmentUrls}
-          onImageSelect={seleccionarImagen}
-          onDocumentSelect={seleccionarDocumento}
-          selectedImage={imagenSeleccionada}
-          selectedDocument={documentoSeleccionado}
-          enviando={enviando}
-        />
+        {/* Sección de seguimiento */}
+        <div className="mb-8">
+          {tipoUsuario === 'Control' ? (
+            <div className="text-white text-center">
+              <h2 className="text-lg font-semibold mb-1 tracking-wider">CHAT CLIENTE</h2>
+              <p className="text-sm opacity-80">#{incidencia.num_solicitud}</p>
+            </div>
+          ) : (
+            <h2 className="text-white text-center text-lg font-semibold mb-4 tracking-wider">SEGUIMIENTO</h2>
+          )}
+        </div>
+
+        {/* Área de comentarios */}
+        <div className="bg-white rounded-lg shadow-sm flex flex-col h-[700px] relative">
+          {/* Lista de comentarios */}
+          <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            {comentarios.length === 0 ? (
+              <div className="text-center text-gray-500 py-8">
+                No hay comentarios aún. ¡Añade el primero!
+              </div>
+            ) : (
+              comentarios.map((comentario) => (
+                <div
+                  key={comentario.id}
+                  className={`flex ${
+                    comentario.es_sistema
+                      ? 'justify-center'
+                      : comentario.autor_email === userEmail ? 'justify-end' : 'justify-start'
+                  }`}
+                >
+                  <div
+                    className={`rounded-lg p-3 ${
+                      comentario.es_sistema
+                        ? 'max-w-full mx-4'
+                        : 'max-w-xs md:max-w-md'
+                    }`}
+                    style={{
+                      backgroundColor: comentario.es_sistema
+                        ? '#fef3c7'
+                        : comentario.autor_email === userEmail
+                          ? '#dcfce7'
+                          : getColorEmisor(comentario.autor_rol || 'cliente')
+                    }}
+                  >
+                    {!comentario.es_sistema && (
+                      <div className="text-xs font-medium mb-1" style={{
+                        color: PALETA.bg
+                      }}>
+                        {`${comentario.autor_email} (${comentario.autor_rol})`}
+                      </div>
+                    )}
+                    <div className="text-sm">{comentario.cuerpo}</div>
+
+                    {/* Mostrar adjuntos desde campos imagen_url y documento_url */}
+                    {((comentario.imagen_url || comentario.documento_url) || (comentario.adjuntos && comentario.adjuntos.length > 0)) && (
+                      <div className="mt-2 space-y-2">
+                        {/* Mostrar imagen_url del comentario */}
+                        {comentario.imagen_url && (
+                          (() => {
+                            const imageUrl = commentAttachmentUrls[`imagen_${comentario.id}`];
+                            return imageUrl ? (
+                              <img
+                                src={imageUrl}
+                                alt="Imagen adjunta al comentario"
+                                className="max-w-32 h-24 object-cover rounded border cursor-pointer hover:scale-105 transition-transform"
+                                onClick={() => window.open(imageUrl, '_blank')}
+                              />
+                            ) : (
+                              <div className="text-sm text-red-600">
+                                Error cargando imagen: {comentario.imagen_url}
+                              </div>
+                            );
+                          })()
+                        )}
+
+                        {/* Mostrar documento_url del comentario */}
+                        {comentario.documento_url && (
+                          (() => {
+                            const documentUrl = commentAttachmentUrls[`documento_${comentario.id}`];
+                            const fileName = comentario.documento_url.split('/').pop() || 'Documento adjunto';
+                            return documentUrl ? (
+                              <a
+                                href={documentUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-2 text-blue-600 hover:underline text-sm bg-blue-50 px-3 py-1 rounded"
+                              >
+                                📎 {fileName}
+                              </a>
+                            ) : (
+                              <div className="text-sm text-red-600">
+                                Error cargando documento: {comentario.documento_url}
+                              </div>
+                            );
+                          })()
+                        )}
+
+                        {/* Mantener compatibilidad con adjuntos legacy */}
+                        {comentario.adjuntos && comentario.adjuntos.map((adjunto) => (
+                          <div key={adjunto.id}>
+                            {adjunto.tipo === 'imagen' && (
+                              (() => {
+                                const imageUrl = commentAttachmentUrls[adjunto.id];
+                                return imageUrl ? (
+                                  <img
+                                    src={imageUrl}
+                                    alt={adjunto.nombre_archivo || "Imagen adjunta"}
+                                    className="max-w-32 h-24 object-cover rounded border cursor-pointer hover:scale-105 transition-transform"
+                                    onClick={() => window.open(imageUrl, '_blank')}
+                                  />
+                                ) : null;
+                              })()
+                            )}
+                            {adjunto.tipo === 'documento' && (
+                              (() => {
+                                const documentUrl = commentAttachmentUrls[adjunto.id] || adjunto.storage_key;
+                                return documentUrl ? (
+                                  <a
+                                    href={documentUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-2 text-blue-600 hover:underline text-sm bg-blue-50 px-3 py-1 rounded"
+                                  >
+                                    📎 {adjunto.nombre_archivo || 'Documento adjunto'}
+                                  </a>
+                                ) : null;
+                              })()
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="text-xs opacity-75 mt-1">
+                      {new Date(comentario.creado_en).toLocaleDateString('es-ES', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Formulario para añadir comentario */}
+          <form onSubmit={handleEnviarComentario} className="border-t p-4 space-y-4">
+            <textarea
+              value={nuevoComentario}
+              onChange={(e) => setNuevoComentario(e.target.value)}
+              placeholder="Añadir comentario"
+              className="w-full h-24 p-3 border rounded focus:outline-none resize-none text-sm"
+              style={{ borderColor: PALETA.textoOscuro }}
+              onFocus={(e) => {
+                e.target.style.boxShadow = `0 0 0 2px ${PALETA.verdeClaro}80`;
+              }}
+              onBlur={(e) => {
+                e.target.style.boxShadow = '';
+              }}
+              disabled={enviando}
+            />
+
+            {/* Preview de archivos seleccionados */}
+            {(imagenSeleccionada || documentoSeleccionado) && (
+              <div className="flex gap-2 flex-wrap">
+                {imagenSeleccionada && (
+                  <div className="flex items-center gap-2 bg-white px-3 py-2 rounded border border-gray-300">
+                    <span className="text-gray-700 text-sm">{imagenSeleccionada.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => seleccionarImagen(null)}
+                      className="text-gray-500 hover:text-gray-700 text-sm"
+                    >
+                      ×
+                    </button>
+                  </div>
+                )}
+                {documentoSeleccionado && (
+                  <div className="flex items-center gap-2 bg-white px-3 py-2 rounded border border-gray-300">
+                    <span className="text-gray-700 text-sm">{documentoSeleccionado.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => seleccionarDocumento(null)}
+                      className="text-gray-500 hover:text-gray-700 text-sm"
+                    >
+                      ×
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Botones de archivos adjuntos */}
+            <div className="flex gap-4 items-center">
+              <div className="relative">
+                <input
+                  type="file"
+                  id="imagen"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) seleccionarImagen(file);
+                  }}
+                  className="hidden"
+                />
+                <label
+                  htmlFor="imagen"
+                  className="inline-flex items-center gap-2 px-3 py-0.5 border border-gray-400 rounded cursor-pointer transition-colors text-gray-600"
+                  style={{ borderColor: PALETA.textoOscuro }}
+                >
+                  <span className="font-medium text-sm">Añadir imagen</span>
+                  <span className="text-2xl text-gray-400">+</span>
+                </label>
+              </div>
+
+              <div className="relative">
+                <input
+                  type="file"
+                  id="documento"
+                  accept=".pdf,.doc,.docx,.txt"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) seleccionarDocumento(file);
+                  }}
+                  className="hidden"
+                />
+                <label
+                  htmlFor="documento"
+                  className="inline-flex items-center gap-2 px-3 py-0.5 border border-gray-400 rounded cursor-pointer transition-colors text-gray-600"
+                  style={{ borderColor: PALETA.textoOscuro }}
+                >
+                  <span className="font-medium text-sm">Añadir documento</span>
+                  <span className="text-2xl text-gray-400">+</span>
+                </label>
+              </div>
+
+              <button
+                type="submit"
+                disabled={enviando}
+                className="ml-auto px-6 py-2 text-white rounded hover:opacity-90 transition-opacity disabled:opacity-50"
+                style={{ backgroundColor: PALETA.verdeClaro }}
+              >
+                {enviando ? 'Enviando...' : 'Enviar'}
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
 
       {/* Modales */}
