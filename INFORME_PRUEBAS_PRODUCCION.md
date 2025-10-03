@@ -232,6 +232,74 @@ Para reactivar:
 
 ---
 
+### FLUJO 6: Resolución Manual por Control (Sin Proveedor del Sistema)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ ESCENARIO                                                    │
+└─────────────────────────────────────────────────────────────┘
+Control resuelve la incidencia directamente porque:
+- Usó proveedor externo (no registrado en sistema)
+- Solucionó internamente
+- No requiere proveedor
+
+┌─────────────────────────────────────────────────────────────┐
+│ CONTROL - OPCIÓN A: Desde Chat Cliente (sin proveedor)     │
+└─────────────────────────────────────────────────────────────┘
+REQUISITO: Incidencia "Abierta" o "En espera" SIN proveedor asignado
+
+1. Abrir incidencia en estado "Abierta" o "En espera"
+2. En "Acciones de Control", clic "Resolver Manualmente"
+3. Modal solicita:
+   - Motivo/descripción de resolución *
+   - Proveedor externo (texto libre, opcional)
+   - Importe (opcional)
+   - Adjuntar documentos (facturas, fotos, opcional)
+4. Confirmar
+   → Estado Cliente: (actual) → "Resuelta"
+   → Comentario sistema en chat cliente con detalles
+   → Registro en historial_estados con metadatos
+   → NO se crea proveedor_casos
+
+5. Control puede luego cerrar:
+   → Estado Cliente: "Resuelta" → "Cerrada"
+
+┌─────────────────────────────────────────────────────────────┐
+│ CONTROL - OPCIÓN B: Desde Chat Proveedor (con proveedor)   │
+└─────────────────────────────────────────────────────────────┘
+REQUISITO: Incidencia CON proveedor asignado
+
+1. Abrir incidencia en chat proveedor
+2. Selector de estado con opción "Resolver Manualmente"
+3. Modal solicita:
+   - Motivo de resolución manual *
+   - Observaciones adicionales
+   - Adjuntar documentos
+4. Confirmar
+   → Estado Proveedor: (actual) → "Resuelta"
+   → Estado Cliente: (actual) → "Resuelta"
+   → Comentario en chat proveedor (visible solo Control/Proveedor)
+   → Comentario en chat cliente (visible Cliente/Gestor/Control)
+   → Registro en historial_estados (ambos tipos)
+
+5. Seguir flujo normal de cierre
+
+┌─────────────────────────────────────────────────────────────┐
+│ DIFERENCIAS CLAVE                                            │
+└─────────────────────────────────────────────────────────────┘
+SIN PROVEEDOR:
+- No se crea registro en proveedor_casos
+- Solo un comentario sistema en chat cliente
+- Ideal para casos resueltos por terceros
+
+CON PROVEEDOR:
+- Proveedor_casos se mantiene activo
+- Doble comentario (cliente + proveedor)
+- Marca que Control resolvió en lugar del proveedor
+```
+
+---
+
 ## 🎯 CASOS DE USO ESPECÍFICOS
 
 ### CU-01: Chat Cliente/Control
@@ -387,12 +455,81 @@ Para reactivar:
 
 ---
 
+### CU-07: Resolución Manual por Control
+**Actor**: Control
+**Flujo**:
+
+**Escenario A - Sin Proveedor**:
+1. Acceder a incidencia "Abierta" o "En espera" sin proveedor
+2. En sección "Acciones de Control", clic "Resolver Manualmente"
+3. Modal muestra formulario:
+   - **Descripción de resolución** * (textarea)
+   - **Proveedor externo** (texto libre, opcional)
+   - **Importe** (número, opcional)
+   - **Adjuntar documentos** (facturas, fotos, opcional)
+4. Completar y confirmar
+5. Sistema ejecuta:
+   - Actualizar incidencias.estado_cliente → "Resuelta"
+   - Subir documentos a storage (si hay)
+   - Crear comentario sistema en chat cliente:
+     ```
+     "Incidencia resuelta manualmente por Control.
+
+     Motivo: [descripción]
+     Proveedor: [proveedor_externo o "No especificado"]
+     Importe: [importe o "No especificado"]
+
+     [Enlaces a documentos adjuntos]"
+     ```
+   - Registrar en historial_estados:
+     - tipo_estado: "cliente"
+     - estado_anterior → estado_nuevo: "Resuelta"
+     - metadatos: { accion: "resolucion_manual", proveedor_externo, importe }
+6. Redirigir al chat actualizado
+
+**Escenario B - Con Proveedor**:
+1. Acceder a incidencia con proveedor en chat proveedor
+2. Selector de estado muestra opción "Resolver Manualmente (Control)"
+3. Seleccionar → Modal muestra:
+   - **Motivo de resolución** * (textarea)
+   - **Observaciones** (textarea, opcional)
+   - **Adjuntar documentos** (opcional)
+4. Confirmar
+5. Sistema ejecuta:
+   - Actualizar incidencias.estado_cliente → "Resuelta"
+   - Actualizar proveedor_casos.estado_proveedor → "Resuelta" (donde activo=true)
+   - Crear comentario en chat proveedor (ámbito: "proveedor"):
+     ```
+     "Control ha resuelto esta incidencia manualmente.
+
+     Motivo: [motivo]
+     Observaciones: [observaciones o "-"]"
+     ```
+   - Crear comentario en chat cliente (ámbito: "cliente"):
+     ```
+     "Incidencia resuelta por Control.
+
+     Motivo: [motivo]"
+     ```
+   - Registrar 2 cambios en historial_estados:
+     - tipo_estado: "cliente" (estado → "Resuelta")
+     - tipo_estado: "proveedor" (estado → "Resuelta")
+     - metadatos: { accion: "resolucion_manual_control" }
+
+**Validaciones**:
+- Motivo obligatorio en ambos escenarios
+- Solo Control puede usar esta función
+- Documentos opcionales pero recomendados
+- Historial completo de cambios
+
+---
+
 ## ⚠️ RESTRICCIONES Y REGLAS DE NEGOCIO
 
 ### RN-01: Estados Cliente
-- **Abierta** → Solo puede ir a: "En espera", "En tramitación" (con proveedor), "Anulada"
-- **En espera** → Solo puede ir a: "En tramitación" (asignar proveedor), "Anulada"
-- **En tramitación** → Solo puede ir a: "Resuelta" (proveedor), "Cerrada" (control), "Anulada"
+- **Abierta** → Solo puede ir a: "En espera", "En tramitación" (con proveedor), "Resuelta" (resolución manual), "Anulada"
+- **En espera** → Solo puede ir a: "En tramitación" (asignar proveedor), "Resuelta" (resolución manual), "Anulada"
+- **En tramitación** → Solo puede ir a: "Resuelta" (proveedor o manual), "Cerrada" (control), "Anulada"
 - **Resuelta** → Solo puede ir a: "Cerrada"
 - **Cerrada** → Estado final (no cambia)
 - **Anulada** → Solo puede ir a: "En tramitación" (reasignar)
@@ -451,6 +588,19 @@ Para reactivar:
 - Estados permitidos para visitas: ver CU-03
 - Horarios: "mañana" o "tarde" (no horas específicas)
 
+### RN-10: Resolución Manual por Control
+- **Sin proveedor**: Disponible en estados "Abierta" o "En espera"
+- **Con proveedor**: Disponible desde chat proveedor en cualquier estado activo
+- Campos obligatorios: Motivo/descripción
+- Campos opcionales: Proveedor externo, importe, documentos
+- Genera comentario sistema automático
+- Actualiza historial_estados con metadatos:
+  - `accion: "resolucion_manual"`
+  - `proveedor_externo: "..."` (si aplica)
+  - `importe: 123.45` (si aplica)
+- Sin proveedor: NO crea proveedor_casos
+- Con proveedor: Mantiene proveedor_casos.activo=true
+
 ---
 
 ## 🧪 MATRIZ DE PRUEBAS
@@ -483,6 +633,9 @@ Para reactivar:
 | T-204 | Proveedor a resolución | Proveedor | 1. Abrir incidencia "Abierta"<br>2. Cambiar estado<br>3. Seleccionar "En resolución" | Estado proveedor → "En resolución" |
 | T-205 | Resolver sin presupuesto | Proveedor | 1. Incidencia "En resolución"<br>2. Cambiar a "Resuelta" | Estado proveedor → "Resuelta" |
 | T-206 | Cerrar incidencia | Control | 1. Incidencia "Resuelta"<br>2. Cambiar a "Cerrada" | Estado cliente → "Cerrada"<br>Estado proveedor → "Cerrada" |
+| T-207 | **Resolución manual sin proveedor** | Control | 1. Incidencia "Abierta" sin proveedor<br>2. "Resolver Manualmente"<br>3. Motivo + proveedor externo + importe<br>4. Adjuntar factura<br>5. Confirmar | Estado cliente → "Resuelta"<br>Comentario sistema con detalles<br>NO crea proveedor_casos<br>Historial con metadatos |
+| T-208 | **Resolución manual con proveedor** | Control | 1. Incidencia "En tramitación"<br>2. Chat proveedor<br>3. "Resolver Manualmente"<br>4. Indicar motivo<br>5. Confirmar | Estado cliente → "Resuelta"<br>Estado proveedor → "Resuelta"<br>Doble comentario<br>Proveedor_casos activo=true |
+| T-209 | **Validar campos obligatorios resolución** | Control | 1. "Resolver Manualmente"<br>2. Dejar motivo vacío<br>3. Confirmar | Error: motivo obligatorio |
 
 ### Módulo: Presupuestos
 
@@ -636,6 +789,8 @@ Para reactivar:
 - [ ] T-501: Crear visita calendario
 - [ ] T-203: Anular con proveedor
 - [ ] T-103: Reasignar proveedor
+- [ ] **T-207: Resolución manual sin proveedor** (NUEVO)
+- [ ] **T-208: Resolución manual con proveedor** (NUEVO)
 
 ### Pruebas de Estados (Críticas)
 - [ ] T-201 a T-206: Todas las transiciones

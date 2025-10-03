@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { registrarCambioEstado, obtenerHistorialEstados } from "@/lib/historialEstados";
 import SearchableSelect from "@/components/SearchableSelect";
+import ModalResolucionManual, { type FormularioResolucionManual } from "@/components/ModalResolucionManual";
 import { PALETA } from "@/lib/theme";
 
 type Adjunto = {
@@ -117,6 +118,7 @@ export default function ChatProveedor() {
   const [mostrarModalAnular, setMostrarModalAnular] = useState(false);
   const [mostrarModalCerrar, setMostrarModalCerrar] = useState(false);
   const [mostrarModalValorarIncidencia, setMostrarModalValorarIncidencia] = useState(false);
+  const [mostrarModalResolucionManual, setMostrarModalResolucionManual] = useState(false);
   const [motivoAnulacion, setMotivoAnulacion] = useState('');
   const [motivoCierre, setMotivoCierre] = useState('');
   const [presupuestoActual, setPresupuestoActual] = useState<{ id: string; importe_total: number; importe_total_sin_iva?: number; presupuesto_detallado_url?: string; estado: string; fecha_estimada_inicio?: string; duracion_estimada?: string; descripcion_breve?: string; instituciones?: { nombre: string }; incidencias?: { num_solicitud: string; descripcion: string } } | null>(null);
@@ -1592,6 +1594,101 @@ Solución aplicada: ${solucionAplicada}`;
     }
   };
 
+  const resolverManualmenteConProveedor = async (formulario: FormularioResolucionManual) => {
+    if (!autorId || !incidencia) return;
+
+    try {
+      setEnviando(true);
+
+      const { data: userData } = await supabase.auth.getUser();
+      const userEmail = userData.user?.email;
+
+      // 1. Obtener estados anteriores
+      const estadoClienteAnterior = incidencia.estado_cliente;
+      const estadoProveedorAnterior = incidencia.estado_proveedor || null;
+
+      // 2. Actualizar estado cliente
+      await supabase
+        .from("incidencias")
+        .update({ estado_cliente: "Resuelta" })
+        .eq("id", incidenciaId);
+
+      // 3. Actualizar estado proveedor
+      await supabase
+        .from("proveedor_casos")
+        .update({ estado_proveedor: "Resuelta" })
+        .eq("incidencia_id", incidenciaId)
+        .eq("activo", true);
+
+      // 4. Registrar cambio de estado (cliente)
+      await registrarCambioEstado({
+        incidenciaId,
+        tipoEstado: 'cliente',
+        estadoAnterior: estadoClienteAnterior,
+        estadoNuevo: 'Resuelta',
+        autorId,
+        motivo: 'Resolución manual por Control',
+        metadatos: {
+          accion: 'resolucion_manual_control'
+        }
+      });
+
+      // 5. Registrar cambio de estado (proveedor)
+      await registrarCambioEstado({
+        incidenciaId,
+        tipoEstado: 'proveedor',
+        estadoAnterior: estadoProveedorAnterior,
+        estadoNuevo: 'Resuelta',
+        autorId,
+        motivo: 'Resolución manual por Control',
+        metadatos: {
+          accion: 'resolucion_manual_control'
+        }
+      });
+
+      // 6. Comentario en chat proveedor
+      await supabase
+        .from("comentarios")
+        .insert({
+          incidencia_id: incidenciaId,
+          ambito: 'proveedor',
+          autor_id: autorId,
+          autor_email: userEmail,
+          autor_rol: 'Control',
+          cuerpo: `Control ha resuelto esta incidencia manualmente.
+
+**Motivo:** ${formulario.descripcion}
+
+${formulario.observaciones ? `**Observaciones:** ${formulario.observaciones}` : ''}`,
+          es_sistema: true
+        });
+
+      // 7. Comentario en chat cliente
+      await supabase
+        .from("comentarios")
+        .insert({
+          incidencia_id: incidenciaId,
+          ambito: 'cliente',
+          autor_id: autorId,
+          autor_email: userEmail,
+          autor_rol: 'Control',
+          cuerpo: `Incidencia resuelta por Control.
+
+**Motivo:** ${formulario.descripcion}`,
+          es_sistema: true
+        });
+
+      setMostrarModalResolucionManual(false);
+      cargarDatos(); // Recargar
+
+    } catch (error) {
+      console.error("Error en resolución manual:", error);
+      alert('Error al resolver la incidencia');
+    } finally {
+      setEnviando(false);
+    }
+  };
+
 
   // Función para cargar presupuesto
   const cargarPresupuesto = async () => {
@@ -2261,17 +2358,29 @@ Solución aplicada: ${solucionAplicada}`;
 
                   {/* Botón Cambiar al Chat Cliente - solo para Control */}
                   {tipoUsuario === 'Control' && (
-                    <button
-                      type="button"
-                      onClick={() => router.push(`/incidencias/${incidenciaId}/chat-control-cliente`)}
-                      className="px-4 py-2 text-sm border rounded hover:bg-gray-50 transition-colors"
-                      style={{
-                        borderColor: PALETA.bg,
-                        color: PALETA.bg
-                      }}
-                    >
-                      Cambiar al Chat Cliente
-                    </button>
+                    <div className="flex gap-3 justify-center">
+                      <button
+                        type="button"
+                        onClick={() => router.push(`/incidencias/${incidenciaId}/chat-control-cliente`)}
+                        className="px-4 py-2 text-sm border rounded hover:bg-gray-50 transition-colors"
+                        style={{
+                          borderColor: PALETA.bg,
+                          color: PALETA.bg
+                        }}
+                      >
+                        Cambiar al Chat Cliente
+                      </button>
+                      {incidencia.estado_proveedor !== 'Cerrada' && incidencia.estado_proveedor !== 'Anulada' && (
+                        <button
+                          type="button"
+                          onClick={() => setMostrarModalResolucionManual(true)}
+                          className="px-4 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity"
+                          style={{ backgroundColor: PALETA.verdeClaro }}
+                        >
+                          🔧 Resolver Manualmente
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
               );
@@ -3724,6 +3833,17 @@ Solución aplicada: ${solucionAplicada}`;
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal Resolución Manual - Solo para Control */}
+      {tipoUsuario === 'Control' && (
+        <ModalResolucionManual
+          isOpen={mostrarModalResolucionManual}
+          onClose={() => setMostrarModalResolucionManual(false)}
+          onSubmit={resolverManualmenteConProveedor}
+          tieneProveedor={true}
+          enviando={enviando}
+        />
       )}
 
     </div>

@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { registrarCambioEstado } from "@/lib/historialEstados";
 import ModalAsignarProveedor from "@/components/ModalAsignarProveedor";
+import ModalResolucionManual, { type FormularioResolucionManual } from "@/components/ModalResolucionManual";
 import { PALETA } from "@/lib/theme";
 
 type Adjunto = {
@@ -78,6 +79,7 @@ export default function ChatControlCliente() {
   const [motivoAnulacion, setMotivoAnulacion] = useState('');
   const [mostrarModalEspera, setMostrarModalEspera] = useState(false);
   const [motivoEspera, setMotivoEspera] = useState('');
+  const [mostrarModalResolucionManual, setMostrarModalResolucionManual] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const incidenciaId = params.id as string;
@@ -943,6 +945,112 @@ export default function ChatControlCliente() {
     }
   };
 
+  const resolverManualmenteSinProveedor = async (formulario: FormularioResolucionManual) => {
+    if (!autorId || !incidencia) return;
+
+    try {
+      setEnviando(true);
+
+      const { data: userData } = await supabase.auth.getUser();
+      const userEmail = userData.user?.email;
+
+      // 1. Subir documentos adjuntos (si hay)
+      const documentosUrls: string[] = [];
+      if (formulario.documentos && formulario.documentos.length > 0) {
+        for (const doc of formulario.documentos) {
+          const nombreArchivo = `${Date.now()}_${doc.name}`;
+          const ruta = `incidencias/${incidencia.num_solicitud}/resolucion_manual/${nombreArchivo}`;
+
+          const { data, error } = await supabase.storage
+            .from('incidencias')
+            .upload(ruta, doc);
+
+          if (!error && data) {
+            documentosUrls.push(ruta);
+          }
+        }
+      }
+
+      // 2. Obtener estado anterior
+      const estadoAnterior = incidencia.estado_cliente;
+
+      // 3. Actualizar estado de incidencia
+      const { error: updateError } = await supabase
+        .from("incidencias")
+        .update({ estado_cliente: "Resuelta" })
+        .eq("id", incidenciaId);
+
+      if (updateError) throw updateError;
+
+      // 4. Registrar cambio de estado
+      await registrarCambioEstado({
+        incidenciaId,
+        tipoEstado: 'cliente',
+        estadoAnterior,
+        estadoNuevo: 'Resuelta',
+        autorId,
+        motivo: 'Resolución manual por Control',
+        metadatos: {
+          accion: 'resolucion_manual',
+          proveedor_externo: formulario.proveedor_externo || 'No especificado',
+          importe: formulario.importe || 0,
+          num_documentos: documentosUrls.length
+        }
+      });
+
+      // 5. Crear comentario sistema con detalles
+      const cuerpoComentario = `Incidencia resuelta manualmente por Control.
+
+**Descripción:** ${formulario.descripcion}
+
+**Proveedor:** ${formulario.proveedor_externo || 'No especificado'}
+
+**Importe:** ${formulario.importe ? `${formulario.importe}€` : 'No especificado'}
+
+${documentosUrls.length > 0 ? `**Documentos adjuntos:** ${documentosUrls.length}` : ''}`;
+
+      const { data: comentarioData, error: comentarioError } = await supabase
+        .from("comentarios")
+        .insert({
+          incidencia_id: incidenciaId,
+          ambito: 'cliente',
+          autor_id: autorId,
+          autor_email: userEmail,
+          autor_rol: 'Control',
+          cuerpo: cuerpoComentario,
+          es_sistema: true
+        })
+        .select()
+        .single();
+
+      if (comentarioError) throw comentarioError;
+
+      // 6. Si hay documentos, crear adjuntos
+      if (documentosUrls.length > 0 && comentarioData) {
+        const adjuntos = documentosUrls.map((url, index) => ({
+          incidencia_id: incidenciaId,
+          comentario_id: comentarioData.id,
+          storage_key: url,
+          nombre_archivo: formulario.documentos![index].name,
+          tipo: 'documento'
+        }));
+
+        await supabase
+          .from("adjuntos")
+          .insert(adjuntos);
+      }
+
+      setMostrarModalResolucionManual(false);
+      cargarDatos(); // Recargar
+
+    } catch (error) {
+      console.error("Error en resolución manual:", error);
+      alert('Error al resolver la incidencia');
+    } finally {
+      setEnviando(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: PALETA.bg }}>
@@ -1190,6 +1298,17 @@ export default function ChatControlCliente() {
                     }}
                   >
                     Poner en espera
+                  </button>
+                )}
+
+                {/* Botón Resolver Manualmente - disponible sin proveedor en estados Abierta o En espera */}
+                {!tieneProveedorAsignado && (incidencia.estado_cliente === 'Abierta' || incidencia.estado_cliente === 'En espera') && (
+                  <button
+                    onClick={() => setMostrarModalResolucionManual(true)}
+                    className="px-3 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity"
+                    style={{ backgroundColor: PALETA.verdeClaro }}
+                  >
+                    🔧 Resolver Manualmente
                   </button>
                 )}
 
@@ -1678,6 +1797,15 @@ export default function ChatControlCliente() {
           </div>
         </div>
       )}
+
+      {/* Modal Resolución Manual */}
+      <ModalResolucionManual
+        isOpen={mostrarModalResolucionManual}
+        onClose={() => setMostrarModalResolucionManual(false)}
+        onSubmit={resolverManualmenteSinProveedor}
+        tieneProveedor={false}
+        enviando={enviando}
+      />
     </div>
   );
 }
