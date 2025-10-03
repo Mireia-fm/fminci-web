@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { PALETA } from "@/lib/theme";
 import { useAuth } from "@/contexts/AuthContext";
+import SearchableSelect from "@/components/SearchableSelect";
 
 // Tipos
 type Opcion = { value: string; label: string };
@@ -270,8 +271,6 @@ export default function NuevaIncidenciaPage() {
   // Estilos
   const inputBase =
     "w-full h-9 rounded border px-3 text-sm outline-none focus:ring-2 focus:ring-[#C9D7A7] placeholder:text-gray-500";
-  const selectBase =
-    "w-full h-9 rounded border px-3 text-sm outline-none focus:ring-2 focus:ring-[#C9D7A7] appearance-none pr-6 [&>option:not(:first-child)]:text-black [&>option:first-child]:text-gray-500";
   const textAreaBase =
     "min-h-[120px] w-full rounded border p-3 text-sm outline-none focus:ring-2 focus:ring-[#C9D7A7] placeholder:text-gray-500";
 
@@ -413,20 +412,14 @@ export default function NuevaIncidenciaPage() {
                 readOnly
               />
             ) : (
-              <div className="relative">
-                <select
-                  className={`${selectBase} ${centro ? 'text-black' : 'text-gray-500'}`}
-                  value={centro}
-                  onChange={(e) => setCentro(e.target.value)}
-                  aria-label="Seleccione un centro"
-                >
-                  {opcionesCentros.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <SearchableSelect
+                value={centro}
+                onChange={setCentro}
+                placeholder="Seleccione un centro"
+                options={opcionesCentros.filter(o => o.value !== "")}
+                className="w-full"
+                focusColor="#C9D7A7"
+              />
             )}
           </div>
 
@@ -436,39 +429,28 @@ export default function NuevaIncidenciaPage() {
               <label className="mb-1 block text-sm text-gray-600">
                 Catalogación <span className="text-red-500">*</span>
               </label>
-              <div className="relative">
-                <select
-                  className={`${selectBase} ${catalogacion ? 'text-black' : 'text-gray-500'}`}
-                  value={catalogacion}
-                  onChange={(e) => setCatalogacion(e.target.value)}
-                  aria-label="Seleccione una catalogación"
-                >
-                  {opcionesCatalogacion.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <SearchableSelect
+                value={catalogacion}
+                onChange={setCatalogacion}
+                placeholder="Seleccione catalogación"
+                options={opcionesCatalogacion.filter(o => o.value !== "")}
+                className="w-full"
+                focusColor="#C9D7A7"
+              />
             </div>
 
             <div>
               <label className="mb-1 block text-sm text-gray-600">
                 Prioridad <span className="text-red-500">*</span>
               </label>
-              <div className="relative">
-                <select
-                  className={`${selectBase} ${prioridad ? 'text-black' : 'text-gray-500'}`}
-                  value={prioridad}
-                  onChange={(e) => setPrioridad(e.target.value)}
-                >
-                  {opcionesPrioridad.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <SearchableSelect
+                value={prioridad}
+                onChange={setPrioridad}
+                placeholder="Seleccione la prioridad"
+                options={opcionesPrioridad.filter(o => o.value !== "")}
+                className="w-full"
+                focusColor="#C9D7A7"
+              />
             </div>
           </div>
 
