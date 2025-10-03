@@ -1280,7 +1280,6 @@ Solución aplicada: ${solucionAplicada}`;
       // 8. Limpiar formulario y cerrar modal
       setMostrarModalResolver(false);
       setSolucionAplicada('');
-      setImporteResolucion('');
       setImagenResolucion(null);
       setDocumentoResolucion(null);
       cargarDatos();
