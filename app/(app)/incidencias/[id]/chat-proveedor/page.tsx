@@ -89,6 +89,10 @@ export default function ChatProveedor() {
   const [busquedaIva, setBusquedaIva] = useState('');
   const [mostrarOpcionesIva, setMostrarOpcionesIva] = useState(false);
 
+  // Estados para resolución de incidencia
+  const [imagenResolucion, setImagenResolucion] = useState<File | null>(null);
+  const [documentoResolucion, setDocumentoResolucion] = useState<File | null>(null);
+
   const opcionesIva = [
     { valor: '0', texto: '0% (Exento)' },
     { valor: '4', texto: '4% (Superreducido)' },
