@@ -29,10 +29,24 @@ export async function obtenerUrlFirmada(
   }
 
   try {
+    // Limpiar la ruta: extraer solo el path si es una URL completa
+    let cleanPath = storageKey;
+
+    if (storageKey.startsWith('https://') || storageKey.startsWith('http://')) {
+      // Extraer path de URL completa
+      if (storageKey.includes('/storage/v1/object/public/incidencias/')) {
+        const parts = storageKey.split('/storage/v1/object/public/incidencias/');
+        cleanPath = parts.length > 1 ? parts[1] : storageKey;
+      } else if (storageKey.includes('/storage/v1/object/sign/incidencias/')) {
+        const parts = storageKey.split('/storage/v1/object/sign/incidencias/');
+        cleanPath = parts.length > 1 ? parts[1] : storageKey;
+      }
+    }
+
     // Intentar obtener URL firmada directamente
     const { data, error } = await supabase.storage
       .from(bucket)
-      .createSignedUrl(storageKey, expiresIn);
+      .createSignedUrl(cleanPath, expiresIn);
 
     if (error) {
       console.warn(`Error obteniendo URL firmada para ${storageKey}:`, error.message);
