@@ -26,6 +26,23 @@ type FormularioProveedor = {
   descripcion_proveedor: string;
   prioridad: string;
   estado_proveedor: string;
+  imagenes_excluidas?: string[]; // IDs de imágenes a excluir
+  documentos_incluidos?: string[]; // IDs de documentos del chat anterior a incluir
+};
+
+type Imagen = {
+  id: string;
+  storage_key: string;
+  nombre_archivo: string;
+  url?: string;
+};
+
+type Documento = {
+  id: string;
+  storage_key: string;
+  nombre_archivo: string;
+  autor_rol: string;
+  creado_en: string;
 };
 
 interface ModalAsignarProveedorProps {
@@ -34,6 +51,8 @@ interface ModalAsignarProveedorProps {
   onSubmit: (formulario: FormularioProveedor) => Promise<void>;
   descripcionInicial?: string;
   enviando?: boolean;
+  incidenciaId?: string;
+  esReasignacion?: boolean;
 }
 
 export default function ModalAsignarProveedor({
@@ -41,27 +60,42 @@ export default function ModalAsignarProveedor({
   onClose,
   onSubmit,
   descripcionInicial = "",
-  enviando = false
+  enviando = false,
+  incidenciaId,
+  esReasignacion = false
 }: ModalAsignarProveedorProps) {
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [formulario, setFormulario] = useState<FormularioProveedor>({
     proveedor_id: '',
     descripcion_proveedor: descripcionInicial,
     prioridad: '',
-    estado_proveedor: 'Abierta'
+    estado_proveedor: 'Abierta',
+    imagenes_excluidas: [],
+    documentos_incluidos: []
   });
+  const [imagenes, setImagenes] = useState<Imagen[]>([]);
+  const [documentos, setDocumentos] = useState<Documento[]>([]);
+  const [cargandoRecursos, setCargandoRecursos] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       cargarProveedores();
+      if (incidenciaId) {
+        cargarImagenes();
+        if (esReasignacion) {
+          cargarDocumentos();
+        }
+      }
       setFormulario(prev => ({
         ...prev,
         descripcion_proveedor: descripcionInicial,
         proveedor_id: '',
-        prioridad: ''
+        prioridad: '',
+        imagenes_excluidas: [],
+        documentos_incluidos: []
       }));
     }
-  }, [isOpen, descripcionInicial]);
+  }, [isOpen, descripcionInicial, incidenciaId, esReasignacion]);
 
   const cargarProveedores = async () => {
     try {
@@ -78,6 +112,101 @@ export default function ModalAsignarProveedor({
     } catch (error) {
       console.error("Error cargando proveedores:", error);
     }
+  };
+
+  const cargarImagenes = async () => {
+    if (!incidenciaId) return;
+
+    try {
+      setCargandoRecursos(true);
+
+      // Obtener imágenes principales de la incidencia
+      const { data: adjuntos } = await supabase
+        .from("adjuntos")
+        .select("id, storage_key, nombre_archivo")
+        .eq("incidencia_id", incidenciaId)
+        .eq("tipo", "imagen_principal");
+
+      if (adjuntos) {
+        // Obtener URLs firmadas para preview
+        const imagenesConUrl = await Promise.all(
+          adjuntos.map(async (adj) => {
+            const { data } = await supabase.storage
+              .from('incidencias-imagenes')
+              .createSignedUrl(adj.storage_key, 3600);
+
+            return {
+              id: adj.id,
+              storage_key: adj.storage_key,
+              nombre_archivo: adj.nombre_archivo || 'imagen.jpg',
+              url: data?.signedUrl
+            };
+          })
+        );
+
+        setImagenes(imagenesConUrl);
+      }
+    } catch (error) {
+      console.error("Error cargando imágenes:", error);
+    } finally {
+      setCargandoRecursos(false);
+    }
+  };
+
+  const cargarDocumentos = async () => {
+    if (!incidenciaId) return;
+
+    try {
+      // Obtener documentos del chat del proveedor anterior
+      const { data: adjuntos } = await supabase
+        .from("adjuntos")
+        .select("id, storage_key, nombre_archivo, comentarios!inner(autor_rol, creado_en)")
+        .eq("incidencia_id", incidenciaId)
+        .eq("tipo", "documento")
+        .order("comentarios(creado_en)", { ascending: false });
+
+      if (adjuntos) {
+        const docs = adjuntos.map((adj: any) => ({
+          id: adj.id,
+          storage_key: adj.storage_key,
+          nombre_archivo: adj.nombre_archivo || 'documento',
+          autor_rol: adj.comentarios?.autor_rol || 'Desconocido',
+          creado_en: adj.comentarios?.creado_en || ''
+        }));
+
+        setDocumentos(docs);
+      }
+    } catch (error) {
+      console.error("Error cargando documentos:", error);
+    }
+  };
+
+  const toggleImagenExcluida = (imagenId: string) => {
+    setFormulario(prev => {
+      const excluidas = prev.imagenes_excluidas || [];
+      const yaExcluida = excluidas.includes(imagenId);
+
+      return {
+        ...prev,
+        imagenes_excluidas: yaExcluida
+          ? excluidas.filter(id => id !== imagenId)
+          : [...excluidas, imagenId]
+      };
+    });
+  };
+
+  const toggleDocumentoIncluido = (documentoId: string) => {
+    setFormulario(prev => {
+      const incluidos = prev.documentos_incluidos || [];
+      const yaIncluido = incluidos.includes(documentoId);
+
+      return {
+        ...prev,
+        documentos_incluidos: yaIncluido
+          ? incluidos.filter(id => id !== documentoId)
+          : [...incluidos, documentoId]
+      };
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -98,13 +227,13 @@ export default function ModalAsignarProveedor({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
       <div
-        className="rounded-lg p-8 max-w-lg w-full mx-4 shadow"
+        className="rounded-lg p-8 max-w-3xl w-full mx-4 shadow my-8"
         style={{ backgroundColor: PALETA.card }}
       >
         <h3 className="text-xl font-semibold mb-6" style={{ color: PALETA.textoOscuro }}>
-          Asignar Incidencia a Proveedor
+          {esReasignacion ? 'Reasignar Incidencia a Proveedor' : 'Asignar Incidencia a Proveedor'}
         </h3>
 
         <form onSubmit={handleSubmit}>
@@ -170,6 +299,101 @@ export default function ModalAsignarProveedor({
                 focusColor={PALETA.verdeClaro}
               />
             </div>
+
+            {/* Gestión de Imágenes */}
+            {imagenes.length > 0 && (
+              <div className="border rounded-lg p-4" style={{ borderColor: PALETA.verdeClaro }}>
+                <h4 className="font-semibold text-sm mb-3" style={{ color: PALETA.textoOscuro }}>
+                  Imágenes de la Incidencia
+                </h4>
+                <p className="text-xs mb-3" style={{ color: '#6b7280' }}>
+                  Selecciona las imágenes que NO quieres compartir con el proveedor
+                </p>
+
+                {cargandoRecursos ? (
+                  <p className="text-sm text-gray-500">Cargando imágenes...</p>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3">
+                    {imagenes.map((imagen) => {
+                      const excluida = formulario.imagenes_excluidas?.includes(imagen.id);
+                      return (
+                        <div
+                          key={imagen.id}
+                          className="relative border rounded p-2 cursor-pointer transition-all"
+                          style={{
+                            borderColor: excluida ? '#ef4444' : PALETA.verdeClaro,
+                            opacity: excluida ? 0.5 : 1,
+                            backgroundColor: excluida ? '#fef2f2' : 'white'
+                          }}
+                          onClick={() => toggleImagenExcluida(imagen.id)}
+                        >
+                          {imagen.url && (
+                            <img
+                              src={imagen.url}
+                              alt={imagen.nombre_archivo}
+                              className="w-full h-32 object-cover rounded mb-2"
+                            />
+                          )}
+                          <p className="text-xs truncate" style={{ color: PALETA.textoOscuro }}>
+                            {imagen.nombre_archivo}
+                          </p>
+                          {excluida && (
+                            <div className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded">
+                              No incluir
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Documentos del Chat Anterior (solo en reasignación) */}
+            {esReasignacion && documentos.length > 0 && (
+              <div className="border rounded-lg p-4" style={{ borderColor: PALETA.verdeClaro }}>
+                <h4 className="font-semibold text-sm mb-3" style={{ color: PALETA.textoOscuro }}>
+                  Documentos del Proveedor Anterior
+                </h4>
+                <p className="text-xs mb-3" style={{ color: '#6b7280' }}>
+                  Selecciona los documentos que quieres compartir con el nuevo proveedor
+                </p>
+
+                <div className="space-y-2">
+                  {documentos.map((doc) => {
+                    const incluido = formulario.documentos_incluidos?.includes(doc.id);
+                    return (
+                      <div
+                        key={doc.id}
+                        className="flex items-center gap-3 p-3 border rounded cursor-pointer transition-all hover:bg-gray-50"
+                        style={{
+                          borderColor: incluido ? PALETA.verdeClaro : '#e5e7eb',
+                          backgroundColor: incluido ? '#f0f9ff' : 'white'
+                        }}
+                        onClick={() => toggleDocumentoIncluido(doc.id)}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={incluido}
+                          onChange={() => {}}
+                          className="w-4 h-4"
+                          style={{ accentColor: PALETA.verdeClaro }}
+                        />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium" style={{ color: PALETA.textoOscuro }}>
+                            {doc.nombre_archivo}
+                          </p>
+                          <p className="text-xs" style={{ color: '#6b7280' }}>
+                            Subido por {doc.autor_rol} • {new Date(doc.creado_en).toLocaleDateString()}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="flex justify-end gap-3 mt-8">

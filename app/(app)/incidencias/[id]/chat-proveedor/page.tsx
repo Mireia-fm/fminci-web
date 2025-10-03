@@ -438,7 +438,8 @@ export default function ChatProveedor() {
           .from("adjuntos")
           .select("*")
           .eq("incidencia_id", incidenciaId)
-          .eq("categoria", "imagen_principal");
+          .eq("categoria", "imagen_principal")
+          .eq("visible_proveedor", true); // Solo mostrar imágenes visibles para el proveedor
 
         adjuntosPrincipales = adjuntosData || [];
 

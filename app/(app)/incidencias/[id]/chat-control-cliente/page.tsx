@@ -577,7 +577,14 @@ export default function ChatControlCliente() {
     setMostrarModalProveedor(false);
   };
 
-  const asignarProveedorCompleto = async (formularioProveedor: { proveedor_id: string; descripcion_proveedor: string; prioridad: string; estado_proveedor: string }) => {
+  const asignarProveedorCompleto = async (formularioProveedor: {
+    proveedor_id: string;
+    descripcion_proveedor: string;
+    prioridad: string;
+    estado_proveedor: string;
+    imagenes_excluidas?: string[];
+    documentos_incluidos?: string[];
+  }) => {
     if (!formularioProveedor.proveedor_id) return;
 
     try {
@@ -681,6 +688,58 @@ export default function ChatControlCliente() {
           prioridad: formularioProveedor.prioridad
         }
       });
+
+      // Procesar imágenes excluidas (marcarlas como ocultas para el proveedor)
+      if (formularioProveedor.imagenes_excluidas && formularioProveedor.imagenes_excluidas.length > 0) {
+        for (const imagenId of formularioProveedor.imagenes_excluidas) {
+          await supabase
+            .from("adjuntos")
+            .update({ visible_proveedor: false })
+            .eq("id", imagenId);
+        }
+      }
+
+      // Procesar documentos incluidos (copiarlos al chat del nuevo proveedor)
+      if (formularioProveedor.documentos_incluidos && formularioProveedor.documentos_incluidos.length > 0) {
+        for (const docId of formularioProveedor.documentos_incluidos) {
+          // Obtener el adjunto original
+          const { data: adjunto } = await supabase
+            .from("adjuntos")
+            .select("storage_key, nombre_archivo, comentario_id")
+            .eq("id", docId)
+            .single();
+
+          if (adjunto) {
+            // Crear comentario del sistema con el documento
+            const { data: comentario, error: comentarioError } = await supabase
+              .from("comentarios")
+              .insert({
+                incidencia_id: incidenciaId,
+                ambito: 'proveedor',
+                autor_id: asignadoPorId,
+                autor_email: userEmail,
+                autor_rol: 'Control',
+                cuerpo: `Documento del proveedor anterior incluido por Control.`,
+                es_sistema: true
+              })
+              .select()
+              .single();
+
+            if (comentario && !comentarioError) {
+              // Asociar el adjunto existente al nuevo comentario
+              await supabase
+                .from("adjuntos")
+                .insert({
+                  incidencia_id: incidenciaId,
+                  comentario_id: comentario.id,
+                  storage_key: adjunto.storage_key,
+                  nombre_archivo: adjunto.nombre_archivo,
+                  tipo: 'documento'
+                });
+            }
+          }
+        }
+      }
 
       // Obtener nombre del proveedor para el comentario
       const { data: proveedor } = await supabase
@@ -1444,6 +1503,8 @@ export default function ChatControlCliente() {
         onSubmit={asignarProveedorCompleto}
         descripcionInicial={incidencia?.descripcion || ''}
         enviando={enviando}
+        incidenciaId={incidenciaId}
+        esReasignacion={tieneProveedorAnulado}
       />
 
       {/* Modal para anular incidencia */}
