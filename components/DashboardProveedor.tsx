@@ -14,7 +14,7 @@ type Notificacion = {
   descripcion: string;
   fecha_asignacion: string;
   institucion_nombre?: string;
-  tipo: 'nueva' | 'revision';
+  tipo: 'nueva' | 'revision' | 'anulacion';
 };
 
 export default function DashboardProveedor() {
@@ -84,7 +84,7 @@ export default function DashboardProveedor() {
           descripcion: notif.proveedor_casos?.descripcion_proveedor || notif.incidencias?.descripcion || "",
           fecha_asignacion: notif.fecha_creacion || '',
           institucion_nombre: notif.incidencias?.instituciones?.nombre || notif.incidencias?.centro,
-          tipo: (notif.tipo_notificacion === 'revision' ? 'revision' : 'nueva') as 'nueva' | 'revision'
+          tipo: (notif.tipo_notificacion === 'revision' ? 'revision' : notif.tipo_notificacion === 'anulacion' ? 'anulacion' : 'nueva') as 'nueva' | 'revision' | 'anulacion'
         }));
 
         setNotificaciones(notificacionesFormateadas);
@@ -183,11 +183,13 @@ export default function DashboardProveedor() {
                         #{notif.num_solicitud}
                       </span>
                       <span className={`text-xs px-2 py-1 rounded ${
-                        notif.tipo === 'revision'
+                        notif.tipo === 'anulacion'
+                          ? 'bg-gray-200 text-gray-700'
+                          : notif.tipo === 'revision'
                           ? 'bg-red-100 text-red-800'
                           : 'bg-orange-100 text-orange-800'
                       }`}>
-                        {notif.tipo === 'revision' ? 'REQUIERE REVISIÓN' : 'NUEVA'}
+                        {notif.tipo === 'anulacion' ? 'ANULADA' : notif.tipo === 'revision' ? 'REQUIERE REVISIÓN' : 'NUEVA'}
                       </span>
                     </div>
                     <p className="text-gray-700 text-sm mb-2">

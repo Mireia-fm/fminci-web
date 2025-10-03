@@ -396,13 +396,15 @@ export default function ChatProveedor() {
           asignado = true;
 
           // Obtener datos del proveedor (fecha de asignación, estado y prioridad)
+          // Buscar el caso más reciente (activo o anulado)
           console.log('Buscando proveedor_casos para incidencia:', incidenciaId);
 
           const { data: proveedorCaso, error: proveedorError } = await supabase
             .from("proveedor_casos")
             .select("asignado_en, estado_proveedor, prioridad, descripcion_proveedor, activo")
             .eq("incidencia_id", incidenciaId)
-            .eq("activo", true)
+            .order("asignado_en", { ascending: false })
+            .limit(1)
             .maybeSingle();
 
           console.log('Resultado proveedor_casos:', { proveedorCaso, proveedorError });
@@ -1511,11 +1513,6 @@ Notas adicionales: ${notasAdicionales}`;
       const { data: userData } = await supabase.auth.getUser();
       const userEmail = userData.user?.email;
       const fechaAnulacion = new Date();
-      const fechaFormateada = fechaAnulacion.toLocaleDateString('es-ES', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
 
       // 1. Obtener información del proveedor antes de anular
       const { data: proveedorInfo } = await supabase
@@ -1577,7 +1574,7 @@ Notas adicionales: ${notasAdicionales}`;
       }
 
       // 5. Comentario en el chat del proveedor (mantener historial)
-      const mensajeAnulacion = `🚫 Asignación anulada por Control el ${fechaFormateada}.\n\nMotivo: ${motivoAnulacion}\n\nTodas las citas programadas han sido canceladas.`;
+      const mensajeAnulacion = `Asignación anulada por Control. Motivo: ${motivoAnulacion}`;
 
       await supabase
         .from("comentarios")
