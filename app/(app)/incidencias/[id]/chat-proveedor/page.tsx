@@ -2214,7 +2214,7 @@ Solución aplicada: ${solucionAplicada}`;
                   {estado === "Anulada" && (
                     <button
                       type="button"
-                      onClick={() => router.push(`/control/incidencias?asignar=${incidenciaId}`)}
+                      onClick={() => router.push(`/incidencias/${incidenciaId}/chat-control-cliente`)}
                       className="px-4 py-2 text-white rounded hover:opacity-90 transition-opacity"
                       style={{ backgroundColor: PALETA.verdeClaro }}
                     >
