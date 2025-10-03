@@ -1168,10 +1168,6 @@ Documento adjunto: ${documentoPresupuesto.name}`;
         accion: 'resolver_incidencia'
       };
 
-      if (!tieneOfertaAprobada && importeResolucion) {
-        metadatosResolucion.importe_resolucion = parseFloat(importeResolucion);
-      }
-
 
       // Registrar cambios de estado individualmente
       await registrarCambioEstado({
@@ -1195,13 +1191,8 @@ Documento adjunto: ${documentoPresupuesto.name}`;
       });
 
       // 5. Crear comentario con información de resolución
-      let mensajeSolucion = `Incidencia resuelta
+      const mensajeSolucion = `Incidencia resuelta
 Solución aplicada: ${solucionAplicada}`;
-
-      if (!tieneOfertaAprobada && importeResolucion) {
-        mensajeSolucion += `
-Importe total sin IVA: ${importeResolucion}€`;
-      }
 
 
       const { data: comentarioCreado, error: comentarioError } = await supabase
@@ -3058,7 +3049,6 @@ Importe total sin IVA: ${importeResolucion}€`;
                 onClick={() => {
                   setMostrarModalResolver(false);
                   setSolucionAplicada('');
-                  setImporteResolucion('');
                   setImagenResolucion(null);
                   setDocumentoResolucion(null);
                 }}
