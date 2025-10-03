@@ -1514,10 +1514,10 @@ Notas adicionales: ${notasAdicionales}`;
       const userEmail = userData.user?.email;
       const fechaAnulacion = new Date();
 
-      // 1. Obtener información del proveedor antes de anular
+      // 1. Obtener información del proveedor y estado anterior antes de anular
       const { data: proveedorInfo } = await supabase
         .from("proveedor_casos")
-        .select("proveedor_id")
+        .select("proveedor_id, estado_proveedor")
         .eq("incidencia_id", incidenciaId)
         .eq("activo", true)
         .single();
@@ -1525,6 +1525,8 @@ Notas adicionales: ${notasAdicionales}`;
       if (!proveedorInfo) {
         throw new Error("No se encontró información del proveedor");
       }
+
+      const estadoAnterior = proveedorInfo.estado_proveedor;
 
       // 2. Cancelar todas las citas programadas de ESTA incidencia específica
       const { error: citasError } = await supabase
@@ -1573,7 +1575,21 @@ Notas adicionales: ${notasAdicionales}`;
         // No lanzamos error para no bloquear la anulación
       }
 
-      // 5. Comentario en el chat del proveedor (mantener historial)
+      // 5. Registrar cambio de estado en el historial
+      await registrarCambioEstado({
+        incidenciaId,
+        tipoEstado: 'proveedor',
+        estadoAnterior,
+        estadoNuevo: 'Anulada',
+        autorId,
+        motivo: motivoAnulacion,
+        metadatos: {
+          accion: 'anular_proveedor',
+          citas_canceladas: true
+        }
+      });
+
+      // 6. Comentario en el chat del proveedor (mantener historial)
       const mensajeAnulacion = `Asignación anulada por Control. Motivo: ${motivoAnulacion}`;
 
       await supabase
@@ -1609,6 +1625,23 @@ Notas adicionales: ${notasAdicionales}`;
       const { data: userData } = await supabase.auth.getUser();
       const userEmail = userData.user?.email;
 
+      // 0. Obtener estados anteriores
+      const { data: estadosActuales } = await supabase
+        .from("proveedor_casos")
+        .select("estado_proveedor")
+        .eq("incidencia_id", incidenciaId)
+        .eq("activo", true)
+        .single();
+
+      const { data: incidenciaActual } = await supabase
+        .from("incidencias")
+        .select("estado_cliente")
+        .eq("id", incidenciaId)
+        .single();
+
+      const estadoProveedorAnterior = estadosActuales?.estado_proveedor || null;
+      const estadoClienteAnterior = incidenciaActual?.estado_cliente || null;
+
       // 1. Cambiar estado_proveedor a "Cerrada"
       await supabase
         .from("proveedor_casos")
@@ -1622,7 +1655,32 @@ Notas adicionales: ${notasAdicionales}`;
         .update({ estado_cliente: "Cerrada" })
         .eq("id", incidenciaId);
 
-      // 3. Comentario para ambos chats
+      // 3. Registrar cambios de estado en el historial
+      await registrarCambioEstado({
+        incidenciaId,
+        tipoEstado: 'proveedor',
+        estadoAnterior: estadoProveedorAnterior,
+        estadoNuevo: 'Cerrada',
+        autorId,
+        motivo: motivoCierre || 'Incidencia cerrada',
+        metadatos: {
+          accion: 'cerrar_incidencia'
+        }
+      });
+
+      await registrarCambioEstado({
+        incidenciaId,
+        tipoEstado: 'cliente',
+        estadoAnterior: estadoClienteAnterior,
+        estadoNuevo: 'Cerrada',
+        autorId,
+        motivo: motivoCierre || 'Incidencia cerrada',
+        metadatos: {
+          accion: 'cerrar_incidencia'
+        }
+      });
+
+      // 4. Comentario para ambos chats
       const mensajeCierre = motivoCierre.trim()
         ? `Incidencia cerrada por Control. ${motivoCierre}`
         : 'Incidencia cerrada por Control.';

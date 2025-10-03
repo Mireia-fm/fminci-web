@@ -19,6 +19,7 @@ type Presupuesto = {
   estado: string;
   creado_en: string;
   creado_por: string;
+  comentarios_revision?: string;
   instituciones: {
     nombre: string;
   };
@@ -255,10 +256,13 @@ export default function PresupuestosPage() {
     try {
       setEnviando(true);
 
-      // 1. Cambiar estado del presupuesto a "rechazado"
+      // 1. Cambiar estado del presupuesto a "rechazado" y guardar motivo
       const { error: presupuestoError } = await supabase
         .from("presupuestos")
-        .update({ estado: "rechazado" })
+        .update({
+          estado: "rechazado",
+          comentarios_revision: motivoRevision
+        })
         .eq("id", presupuestoParaRechazar.id);
 
       if (presupuestoError) {
@@ -294,7 +298,7 @@ export default function PresupuestosPage() {
         }
       });
 
-      // 4. Crear comentario del sistema con justificación
+      // 4. Crear comentario del sistema solo para el proveedor
       const { data: userData } = await supabase.auth.getUser();
       const userEmail = userData.user?.email;
 
@@ -302,7 +306,7 @@ export default function PresupuestosPage() {
         .from("comentarios")
         .insert({
           incidencia_id: presupuestoParaRechazar.incidencia_id,
-          ambito: 'ambos',
+          ambito: 'proveedor',
           autor_id: autorId,
           autor_email: userEmail,
           autor_rol: 'Control',
@@ -342,12 +346,11 @@ El proveedor debe enviar una nueva propuesta.`,
       setPresupuestoParaRechazar(null);
 
       // 7. Recargar datos
-      cargarDatos();
-      alert('Presupuesto mandado a revisar correctamente');
+      await cargarDatos();
 
     } catch (error) {
       console.error("Error rechazando presupuesto:", error);
-      alert('Error al rechazar el presupuesto');
+      alert('Error al rechazar el presupuesto. Por favor, intente de nuevo.');
     } finally {
       setEnviando(false);
     }
@@ -781,6 +784,33 @@ El proveedor debe enviar una nueva propuesta.`,
                 </div>
               </div>
 
+              {/* Motivo de revisión (solo si fue rechazado) */}
+              {presupuestoSeleccionado.estado === 'rechazado' && presupuestoSeleccionado.comentarios_revision && (
+                <div className="mb-6">
+                  <div
+                    className="border rounded-lg"
+                    style={{ borderColor: '#ef4444' }}
+                  >
+                    <div
+                      className="px-4 py-3 border-b"
+                      style={{
+                        backgroundColor: '#fef2f2',
+                        borderColor: '#ef4444'
+                      }}
+                    >
+                      <h4 className="font-semibold text-sm" style={{ color: '#dc2626' }}>
+                        MOTIVO DE RECHAZO
+                      </h4>
+                    </div>
+                    <div className="p-4 bg-red-50">
+                      <p className="text-sm" style={{ color: '#991b1b' }}>
+                        {presupuestoSeleccionado.comentarios_revision}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Documento adjunto */}
               {presupuestoSeleccionado.presupuesto_detallado_url && (
                 <div className="mb-6">
@@ -833,34 +863,44 @@ El proveedor debe enviar una nueva propuesta.`,
               )}
 
               {/* Botones de acción */}
-              {presupuestoSeleccionado.estado === 'pendiente_revision' && (
-                <div className="flex gap-3 justify-end">
-                  <button
-                    onClick={() => setMostrarModal(false)}
-                    className="px-4 py-2 text-sm rounded border hover:bg-gray-50 transition-colors"
-                    style={{ color: PALETA.textoOscuro, borderColor: '#d1d5db' }}
-                    disabled={enviando}
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    onClick={() => abrirModalMotivoRevision(presupuestoSeleccionado)}
-                    disabled={enviando}
-                    className="px-6 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity disabled:opacity-50"
-                    style={{ backgroundColor: '#d4a574' }}
-                  >
-                    {enviando ? 'Procesando...' : 'Mandar a revisar'}
-                  </button>
-                  <button
-                    onClick={() => aprobarPresupuesto(presupuestoSeleccionado)}
-                    disabled={enviando}
-                    className="px-6 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity disabled:opacity-50"
-                    style={{ backgroundColor: PALETA.verdeClaro }}
-                  >
-                    {enviando ? 'Procesando...' : 'Aprobar Presupuesto'}
-                  </button>
-                </div>
-              )}
+              <div className="flex gap-3 justify-between">
+                <button
+                  onClick={() => router.push(`/incidencias/${presupuestoSeleccionado.incidencia_id}/chat-proveedor`)}
+                  className="px-4 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity"
+                  style={{ backgroundColor: PALETA.verdeClaro }}
+                >
+                  Ir al chat del proveedor
+                </button>
+
+                {presupuestoSeleccionado.estado === 'pendiente_revision' && (
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setMostrarModal(false)}
+                      className="px-4 py-2 text-sm rounded border hover:bg-gray-50 transition-colors"
+                      style={{ color: PALETA.textoOscuro, borderColor: '#d1d5db' }}
+                      disabled={enviando}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={() => abrirModalMotivoRevision(presupuestoSeleccionado)}
+                      disabled={enviando}
+                      className="px-6 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity disabled:opacity-50"
+                      style={{ backgroundColor: '#d4a574' }}
+                    >
+                      {enviando ? 'Procesando...' : 'Mandar a revisar'}
+                    </button>
+                    <button
+                      onClick={() => aprobarPresupuesto(presupuestoSeleccionado)}
+                      disabled={enviando}
+                      className="px-6 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity disabled:opacity-50"
+                      style={{ backgroundColor: PALETA.verdeClaro }}
+                    >
+                      {enviando ? 'Procesando...' : 'Aprobar Presupuesto'}
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

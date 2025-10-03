@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { registrarCambioEstado } from "@/lib/historialEstados";
 import ModalAsignarProveedor from "@/components/ModalAsignarProveedor";
 import { PALETA } from "@/lib/theme";
 
@@ -596,6 +597,15 @@ export default function ChatControlCliente() {
         asignadoPorId = persona?.id;
       }
 
+      // Obtener estado anterior del cliente
+      const { data: incidenciaActual } = await supabase
+        .from("incidencias")
+        .select("estado_cliente")
+        .eq("id", incidenciaId)
+        .single();
+
+      const estadoClienteAnterior = incidenciaActual?.estado_cliente || null;
+
       // Verificar si ya existe un caso activo
       const { data: casoExistente } = await supabase
         .from("proveedor_casos")
@@ -644,6 +654,34 @@ export default function ChatControlCliente() {
         .update({ estado_cliente: "En tramitación" })
         .eq("id", incidenciaId);
 
+      // Registrar cambios de estado en el historial
+      await registrarCambioEstado({
+        incidenciaId,
+        tipoEstado: 'cliente',
+        estadoAnterior: estadoClienteAnterior,
+        estadoNuevo: 'En tramitación',
+        autorId: asignadoPorId,
+        motivo: 'Proveedor asignado',
+        metadatos: {
+          accion: casoExistente ? 'reasignar_proveedor' : 'asignar_proveedor',
+          proveedor_id: formularioProveedor.proveedor_id
+        }
+      });
+
+      await registrarCambioEstado({
+        incidenciaId,
+        tipoEstado: 'proveedor',
+        estadoAnterior: null,
+        estadoNuevo: formularioProveedor.estado_proveedor,
+        autorId: asignadoPorId,
+        motivo: casoExistente ? 'Proveedor reasignado' : 'Proveedor asignado',
+        metadatos: {
+          accion: casoExistente ? 'reasignar_proveedor' : 'asignar_proveedor',
+          proveedor_id: formularioProveedor.proveedor_id,
+          prioridad: formularioProveedor.prioridad
+        }
+      });
+
       // Obtener nombre del proveedor para el comentario
       const { data: proveedor } = await supabase
         .from("instituciones")
@@ -683,11 +721,33 @@ export default function ChatControlCliente() {
       const { data: userData } = await supabase.auth.getUser();
       const userEmail = userData.user?.email;
 
+      // 0. Obtener estado anterior
+      const { data: incidenciaActual } = await supabase
+        .from("incidencias")
+        .select("estado_cliente")
+        .eq("id", incidenciaId)
+        .single();
+
+      const estadoAnterior = incidenciaActual?.estado_cliente || null;
+
       // 1. Cambiar estado_cliente a "Anulada"
       await supabase
         .from("incidencias")
         .update({ estado_cliente: "Anulada" })
         .eq("id", incidenciaId);
+
+      // 1.1. Registrar cambio de estado
+      await registrarCambioEstado({
+        incidenciaId,
+        tipoEstado: 'cliente',
+        estadoAnterior,
+        estadoNuevo: 'Anulada',
+        autorId,
+        motivo: motivoAnulacion,
+        metadatos: {
+          accion: 'anular_incidencia'
+        }
+      });
 
       // 2. Comentario en el chat del cliente
       const mensajeAnulacion = `Incidencia anulada por Control. Motivo: ${motivoAnulacion}`;
@@ -724,11 +784,33 @@ export default function ChatControlCliente() {
       const { data: userData } = await supabase.auth.getUser();
       const userEmail = userData.user?.email;
 
+      // 0. Obtener estado anterior
+      const { data: incidenciaActual } = await supabase
+        .from("incidencias")
+        .select("estado_cliente")
+        .eq("id", incidenciaId)
+        .single();
+
+      const estadoAnterior = incidenciaActual?.estado_cliente || null;
+
       // 1. Cambiar estado_cliente a "En espera"
       await supabase
         .from("incidencias")
         .update({ estado_cliente: "En espera" })
         .eq("id", incidenciaId);
+
+      // 1.1. Registrar cambio de estado
+      await registrarCambioEstado({
+        incidenciaId,
+        tipoEstado: 'cliente',
+        estadoAnterior,
+        estadoNuevo: 'En espera',
+        autorId,
+        motivo: motivoEspera,
+        metadatos: {
+          accion: 'poner_en_espera'
+        }
+      });
 
       // 2. Comentario en el chat del cliente
       const mensajeEspera = `Incidencia puesta en espera por Control. Motivo: ${motivoEspera}`;
@@ -966,7 +1048,7 @@ export default function ChatControlCliente() {
               </h3>
 
               <div className="flex justify-center gap-4 flex-wrap">
-                {!tieneProveedorAsignado && incidencia.estado_cliente !== 'Anulada' && (
+                {!tieneProveedorAsignado && !tieneProveedorAnulado && incidencia.estado_cliente !== 'Anulada' && (
                   <button
                     onClick={abrirModalProveedor}
                     className="px-3 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity"
@@ -980,7 +1062,7 @@ export default function ChatControlCliente() {
                   <button
                     onClick={abrirModalProveedor}
                     className="px-3 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity"
-                    style={{ backgroundColor: PALETA.bg }}
+                    style={{ backgroundColor: PALETA.verdeClaro }}
                   >
                     Reasignar Proveedor
                   </button>
