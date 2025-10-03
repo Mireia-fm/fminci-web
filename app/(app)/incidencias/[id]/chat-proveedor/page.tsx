@@ -1510,6 +1510,12 @@ Notas adicionales: ${notasAdicionales}`;
 
       const { data: userData } = await supabase.auth.getUser();
       const userEmail = userData.user?.email;
+      const fechaAnulacion = new Date();
+      const fechaFormateada = fechaAnulacion.toLocaleDateString('es-ES', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
 
       // 1. Obtener información del proveedor antes de anular
       const { data: proveedorInfo } = await supabase
@@ -1519,14 +1525,31 @@ Notas adicionales: ${notasAdicionales}`;
         .eq("activo", true)
         .single();
 
-      // 2. Marcar proveedor_caso como anulado e inactivo
+      if (!proveedorInfo) {
+        throw new Error("No se encontró información del proveedor");
+      }
+
+      // 2. Cancelar todas las citas programadas de ESTA incidencia específica
+      const { error: citasError } = await supabase
+        .from("citas_proveedores")
+        .update({ estado: 'cancelada' })
+        .eq("incidencia_id", incidenciaId)
+        .eq("proveedor_id", proveedorInfo.proveedor_id)
+        .eq("estado", "programada");
+
+      if (citasError) {
+        console.error("Error cancelando citas:", citasError);
+        // No lanzamos error, solo registramos - no debería bloquear la anulación
+      }
+
+      // 3. Marcar proveedor_caso como anulado e inactivo
       const { error: updateError } = await supabase
         .from("proveedor_casos")
         .update({
           estado_proveedor: "Anulada",
           activo: false,
           motivo_anulacion: motivoAnulacion,
-          anulado_en: new Date().toISOString(),
+          anulado_en: fechaAnulacion.toISOString(),
           anulado_por: autorId
         })
         .eq("incidencia_id", incidenciaId)
@@ -1537,21 +1560,24 @@ Notas adicionales: ${notasAdicionales}`;
         throw updateError;
       }
 
-      // 3. Crear notificación para el proveedor usando la tabla correcta
-      if (proveedorInfo?.proveedor_id) {
-        await supabase
-          .from("proveedor_notificaciones")
-          .insert({
-            proveedor_id: proveedorInfo.proveedor_id,
-            incidencia_id: incidenciaId,
-            tipo_notificacion: 'anulacion',
-            notificacion_vista: false,
-            fecha_creacion: new Date().toISOString()
-          });
+      // 4. Crear notificación para el proveedor
+      const { error: notifError } = await supabase
+        .from("proveedor_notificaciones")
+        .insert({
+          proveedor_id: proveedorInfo.proveedor_id,
+          incidencia_id: incidenciaId,
+          tipo_notificacion: 'anulacion',
+          notificacion_vista: false,
+          fecha_creacion: fechaAnulacion.toISOString()
+        });
+
+      if (notifError) {
+        console.error("Error creando notificación:", notifError);
+        // No lanzamos error para no bloquear la anulación
       }
 
-      // 4. Comentario en el chat del proveedor (mantener historial)
-      const mensajeAnulacion = `Asignación anulada por Control. Motivo: ${motivoAnulacion}`;
+      // 5. Comentario en el chat del proveedor (mantener historial)
+      const mensajeAnulacion = `🚫 Asignación anulada por Control el ${fechaFormateada}.\n\nMotivo: ${motivoAnulacion}\n\nTodas las citas programadas han sido canceladas.`;
 
       await supabase
         .from("comentarios")
@@ -1571,6 +1597,7 @@ Notas adicionales: ${notasAdicionales}`;
 
     } catch (error) {
       console.error("Error anulando incidencia:", error);
+      alert("Error al anular la incidencia. Por favor, intente de nuevo.");
     } finally {
       setEnviando(false);
     }
