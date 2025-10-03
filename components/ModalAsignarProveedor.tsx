@@ -125,7 +125,8 @@ export default function ModalAsignarProveedor({
         .from("adjuntos")
         .select("id, storage_key, nombre_archivo")
         .eq("incidencia_id", incidenciaId)
-        .eq("tipo", "imagen_principal");
+        .eq("tipo", "imagen")
+        .eq("categoria", "imagen_principal");
 
       if (adjuntos) {
         // Obtener URLs firmadas para preview

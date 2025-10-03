@@ -250,20 +250,28 @@ export default function NuevaIncidenciaPage() {
           }
 
           // Crear registro en tabla adjuntos
-          const { error: adjuntoError } = await supabase
+          const { data: adjuntoData, error: adjuntoError } = await supabase
             .from("adjuntos")
             .insert({
               incidencia_id: data.id,
-              tipo: "imagen_principal",
+              tipo: "imagen",
               categoria: "imagen_principal",
               storage_key: imagenUrl,
               nombre_archivo: imagen.name,
               visible_proveedor: true
-            });
+            })
+            .select();
 
           if (adjuntoError) {
-            console.error("Error creando registro en adjuntos:", adjuntoError);
-            // No fallar la creación por esto, solo logear el error
+            console.error("❌ Error creando registro en adjuntos:", adjuntoError);
+            console.error("Detalles del error:", {
+              message: adjuntoError.message,
+              details: adjuntoError.details,
+              hint: adjuntoError.hint,
+              code: adjuntoError.code
+            });
+          } else {
+            console.log("✅ Registro en adjuntos creado exitosamente:", adjuntoData);
           }
         } catch (imagenError) {
           console.error("Error subiendo imagen:", imagenError);
