@@ -401,7 +401,7 @@ export default function ChatProveedor() {
 
           const { data: proveedorCaso, error: proveedorError } = await supabase
             .from("proveedor_casos")
-            .select("asignado_en, fecha, hora, estado_proveedor, prioridad, descripcion_proveedor, activo")
+            .select("asignado_en, estado_proveedor, prioridad, descripcion_proveedor, activo")
             .eq("incidencia_id", incidenciaId)
             .order("asignado_en", { ascending: false })
             .limit(1)
@@ -410,8 +410,8 @@ export default function ChatProveedor() {
           console.log('Resultado proveedor_casos:', { proveedorCaso, proveedorError });
 
           if (proveedorCaso) {
-            if (proveedorCaso.fecha && proveedorCaso.hora) {
-              setFechaAsignacionProveedor(`${proveedorCaso.fecha} ${proveedorCaso.hora}`);
+            if (proveedorCaso.asignado_en) {
+              setFechaAsignacionProveedor(proveedorCaso.asignado_en);
             }
             estadoProveedor = proveedorCaso.estado_proveedor;
             prioridadProveedor = proveedorCaso.prioridad;
@@ -2002,7 +2002,13 @@ Solución aplicada: ${solucionAplicada}`;
                           Fecha de Asignación:
                         </td>
                         <td className="py-2" style={{ color: PALETA.textoOscuro }}>
-                          {fechaAsignacionProveedor ? fechaAsignacionProveedor : '-'}
+                          {fechaAsignacionProveedor ? new Date(fechaAsignacionProveedor).toLocaleString('es-ES', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          }) : '-'}
                         </td>
                       </tr>
 
