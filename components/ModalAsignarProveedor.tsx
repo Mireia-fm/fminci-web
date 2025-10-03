@@ -132,7 +132,7 @@ export default function ModalAsignarProveedor({
         const imagenesConUrl = await Promise.all(
           adjuntos.map(async (adj) => {
             const { data } = await supabase.storage
-              .from('incidencias-imagenes')
+              .from('incidencias')
               .createSignedUrl(adj.storage_key, 3600);
 
             return {

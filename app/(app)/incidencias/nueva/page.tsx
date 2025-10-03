@@ -248,6 +248,23 @@ export default function NuevaIncidenciaPage() {
             console.error("Error actualizando imagen_url:", updateError);
             // No fallar la creación por esto, solo logear el error
           }
+
+          // Crear registro en tabla adjuntos
+          const { error: adjuntoError } = await supabase
+            .from("adjuntos")
+            .insert({
+              incidencia_id: data.id,
+              tipo: "imagen_principal",
+              categoria: "imagen_principal",
+              storage_key: imagenUrl,
+              nombre_archivo: imagen.name,
+              visible_proveedor: true
+            });
+
+          if (adjuntoError) {
+            console.error("Error creando registro en adjuntos:", adjuntoError);
+            // No fallar la creación por esto, solo logear el error
+          }
         } catch (imagenError) {
           console.error("Error subiendo imagen:", imagenError);
           // No fallar la creación por esto
