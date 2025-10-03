@@ -249,11 +249,46 @@ export default function NuevaIncidenciaPage() {
             // No fallar la creación por esto, solo logear el error
           }
 
-          // Crear registro en tabla adjuntos
+          // Obtener datos del usuario para el comentario
+          const { data: userData } = await supabase.auth.getUser();
+          const userEmail = userData.user?.email;
+
+          // Obtener persona_id
+          let personaId = null;
+          if (userEmail) {
+            const { data: persona } = await supabase
+              .from("personas")
+              .select("id")
+              .eq("email", userEmail)
+              .maybeSingle();
+            personaId = persona?.id;
+          }
+
+          // Crear comentario del sistema para la imagen principal
+          const { data: comentarioData, error: comentarioError } = await supabase
+            .from("comentarios")
+            .insert({
+              incidencia_id: data.id,
+              ambito: 'cliente',
+              autor_id: personaId,
+              autor_email: userEmail,
+              autor_rol: 'Cliente',
+              cuerpo: 'Imagen principal de la incidencia',
+              es_sistema: true
+            })
+            .select()
+            .single();
+
+          if (comentarioError) {
+            console.error("Error creando comentario para imagen:", comentarioError);
+          }
+
+          // Crear registro en tabla adjuntos vinculado al comentario
           const { data: adjuntoData, error: adjuntoError } = await supabase
             .from("adjuntos")
             .insert({
               incidencia_id: data.id,
+              comentario_id: comentarioData?.id || null,
               tipo: "imagen",
               categoria: "imagen_principal",
               storage_key: imagenUrl,
