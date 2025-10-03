@@ -166,12 +166,12 @@ export default function ModalAsignarProveedor({
         .order("comentarios(creado_en)", { ascending: false });
 
       if (adjuntos) {
-        const docs = adjuntos.map((adj: any) => ({
+        const docs = adjuntos.map((adj) => ({
           id: adj.id,
           storage_key: adj.storage_key,
           nombre_archivo: adj.nombre_archivo || 'documento',
-          autor_rol: adj.comentarios?.autor_rol || 'Desconocido',
-          creado_en: adj.comentarios?.creado_en || ''
+          autor_rol: (adj as { comentarios?: { autor_rol?: string } }).comentarios?.autor_rol || 'Desconocido',
+          creado_en: (adj as { comentarios?: { creado_en?: string } }).comentarios?.creado_en || ''
         }));
 
         setDocumentos(docs);
