@@ -2217,11 +2217,12 @@ Importe total sin IVA: ${importeResolucion}€`;
 
             {(() => {
               const estado = incidencia.estado_proveedor;
+              const incidenciaCerrada = incidencia.estado_cliente === "Cerrada" && estado === "Cerrada";
 
               return (
                 <div className="flex gap-3 justify-center flex-wrap">
-                  {/* Botón Anular - siempre disponible si no está anulada o cerrada */}
-                  {estado !== "Anulada" && estado !== "Cerrada" && (
+                  {/* Botón Anular - siempre disponible hasta que la incidencia esté completamente cerrada */}
+                  {!incidenciaCerrada && estado !== "Anulada" && (
                     <button
                       type="button"
                       onClick={() => setMostrarModalAnular(true)}
