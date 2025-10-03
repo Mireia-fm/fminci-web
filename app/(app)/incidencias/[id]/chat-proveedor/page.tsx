@@ -1958,24 +1958,6 @@ Solución aplicada: ${solucionAplicada}`;
 
                       <tr style={{ backgroundColor: `${PALETA.headerTable}20` }}>
                         <td className="py-2 font-semibold" style={{ color: PALETA.textoOscuro }}>
-                          Fecha/Hora:
-                        </td>
-                        <td className="py-2 font-mono" style={{ color: PALETA.textoOscuro }}>
-                          {fechaAsignacionProveedor
-                            ? new Date(fechaAsignacionProveedor).toLocaleString('es-ES', {
-                                year: 'numeric',
-                                month: '2-digit',
-                                day: '2-digit',
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              })
-                            : "-"
-                          }
-                        </td>
-                      </tr>
-
-                      <tr style={{ backgroundColor: `${PALETA.headerTable}20` }}>
-                        <td className="py-2 font-semibold" style={{ color: PALETA.textoOscuro }}>
                           Estado:
                         </td>
                         <td className="py-2">
@@ -1993,7 +1975,15 @@ Solución aplicada: ${solucionAplicada}`;
                           Fecha de Creación:
                         </td>
                         <td className="py-2" style={{ color: PALETA.textoOscuro }}>
-                          {incidencia.fecha && incidencia.hora ? `${incidencia.fecha} ${incidencia.hora}` : '-'}
+                          {incidencia.fecha && incidencia.hora
+                            ? new Date(`${incidencia.fecha}T${incidencia.hora}`).toLocaleString('es-ES', {
+                                day: '2-digit',
+                                month: '2-digit',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })
+                            : '-'}
                         </td>
                       </tr>
 
