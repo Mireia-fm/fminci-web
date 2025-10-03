@@ -398,7 +398,11 @@ export default function IncidenciasListado() {
 
     const coincideEstado = !estadoAFiltrar ||
       (perfil?.rol === "Proveedor" ?
-        (inc.proveedor_casos && inc.proveedor_casos.some(pc => pc.activo && pc.estado_proveedor === estadoAFiltrar)) :
+        (inc.proveedor_casos && inc.proveedor_casos.some(pc =>
+          estadoAFiltrar === "Anulada"
+            ? pc.activo === false
+            : (pc.activo && pc.estado_proveedor === estadoAFiltrar)
+        )) :
         inc.estado_cliente?.trim() === estadoAFiltrar?.trim()
       );
 
@@ -408,7 +412,11 @@ export default function IncidenciasListado() {
     const coincideNumero = !filtroNumero ||
       inc.num_solicitud.toLowerCase().includes(filtroNumero.toLowerCase());
     const coincideEstadoProveedor = !filtroEstadoProveedor ||
-      (inc.proveedor_casos && inc.proveedor_casos.some(pc => pc.activo && pc.estado_proveedor === filtroEstadoProveedor));
+      (inc.proveedor_casos && inc.proveedor_casos.some(pc =>
+        filtroEstadoProveedor === "Anulada"
+          ? pc.activo === false
+          : (pc.activo && pc.estado_proveedor === filtroEstadoProveedor)
+      ));
     const coincideFecha = !filtroFecha ||
       inc.fecha === filtroFecha;
     const coincideCatalogacion = !filtroCatalogacion ||

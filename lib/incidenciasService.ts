@@ -57,6 +57,7 @@ export async function obtenerTodasIncidencias(): Promise<Incidencia[]> {
 
 /**
  * Obtiene incidencias asignadas a un proveedor específico
+ * Incluye TODAS las incidencias (activas y anuladas)
  */
 export async function obtenerIncidenciasProveedor(proveedorId: string): Promise<Incidencia[]> {
   const { data, error } = await supabase
@@ -78,7 +79,6 @@ export async function obtenerIncidenciasProveedor(proveedorId: string): Promise<
       )
     `)
     .eq("proveedor_casos.proveedor_id", proveedorId)
-    .eq("proveedor_casos.activo", true)
     .order("fecha_creacion", { ascending: false });
 
   if (error) {
@@ -171,12 +171,11 @@ export async function obtenerConteoPorEstado(
   tipoEstado: "cliente" | "proveedor" = "cliente"
 ): Promise<{ estado: string; n: number }[]> {
   if (tipoEstado === "proveedor") {
-    // Para vista proveedor: contar CASOS de proveedor activos, no incidencias
-    // Esto permite que una incidencia tenga múltiples proveedores
+    // Para vista proveedor: contar TODOS los CASOS (activos y anulados)
+    // Esto permite que el proveedor vea su historial completo
     const { data, error } = await supabase
       .from("proveedor_casos")
-      .select("estado_proveedor")
-      .eq("activo", true);
+      .select("estado_proveedor, activo");
 
     if (error || !data) {
       console.error("Error cargando casos de proveedor:", error);
@@ -184,9 +183,11 @@ export async function obtenerConteoPorEstado(
     }
 
     // Contar por estado
+    // - Casos activos (activo=true): se cuentan por su estado_proveedor
+    // - Casos anulados (activo=false): se cuentan como "Anulada"
     const conteo: Record<string, number> = {};
     data.forEach(caso => {
-      const estado = caso.estado_proveedor || "Sin estado";
+      const estado = caso.activo === false ? "Anulada" : (caso.estado_proveedor || "Sin estado");
       conteo[estado] = (conteo[estado] || 0) + 1;
     });
 
