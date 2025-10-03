@@ -44,7 +44,6 @@ type Incidencia = {
   hora?: string;
   imagen_url?: string;
   catalogacion?: string;
-  fecha_creacion?: string;
   instituciones?: {
     nombre: string;
   }[] | null;
@@ -402,7 +401,7 @@ export default function ChatProveedor() {
 
           const { data: proveedorCaso, error: proveedorError } = await supabase
             .from("proveedor_casos")
-            .select("asignado_en, estado_proveedor, prioridad, descripcion_proveedor, activo")
+            .select("asignado_en, fecha, hora, estado_proveedor, prioridad, descripcion_proveedor, activo")
             .eq("incidencia_id", incidenciaId)
             .order("asignado_en", { ascending: false })
             .limit(1)
@@ -411,8 +410,8 @@ export default function ChatProveedor() {
           console.log('Resultado proveedor_casos:', { proveedorCaso, proveedorError });
 
           if (proveedorCaso) {
-            if (proveedorCaso.asignado_en) {
-              setFechaAsignacionProveedor(proveedorCaso.asignado_en);
+            if (proveedorCaso.fecha && proveedorCaso.hora) {
+              setFechaAsignacionProveedor(`${proveedorCaso.fecha} ${proveedorCaso.hora}`);
             }
             estadoProveedor = proveedorCaso.estado_proveedor;
             prioridadProveedor = proveedorCaso.prioridad;
@@ -1994,13 +1993,7 @@ Solución aplicada: ${solucionAplicada}`;
                           Fecha de Creación:
                         </td>
                         <td className="py-2" style={{ color: PALETA.textoOscuro }}>
-                          {incidencia.fecha_creacion ? new Date(incidencia.fecha_creacion).toLocaleString('es-ES', {
-                            day: '2-digit',
-                            month: '2-digit',
-                            year: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          }) : '-'}
+                          {incidencia.fecha && incidencia.hora ? `${incidencia.fecha} ${incidencia.hora}` : '-'}
                         </td>
                       </tr>
 
@@ -2009,13 +2002,7 @@ Solución aplicada: ${solucionAplicada}`;
                           Fecha de Asignación:
                         </td>
                         <td className="py-2" style={{ color: PALETA.textoOscuro }}>
-                          {fechaAsignacionProveedor ? new Date(fechaAsignacionProveedor).toLocaleString('es-ES', {
-                            day: '2-digit',
-                            month: '2-digit',
-                            year: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          }) : '-'}
+                          {fechaAsignacionProveedor ? fechaAsignacionProveedor : '-'}
                         </td>
                       </tr>
 
