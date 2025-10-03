@@ -584,6 +584,7 @@ export default function ChatControlCliente() {
     estado_proveedor: string;
     imagenes_excluidas?: string[];
     documentos_incluidos?: string[];
+    imagenes_adicionales?: File[];
   }) => {
     if (!formularioProveedor.proveedor_id) return;
 
@@ -735,6 +736,51 @@ export default function ChatControlCliente() {
                   storage_key: adjunto.storage_key,
                   nombre_archivo: adjunto.nombre_archivo,
                   tipo: 'documento'
+                });
+            }
+          }
+        }
+      }
+
+      // Procesar imágenes adicionales (subirlas al chat del proveedor)
+      if (formularioProveedor.imagenes_adicionales && formularioProveedor.imagenes_adicionales.length > 0) {
+        for (const imagenFile of formularioProveedor.imagenes_adicionales) {
+          // Subir imagen al storage
+          const safeName = imagenFile.name.replace(/\s+/g, "_");
+          const path = `incidencias/${incidencia?.num_solicitud}/${Date.now()}_${safeName}`;
+
+          const { data: uploadData, error: uploadError } = await supabase.storage
+            .from("incidencias")
+            .upload(path, imagenFile, { upsert: false });
+
+          if (!uploadError && uploadData) {
+            // Crear comentario del sistema para la imagen
+            const { data: comentario, error: comentarioError } = await supabase
+              .from("comentarios")
+              .insert({
+                incidencia_id: incidenciaId,
+                ambito: 'proveedor',
+                autor_id: asignadoPorId,
+                autor_email: userEmail,
+                autor_rol: 'Control',
+                cuerpo: `Imagen adicional compartida por Control`,
+                es_sistema: true
+              })
+              .select()
+              .single();
+
+            if (comentario && !comentarioError) {
+              // Crear adjunto vinculado al comentario
+              await supabase
+                .from("adjuntos")
+                .insert({
+                  incidencia_id: incidenciaId,
+                  comentario_id: comentario.id,
+                  storage_key: uploadData.path,
+                  nombre_archivo: imagenFile.name,
+                  tipo: 'imagen',
+                  categoria: 'imagen_comentario',
+                  visible_proveedor: true
                 });
             }
           }

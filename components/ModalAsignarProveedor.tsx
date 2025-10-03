@@ -28,6 +28,7 @@ type FormularioProveedor = {
   estado_proveedor: string;
   imagenes_excluidas?: string[]; // IDs de imágenes a excluir
   documentos_incluidos?: string[]; // IDs de documentos del chat anterior a incluir
+  imagenes_adicionales?: File[]; // Nuevas imágenes para subir
 };
 
 type Imagen = {
@@ -75,6 +76,7 @@ export default function ModalAsignarProveedor({
   });
   const [imagenes, setImagenes] = useState<Imagen[]>([]);
   const [documentos, setDocumentos] = useState<Documento[]>([]);
+  const [imagenesAdicionales, setImagenesAdicionales] = useState<File[]>([]);
   const [cargandoRecursos, setCargandoRecursos] = useState(false);
 
   useEffect(() => {
@@ -212,10 +214,14 @@ export default function ModalAsignarProveedor({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await onSubmit(formulario);
+    await onSubmit({
+      ...formulario,
+      imagenes_adicionales: imagenesAdicionales
+    });
   };
 
   const handleClose = () => {
+    setImagenesAdicionales([]);
     setFormulario({
       proveedor_id: '',
       descripcion_proveedor: '',
@@ -301,47 +307,52 @@ export default function ModalAsignarProveedor({
               />
             </div>
 
-            {/* Gestión de Imágenes */}
+            {/* Gestión de Imagen Principal */}
             {imagenes.length > 0 && (
               <div className="border rounded-lg p-4" style={{ borderColor: PALETA.verdeClaro }}>
                 <h4 className="font-semibold text-sm mb-3" style={{ color: PALETA.textoOscuro }}>
-                  Imágenes de la Incidencia
+                  Imagen Principal de la Incidencia
                 </h4>
-                <p className="text-xs mb-3" style={{ color: '#6b7280' }}>
-                  Selecciona las imágenes que NO quieres compartir con el proveedor
-                </p>
 
                 {cargandoRecursos ? (
-                  <p className="text-sm text-gray-500">Cargando imágenes...</p>
+                  <p className="text-sm text-gray-500">Cargando imagen...</p>
                 ) : (
-                  <div className="grid grid-cols-2 gap-3">
+                  <div>
                     {imagenes.map((imagen) => {
                       const excluida = formulario.imagenes_excluidas?.includes(imagen.id);
                       return (
-                        <div
-                          key={imagen.id}
-                          className="relative border rounded p-2 cursor-pointer transition-all"
-                          style={{
-                            borderColor: excluida ? '#ef4444' : PALETA.verdeClaro,
-                            opacity: excluida ? 0.5 : 1,
-                            backgroundColor: excluida ? '#fef2f2' : 'white'
-                          }}
-                          onClick={() => toggleImagenExcluida(imagen.id)}
-                        >
+                        <div key={imagen.id} className="space-y-3">
                           {imagen.url && (
-                            <img
-                              src={imagen.url}
-                              alt={imagen.nombre_archivo}
-                              className="w-full h-32 object-cover rounded mb-2"
-                            />
-                          )}
-                          <p className="text-xs truncate" style={{ color: PALETA.textoOscuro }}>
-                            {imagen.nombre_archivo}
-                          </p>
-                          {excluida && (
-                            <div className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded">
-                              No incluir
+                            <div className="relative">
+                              <img
+                                src={imagen.url}
+                                alt={imagen.nombre_archivo}
+                                className="w-full max-h-48 object-contain rounded border"
+                                style={{ borderColor: '#e5e7eb' }}
+                              />
                             </div>
+                          )}
+                          <div className="flex items-center gap-3">
+                            <input
+                              type="checkbox"
+                              id={`imagen-${imagen.id}`}
+                              checked={!excluida}
+                              onChange={() => toggleImagenExcluida(imagen.id)}
+                              className="w-4 h-4"
+                              style={{ accentColor: PALETA.verdeClaro }}
+                            />
+                            <label
+                              htmlFor={`imagen-${imagen.id}`}
+                              className="text-sm cursor-pointer"
+                              style={{ color: PALETA.textoOscuro }}
+                            >
+                              Incluir esta imagen en el chat del proveedor
+                            </label>
+                          </div>
+                          {excluida && (
+                            <p className="text-xs text-red-600 italic">
+                              ⚠️ Esta imagen NO será visible para el proveedor
+                            </p>
                           )}
                         </div>
                       );
@@ -350,6 +361,56 @@ export default function ModalAsignarProveedor({
                 )}
               </div>
             )}
+
+            {/* Subir Imágenes Adicionales */}
+            <div className="border rounded-lg p-4" style={{ borderColor: PALETA.verdeClaro }}>
+              <h4 className="font-semibold text-sm mb-3" style={{ color: PALETA.textoOscuro }}>
+                Imágenes Adicionales (Opcional)
+              </h4>
+              <p className="text-xs mb-3" style={{ color: '#6b7280' }}>
+                Puedes agregar imágenes adicionales que se compartirán con el proveedor
+              </p>
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={(e) => {
+                  const files = Array.from(e.target.files || []);
+                  setImagenesAdicionales(prev => [...prev, ...files]);
+                }}
+                className="block w-full text-sm file:mr-4 file:rounded file:border-0 file:px-3 file:py-2 file:text-sm file:font-medium hover:file:brightness-95"
+                style={{
+                  color: PALETA.textoOscuro,
+                  accentColor: PALETA.verdeClaro
+                }}
+              />
+              {imagenesAdicionales.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  <p className="text-xs font-medium" style={{ color: PALETA.textoOscuro }}>
+                    Imágenes seleccionadas ({imagenesAdicionales.length}):
+                  </p>
+                  <div className="space-y-1">
+                    {imagenesAdicionales.map((file, index) => (
+                      <div key={index} className="flex items-center justify-between text-xs p-2 bg-gray-50 rounded">
+                        <span className="truncate flex-1" style={{ color: PALETA.textoOscuro }}>
+                          {file.name}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setImagenesAdicionales(prev => prev.filter((_, i) => i !== index))}
+                          className="ml-2 text-red-600 hover:text-red-800"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <p className="text-xs mt-2" style={{ color: '#9ca3af' }}>
+                Puedes seleccionar múltiples imágenes. Se compartirán con el proveedor al asignar.
+              </p>
+            </div>
 
             {/* Documentos del Chat Anterior (solo en reasignación) */}
             {esReasignacion && documentos.length > 0 && (
