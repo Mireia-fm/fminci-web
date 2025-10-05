@@ -390,17 +390,47 @@ export default function IncidenciasListado() {
     // Para otros usuarios: usar solo filtroEstado para estado_cliente
     const estadoAFiltrar = perfil?.rol === "Proveedor" ? (filtroEstadoProveedor || filtroEstado) : filtroEstado;
 
-    // Debug para proveedores cuando hay filtro activo
-    if (perfil?.rol === "Proveedor" && estadoAFiltrar) {
-      console.log("Filtrando con estado:", estadoAFiltrar);
-      console.log("Incidencia:", inc.num_solicitud, "Casos proveedor:", inc.proveedor_casos);
+    // Debug específico para incidencia 20251004-03
+    if (inc.num_solicitud === "20251004-03") {
+      console.log("🔍 INCIDENCIA 20251004-03 ENCONTRADA");
+      console.log("  Estado a filtrar:", estadoAFiltrar);
+      console.log("  Casos proveedor COMPLETOS:", JSON.stringify(inc.proveedor_casos, null, 2));
+      console.log("  ¿Tiene array de casos?:", !!inc.proveedor_casos);
+      console.log("  Número de casos:", inc.proveedor_casos?.length);
+      if (inc.proveedor_casos) {
+        inc.proveedor_casos.forEach((pc, i) => {
+          console.log(`  Caso ${i}:`, {
+            estado_proveedor: pc.estado_proveedor,
+            activo: pc.activo,
+            prioridad: pc.prioridad,
+            proveedor_id: pc.proveedor_id
+          });
+        });
+      }
     }
+
+    // Debug para proveedores cuando filtran por Anulada
+    if (perfil?.rol === "Proveedor" && estadoAFiltrar === "Anulada") {
+      const casosInactivos = inc.proveedor_casos?.filter(pc => pc.activo === false);
+      if (casosInactivos && casosInactivos.length > 0) {
+        console.log("📋 Incidencia:", inc.num_solicitud);
+        console.log("  Casos INACTIVOS:", casosInactivos.map(pc => ({
+          estado: pc.estado_proveedor,
+          activo: pc.activo
+        })));
+        const tieneAnulada = inc.proveedor_casos?.some(pc => pc.activo === false && pc.estado_proveedor === "Anulada");
+        console.log("  ¿Tiene estado_proveedor='Anulada'?:", tieneAnulada);
+      }
+    }
+
+    // Log detallado de filtros cuando se filtra por Anulada o es la incidencia específica
+    const debugAnulada = (perfil?.rol === "Proveedor" && estadoAFiltrar === "Anulada") || inc.num_solicitud === "20251004-03";
 
     const coincideEstado = !estadoAFiltrar ||
       (perfil?.rol === "Proveedor" ?
         (inc.proveedor_casos && inc.proveedor_casos.some(pc =>
           estadoAFiltrar === "Anulada"
-            ? pc.activo === false
+            ? pc.estado_proveedor === "Anulada"  // Anulada: cualquier caso con estado="Anulada" (Wix: activo=true, Nuevo: activo=false)
             : (pc.activo && pc.estado_proveedor === estadoAFiltrar)
         )) :
         inc.estado_cliente?.trim() === estadoAFiltrar?.trim()
@@ -414,7 +444,7 @@ export default function IncidenciasListado() {
     const coincideEstadoProveedor = !filtroEstadoProveedor ||
       (inc.proveedor_casos && inc.proveedor_casos.some(pc =>
         filtroEstadoProveedor === "Anulada"
-          ? pc.activo === false
+          ? pc.estado_proveedor === "Anulada"  // Anulada: cualquier caso con estado="Anulada" (Wix: activo=true, Nuevo: activo=false)
           : (pc.activo && pc.estado_proveedor === filtroEstadoProveedor)
       ));
     const coincideFecha = !filtroFecha ||
@@ -424,25 +454,57 @@ export default function IncidenciasListado() {
     const coincidePrioridadCliente = !filtroPrioridadCliente ||
       (perfil?.rol === "Cliente" || perfil?.rol === "Gestor" ?
         inc.prioridad === filtroPrioridadCliente :
-        (inc.proveedor_casos && inc.proveedor_casos.some(pc => pc.activo && pc.prioridad === filtroPrioridadCliente)));
+        (inc.proveedor_casos && inc.proveedor_casos.some(pc => pc.prioridad === filtroPrioridadCliente)));
     const coincidePrioridadProveedor = !filtroPrioridadProveedor ||
-      (inc.proveedor_casos && inc.proveedor_casos.some(pc => pc.activo && pc.prioridad === filtroPrioridadProveedor));
+      (inc.proveedor_casos && inc.proveedor_casos.some(pc => pc.prioridad === filtroPrioridadProveedor));
     const coincideProveedor = !filtroProveedor ||
-      (inc.proveedor_casos && inc.proveedor_casos.some(pc => pc.activo && pc.proveedor_id === filtroProveedor));
+      (inc.proveedor_casos && inc.proveedor_casos.some(pc => pc.proveedor_id === filtroProveedor));
 
     // Para proveedores: no verificar filtroEstadoProveedor por separado si ya se verificó en coincideEstado
     const verificarEstadoProveedorSeparado = perfil?.rol !== "Proveedor" && filtroEstadoProveedor;
 
-    return coincideEstado && coincideCentro && coincideNumero &&
+    const pasa = coincideEstado && coincideCentro && coincideNumero &&
            (!verificarEstadoProveedorSeparado || coincideEstadoProveedor) &&
            coincideFecha && coincideCatalogacion && coincidePrioridadCliente && coincidePrioridadProveedor && coincideProveedor;
+
+    if (debugAnulada) {
+      console.log("  Filtros:", {
+        coincideEstado,
+        coincideCentro,
+        coincideNumero,
+        coincideEstadoProveedor,
+        coincideFecha,
+        coincideCatalogacion,
+        coincidePrioridadCliente,
+        coincidePrioridadProveedor,
+        coincideProveedor,
+        pasa
+      });
+    }
+
+    return pasa;
   });
+
+  // Log cuando se filtra por Anulada
+  if (perfil?.rol === "Proveedor" && (filtroEstadoProveedor === "Anulada" || filtroEstado === "Anulada")) {
+    console.log("🔢 RESUMEN FILTRADO:");
+    console.log("  Total incidencias cargadas:", incidencias.length);
+    console.log("  Total incidencias filtradas:", incidenciasFiltradas.length);
+    console.log("  Incidencias que pasaron el filtro:", incidenciasFiltradas.map(i => i.num_solicitud));
+  }
 
   // Calcular paginación
   const totalPaginas = Math.ceil(incidenciasFiltradas.length / incidenciasPorPagina);
   const indiceInicio = (paginaActual - 1) * incidenciasPorPagina;
   const indiceFin = indiceInicio + incidenciasPorPagina;
   const incidenciasPaginadas = incidenciasFiltradas.slice(indiceInicio, indiceFin);
+
+  // Log de paginación cuando se filtra por Anulada
+  if (perfil?.rol === "Proveedor" && (filtroEstadoProveedor === "Anulada" || filtroEstado === "Anulada")) {
+    console.log("  Página actual:", paginaActual);
+    console.log("  Total páginas:", totalPaginas);
+    console.log("  Mostrando incidencias:", incidenciasPaginadas.map(i => i.num_solicitud));
+  }
 
   const limpiarFiltros = () => {
     setFiltroEstado("");
@@ -826,14 +888,27 @@ export default function IncidenciasListado() {
                   <div className="text-sm">{incidencia.num_solicitud}</div>
                   <div className="text-sm">{incidencia.fecha}</div>
                   <div className="text-sm">
-                    {perfil?.rol === "Proveedor" ?
-                      (incidencia.proveedor_casos?.find(pc => pc.activo)?.estado_proveedor || incidencia.estado_cliente) :
-                      incidencia.estado_cliente
-                    }
+                    {perfil?.rol === "Proveedor" ? (() => {
+                      // Si estamos filtrando por Anulada, mostrar cualquier caso con estado="Anulada"
+                      const estadoFiltrado = filtroEstadoProveedor || filtroEstado;
+                      if (estadoFiltrado === "Anulada") {
+                        return incidencia.proveedor_casos?.find(pc => pc.estado_proveedor === "Anulada")?.estado_proveedor || "-";
+                      }
+                      // Para otros estados, mostrar el caso activo
+                      return incidencia.proveedor_casos?.find(pc => pc.activo)?.estado_proveedor || incidencia.estado_cliente;
+                    })() : incidencia.estado_cliente}
                   </div>
                   {perfil?.rol === "Control" && (
                     <div className="text-sm">
-                      {incidencia.proveedor_casos?.find(pc => pc.activo)?.estado_proveedor || "-"}
+                      {(() => {
+                        // Si estamos filtrando por Anulada, mostrar cualquier caso con estado="Anulada"
+                        const estadoFiltrado = filtroEstadoProveedor || filtroEstado;
+                        if (estadoFiltrado === "Anulada") {
+                          return incidencia.proveedor_casos?.find(pc => pc.estado_proveedor === "Anulada")?.estado_proveedor || "-";
+                        }
+                        // Para otros estados, mostrar el caso activo
+                        return incidencia.proveedor_casos?.find(pc => pc.activo)?.estado_proveedor || "-";
+                      })()}
                     </div>
                   )}
                   <div className="text-sm">

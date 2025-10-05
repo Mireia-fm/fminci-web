@@ -95,7 +95,7 @@ export default function ModalResolucionManual({
               value={formulario.descripcion}
               onChange={(e) => setFormulario(prev => ({ ...prev, descripcion: e.target.value }))}
               placeholder="Describe cómo se resolvió la incidencia..."
-              className="w-full h-24 p-3 border rounded resize-none focus:outline-none"
+              className="w-full h-24 p-3 border rounded resize-none focus:outline-none text-sm"
               onFocus={(e) => e.target.style.boxShadow = `0 0 0 2px ${PALETA.verdeClaro}80`}
               onBlur={(e) => e.target.style.boxShadow = ''}
               required
@@ -115,7 +115,7 @@ export default function ModalResolucionManual({
                   value={formulario.proveedor_externo}
                   onChange={(e) => setFormulario(prev => ({ ...prev, proveedor_externo: e.target.value }))}
                   placeholder="Ej: Fontanería García SL"
-                  className="w-full p-2 border rounded focus:outline-none"
+                  className="w-full p-2 border rounded focus:outline-none text-sm"
                   onFocus={(e) => e.target.style.boxShadow = `0 0 0 2px ${PALETA.verdeClaro}80`}
                   onBlur={(e) => e.target.style.boxShadow = ''}
                 />
@@ -136,7 +136,7 @@ export default function ModalResolucionManual({
                     importe: e.target.value ? parseFloat(e.target.value) : undefined
                   }))}
                   placeholder="0.00"
-                  className="w-full p-2 border rounded focus:outline-none"
+                  className="w-full p-2 border rounded focus:outline-none text-sm"
                   onFocus={(e) => e.target.style.boxShadow = `0 0 0 2px ${PALETA.verdeClaro}80`}
                   onBlur={(e) => e.target.style.boxShadow = ''}
                 />
@@ -154,7 +154,7 @@ export default function ModalResolucionManual({
                 value={formulario.observaciones}
                 onChange={(e) => setFormulario(prev => ({ ...prev, observaciones: e.target.value }))}
                 placeholder="Información adicional sobre la resolución..."
-                className="w-full h-20 p-3 border rounded resize-none focus:outline-none"
+                className="w-full h-20 p-3 border rounded resize-none focus:outline-none text-sm"
                 onFocus={(e) => e.target.style.boxShadow = `0 0 0 2px ${PALETA.verdeClaro}80`}
                 onBlur={(e) => e.target.style.boxShadow = ''}
               />
@@ -190,7 +190,7 @@ export default function ModalResolucionManual({
             <button
               type="button"
               onClick={handleClose}
-              className="px-4 py-2 text-sm rounded border hover:bg-gray-50"
+              className="px-4 py-2 text-sm rounded border hover:bg-gray-50 transition-colors"
               style={{ color: PALETA.textoOscuro, borderColor: '#d1d5db' }}
               disabled={enviando}
             >
@@ -199,8 +199,8 @@ export default function ModalResolucionManual({
             <button
               type="submit"
               disabled={enviando || !formulario.descripcion.trim()}
-              className="px-6 py-2 text-sm text-white rounded hover:opacity-90 disabled:opacity-50"
-              style={{ backgroundColor: PALETA.verdeClaro }}
+              className="px-6 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity disabled:opacity-50"
+              style={{ backgroundColor: PALETA.bg }}
             >
               {enviando ? 'Resolviendo...' : 'Resolver Incidencia'}
             </button>

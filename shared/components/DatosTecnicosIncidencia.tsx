@@ -18,6 +18,7 @@ export interface AdjuntoPrincipal {
   id: string;
   nombre_archivo?: string | null;
   storage_key?: string | null;
+  visible_proveedor?: boolean | null;
 }
 
 interface DatosTecnicosIncidenciaProps {

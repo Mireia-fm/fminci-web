@@ -190,7 +190,13 @@ export async function eliminarComentario(comentarioId: string): Promise<boolean>
 export async function crearAdjuntos(
   comentarioId: string,
   incidenciaId: string,
-  archivos: Array<{ storage_key: string; nombre_archivo: string; tipo: string }>
+  archivos: Array<{
+    storage_key: string;
+    nombre_archivo: string;
+    tipo: string;
+    categoria?: string;
+    visible_proveedor?: boolean;
+  }>
 ): Promise<boolean> {
   try {
     const adjuntos = archivos.map(archivo => ({
@@ -198,7 +204,9 @@ export async function crearAdjuntos(
       incidencia_id: incidenciaId,
       storage_key: archivo.storage_key,
       nombre_archivo: archivo.nombre_archivo,
-      tipo: archivo.tipo
+      tipo: archivo.tipo,
+      categoria: archivo.categoria || (archivo.tipo === 'imagen' ? 'imagen_comentario' : 'documento_comentario'),
+      visible_proveedor: archivo.visible_proveedor !== undefined ? archivo.visible_proveedor : true
     }));
 
     const { error } = await supabase

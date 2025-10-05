@@ -1,20 +1,26 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { registrarCambioEstado } from "@/lib/historialEstados";
 import ModalAsignarProveedor from "@/components/ModalAsignarProveedor";
 import ModalResolucionManual, { type FormularioResolucionManual } from "@/components/ModalResolucionManual";
+import ModalPonerEnEspera from "@/components/ModalPonerEnEspera";
+import ModalAnular from "@/components/ModalAnular";
 import { PALETA } from "@/lib/theme";
+import { useAuth } from "@/contexts/AuthContext";
 
 // Nuevos imports de la refactorización
 import { subirMultiples } from "@/lib/services/storageService";
 import { crearComentario, crearAdjuntos } from "@/lib/services/comentariosService";
 import { obtenerProveedorActivo, tieneProveedorActivo as checkProveedorActivo } from "@/lib/services/proveedorCasosService";
+import { asignarProveedorCompleto, type FormularioAsignacionProveedor } from "@/lib/services/asignacionProveedorService";
 import { useSignedUrls, useComentarioUrls } from "@/shared/hooks/useSignedUrls";
 import { useChatFileUpload } from "@/shared/hooks/useFileUpload";
 import DatosTecnicosIncidencia from "@/shared/components/DatosTecnicosIncidencia";
+import HistorialEstados from "@/shared/components/HistorialEstados";
+import ScrollToBottomButton from "@/components/ScrollToBottomButton";
 
 type Adjunto = {
   id: string;
@@ -69,17 +75,14 @@ export default function ChatControlCliente() {
   const router = useRouter();
   const incidenciaId = params.id as string;
 
+  // AuthContext
+  const { perfil, loading: authLoading } = useAuth();
+
   // Estados principales
   const [incidencia, setIncidencia] = useState<Incidencia | null>(null);
   const [comentarios, setComentarios] = useState<Comentario[]>([]);
   const [loading, setLoading] = useState(true);
   const [enviando, setEnviando] = useState(false);
-
-  // Usuario
-  const [tipoUsuario, setTipoUsuario] = useState<string | null>(null);
-  const [nombreUsuario, setNombreUsuario] = useState<string>("");
-  const [autorId, setAutorId] = useState<string | null>(null);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
 
   // Estados de proveedor
   const [tieneProveedorAsignado, setTieneProveedorAsignado] = useState(false);
@@ -88,10 +91,18 @@ export default function ChatControlCliente() {
   // Modales
   const [mostrarModalProveedor, setMostrarModalProveedor] = useState(false);
   const [mostrarModalAnular, setMostrarModalAnular] = useState(false);
-  const [motivoAnulacion, setMotivoAnulacion] = useState('');
   const [mostrarModalEspera, setMostrarModalEspera] = useState(false);
-  const [motivoEspera, setMotivoEspera] = useState('');
   const [mostrarModalResolucionManual, setMostrarModalResolucionManual] = useState(false);
+
+  // Historial de estados
+  type CambioEstado = {
+    id: string;
+    estado_anterior: string | null;
+    estado_nuevo: string;
+    cambiado_en: string;
+    motivo: string | null;
+  };
+  const [historialCliente, setHistorialCliente] = useState<CambioEstado[]>([]);
 
   // Chat input
   const [nuevoComentario, setNuevoComentario] = useState("");
@@ -108,10 +119,23 @@ export default function ChatControlCliente() {
     limpiar: limpiarArchivos
   } = useChatFileUpload(incidencia?.num_solicitud || '');
 
-  // Cargar datos iniciales
+  // Ref para scroll automático
+  const comentariosContainerRef = useRef<HTMLDivElement>(null);
+
+  // Función para hacer scroll al último mensaje
+  const scrollToBottom = () => {
+    comentariosContainerRef.current?.scrollTo({
+      top: comentariosContainerRef.current.scrollHeight,
+      behavior: 'smooth'
+    });
+  };
+
+  // Cargar datos iniciales (esperar a que AuthContext esté listo)
   useEffect(() => {
-    cargarDatos();
-  }, [incidenciaId]);
+    if (!authLoading && perfil) {
+      cargarDatos();
+    }
+  }, [incidenciaId, authLoading, perfil]);
 
   const getColorEmisor = (emisor: string) => {
     switch (emisor.toLowerCase()) {
@@ -130,27 +154,10 @@ export default function ChatControlCliente() {
     try {
       setLoading(true);
 
-      // Obtener usuario actual
-      const { data: userData } = await supabase.auth.getUser();
-      const email = userData.user?.email;
-
-      if (!email) {
+      // Verificar que tenemos perfil del AuthContext
+      if (!perfil) {
         router.push('/login');
         return;
-      }
-
-      // Obtener información del usuario
-      const { data: persona } = await supabase
-        .from("personas")
-        .select("id, rol, nombre")
-        .eq("email", email)
-        .maybeSingle();
-
-      if (persona) {
-        setTipoUsuario(persona.rol);
-        setNombreUsuario(persona.nombre || email);
-        setAutorId(persona.id);
-        setUserEmail(email);
       }
 
       // Cargar incidencia
@@ -177,7 +184,7 @@ export default function ChatControlCliente() {
         // Cargar adjuntos principales
         const { data: adjuntosData } = await supabase
           .from("adjuntos")
-          .select("*")
+          .select("id, nombre_archivo, storage_key, categoria, tipo, visible_proveedor")
           .eq("incidencia_id", incidenciaId)
           .eq("categoria", "imagen_principal");
 
@@ -190,7 +197,8 @@ export default function ChatControlCliente() {
             tipo: 'imagen',
             nombre_archivo: 'Imagen de la incidencia',
             storage_key: incidenciaData.imagen_url,
-            categoria: 'imagen_principal'
+            categoria: 'imagen_principal',
+            visible_proveedor: true
           }];
         }
 
@@ -208,18 +216,29 @@ export default function ChatControlCliente() {
           pc => !pc.activo && pc.estado_proveedor === 'Anulada'
         );
         setTieneProveedorAnulado(!!tieneAnulado);
+
+        // Cargar historial de estados del cliente
+        const { data: historialData } = await supabase
+          .from("historial_estados")
+          .select("id, estado_anterior, estado_nuevo, cambiado_en, motivo")
+          .eq("incidencia_id", incidenciaId)
+          .eq("tipo_estado", "cliente")
+          .order("cambiado_en", { ascending: false });
+
+        setHistorialCliente(historialData || []);
       }
 
-      // Cargar comentarios
+      // Cargar comentarios con adjuntos
       const { data: comentariosData } = await supabase
         .from("comentarios")
         .select(`
           *,
-          personas(nombre, email)
+          personas(nombre, email),
+          adjuntos(*)
         `)
         .eq("incidencia_id", incidenciaId)
         .in("ambito", ["cliente", "ambos"])
-        .order("creado_en", { ascending: true });
+        .order("creado_en", { ascending: true});
 
       setComentarios(comentariosData || []);
 
@@ -233,7 +252,7 @@ export default function ChatControlCliente() {
   const handleEnviarComentario = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!nuevoComentario.trim() && !imagenSeleccionada && !documentoSeleccionado) return;
-    if (enviando || !tipoUsuario || !autorId || !userEmail) return;
+    if (enviando || !perfil) return;
 
     try {
       setEnviando(true);
@@ -245,9 +264,9 @@ export default function ChatControlCliente() {
       const comentarioCreado = await crearComentario({
         incidencia_id: incidenciaId,
         ambito: 'cliente',
-        autor_id: autorId,
-        autor_email: userEmail,
-        autor_rol: tipoUsuario,
+        autor_id: perfil.persona_id,
+        autor_email: perfil.email,
+        autor_rol: perfil.rol,
         cuerpo: nuevoComentario.trim(),
         es_sistema: false
       });
@@ -292,128 +311,122 @@ export default function ChatControlCliente() {
 
   const abrirModalProveedor = () => setMostrarModalProveedor(true);
 
-  const cambiarAEspera = async () => {
-    if (!motivoEspera.trim()) {
-      alert('Por favor ingresa un motivo');
-      return;
-    }
+  const handlePonerEnEspera = async (motivo: string) => {
+    if (!incidencia || !perfil) return;
 
-    if (!incidencia || !autorId) return;
+    const estadoAnterior = incidencia.estado_cliente;
 
-    try {
-      const estadoAnterior = incidencia.estado_cliente;
+    await supabase
+      .from("incidencias")
+      .update({ estado_cliente: "En espera" })
+      .eq("id", incidenciaId);
 
-      await supabase
-        .from("incidencias")
-        .update({ estado_cliente: "En espera" })
-        .eq("id", incidenciaId);
+    await registrarCambioEstado({
+      incidenciaId,
+      tipoEstado: 'cliente',
+      estadoAnterior,
+      estadoNuevo: 'En espera',
+      autorId: perfil.persona_id,
+      motivo
+    });
 
-      await registrarCambioEstado({
-        incidenciaId,
-        tipoEstado: 'cliente',
-        estadoAnterior,
-        estadoNuevo: 'En espera',
-        autorId,
-        motivo: motivoEspera
-      });
+    await crearComentario({
+      incidencia_id: incidenciaId,
+      ambito: 'cliente',
+      autor_id: perfil.persona_id,
+      autor_email: perfil.email,
+      autor_rol: perfil.rol,
+      cuerpo: `Incidencia puesta en espera.\n**Motivo:** ${motivo}`,
+      es_sistema: true
+    });
 
-      // Comentario del sistema
-      await crearComentario({
-        incidencia_id: incidenciaId,
-        ambito: 'cliente',
-        autor_id: autorId,
-        autor_email: userEmail!,
-        autor_rol: tipoUsuario!,
-        cuerpo: `Incidencia puesta en espera.\n**Motivo:** ${motivoEspera}`,
-        es_sistema: true
-      });
-
-      setMostrarModalEspera(false);
-      setMotivoEspera('');
-      cargarDatos();
-    } catch (error) {
-      console.error("Error:", error);
-      alert('Error al cambiar estado');
-    }
+    cargarDatos();
   };
 
-  const anularIncidencia = async () => {
-    if (!motivoAnulacion.trim()) {
-      alert('Por favor ingresa un motivo de anulación');
-      return;
+  const handleAnular = async (motivo: string) => {
+    if (!incidencia || !perfil) return;
+
+    const estadoAnterior = incidencia.estado_cliente;
+
+    await supabase
+      .from("incidencias")
+      .update({ estado_cliente: "Anulada" })
+      .eq("id", incidenciaId);
+
+    if (tieneProveedorAsignado) {
+      await supabase
+        .from("proveedor_casos")
+        .update({
+          estado_proveedor: "Anulada",
+          activo: false,
+          desasignado_en: new Date().toISOString(),
+          desasignado_por: perfil.persona_id,
+          motivo_desasignacion: motivo
+        })
+        .eq("incidencia_id", incidenciaId)
+        .eq("activo", true);
+
+      const proveedor = await obtenerProveedorActivo(incidenciaId);
+      if (proveedor) {
+        await registrarCambioEstado({
+          incidenciaId,
+          tipoEstado: 'proveedor',
+          estadoAnterior: proveedor.estado_proveedor,
+          estadoNuevo: 'Anulada',
+          autorId: perfil.persona_id,
+          motivo
+        });
+      }
     }
 
-    if (!incidencia || !autorId) return;
+    await registrarCambioEstado({
+      incidenciaId,
+      tipoEstado: 'cliente',
+      estadoAnterior,
+      estadoNuevo: 'Anulada',
+      autorId: perfil.persona_id,
+      motivo
+    });
+
+    await crearComentario({
+      incidencia_id: incidenciaId,
+      ambito: 'ambos',
+      autor_id: perfil.persona_id,
+      autor_email: perfil.email,
+      autor_rol: perfil.rol,
+      cuerpo: `Incidencia anulada por Control.\n**Motivo:** ${motivo}`,
+      es_sistema: true
+    });
+
+    cargarDatos();
+  };
+
+  const handleAsignarProveedor = async (formularioProveedor: FormularioAsignacionProveedor) => {
+    if (!formularioProveedor.proveedor_id || !incidencia || !perfil) return;
 
     try {
-      const estadoAnterior = incidencia.estado_cliente;
-
-      // Actualizar estado de la incidencia
-      await supabase
-        .from("incidencias")
-        .update({ estado_cliente: "Anulada" })
-        .eq("id", incidenciaId);
-
-      // Si hay proveedor activo, anularlo también
-      if (tieneProveedorAsignado) {
-        await supabase
-          .from("proveedor_casos")
-          .update({
-            estado_proveedor: "Anulada",
-            activo: false,
-            desasignado_en: new Date().toISOString(),
-            desasignado_por: autorId,
-            motivo_desasignacion: motivoAnulacion
-          })
-          .eq("incidencia_id", incidenciaId)
-          .eq("activo", true);
-
-        // Registrar cambio de estado del proveedor
-        const proveedor = await obtenerProveedorActivo(incidenciaId);
-        if (proveedor) {
-          await registrarCambioEstado({
-            incidenciaId,
-            tipoEstado: 'proveedor',
-            estadoAnterior: proveedor.estado_proveedor,
-            estadoNuevo: 'Anulada',
-            autorId,
-            motivo: motivoAnulacion
-          });
-        }
-      }
-
-      // Registrar cambio de estado del cliente
-      await registrarCambioEstado({
+      setEnviando(true);
+      await asignarProveedorCompleto(
         incidenciaId,
-        tipoEstado: 'cliente',
-        estadoAnterior,
-        estadoNuevo: 'Anulada',
-        autorId,
-        motivo: motivoAnulacion
-      });
-
-      // Comentario del sistema
-      await crearComentario({
-        incidencia_id: incidenciaId,
-        ambito: 'ambos',
-        autor_id: autorId,
-        autor_email: userEmail!,
-        autor_rol: tipoUsuario!,
-        cuerpo: `Incidencia anulada por Control.\n**Motivo:** ${motivoAnulacion}`,
-        es_sistema: true
-      });
-
-      setMostrarModalAnular(false);
-      setMotivoAnulacion('');
+        incidencia.num_solicitud,
+        incidencia.estado_cliente,
+        formularioProveedor,
+        perfil.persona_id,
+        perfil.email
+      );
+      setMostrarModalProveedor(false);
       cargarDatos();
     } catch (error) {
-      console.error("Error:", error);
-      alert('Error al anular incidencia');
+      console.error("Error completo asignando proveedor:", error);
+      const mensajeError = error instanceof Error ? error.message : 'Error desconocido';
+      alert(`Error al asignar el proveedor: ${mensajeError}`);
+    } finally {
+      setEnviando(false);
     }
   };
 
   const resolverManualmenteSinProveedor = async (formulario: FormularioResolucionManual) => {
-    if (!autorId || !incidencia || !userEmail) return;
+    if (!perfil || !incidencia) return;
 
     try {
       setEnviando(true);
@@ -439,7 +452,7 @@ export default function ChatControlCliente() {
         tipoEstado: 'cliente',
         estadoAnterior,
         estadoNuevo: 'Resuelta',
-        autorId,
+        autorId: perfil.persona_id,
         motivo: 'Resolución manual por Control',
         metadatos: {
           accion: 'resolucion_manual',
@@ -459,9 +472,9 @@ ${documentosUrls.length > 0 ? `**Documentos adjuntos:** ${documentosUrls.length}
       const comentarioCreado = await crearComentario({
         incidencia_id: incidenciaId,
         ambito: 'cliente',
-        autor_id: autorId,
-        autor_email: userEmail,
-        autor_rol: tipoUsuario!,
+        autor_id: perfil.persona_id,
+        autor_email: perfil.email,
+        autor_rol: perfil.rol,
         cuerpo: cuerpoComentario,
         es_sistema: true
       });
@@ -489,7 +502,7 @@ ${documentosUrls.length > 0 ? `**Documentos adjuntos:** ${documentosUrls.length}
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: PALETA.bg }}>
-        <div className="text-white text-xl">Cargando...</div>
+        <div className="text-white">Cargando...</div>
       </div>
     );
   }
@@ -497,7 +510,7 @@ ${documentosUrls.length > 0 ? `**Documentos adjuntos:** ${documentosUrls.length}
   if (!incidencia) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: PALETA.bg }}>
-        <div className="text-white text-xl">Incidencia no encontrada</div>
+        <div className="text-white">Incidencia no encontrada</div>
       </div>
     );
   }
@@ -524,57 +537,27 @@ ${documentosUrls.length > 0 ? `**Documentos adjuntos:** ${documentosUrls.length}
         />
 
         {/* Acciones de Control */}
-        {tipoUsuario === 'Control' && (
+        {perfil?.rol === 'Control' && (
           <div className="mb-6">
-            <div
-              className="rounded-lg p-4 shadow-sm"
-              style={{ backgroundColor: PALETA.card }}
-            >
-              <h3
-                className="text-center text-lg font-semibold mb-4"
-                style={{ color: PALETA.textoOscuro }}
+            <div className="rounded-lg shadow-lg" style={{ backgroundColor: PALETA.card }}>
+              <div
+                className="px-6 py-4 border-b rounded-t-lg"
+                style={{
+                  backgroundColor: PALETA.headerTable,
+                  color: PALETA.textoOscuro
+                }}
               >
-                ACCIONES DE CONTROL
-              </h3>
-
-              <div className="flex justify-center gap-4 flex-wrap">
+                <h2 className="text-lg font-semibold">ACCIONES DE CONTROL</h2>
+              </div>
+              <div className="px-6 py-4">
+                <div className="flex justify-center gap-4 flex-wrap">
                 {!tieneProveedorAsignado && !tieneProveedorAnulado && incidencia.estado_cliente !== 'Anulada' && (
                   <button
                     onClick={abrirModalProveedor}
                     className="px-3 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity"
                     style={{ backgroundColor: PALETA.verdeClaro }}
                   >
-                    🔧 Asignar Proveedor
-                  </button>
-                )}
-
-                {(tieneProveedorAsignado || tieneProveedorAnulado) && incidencia.estado_cliente !== 'Anulada' && (
-                  <button
-                    onClick={abrirModalProveedor}
-                    className="px-3 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity"
-                    style={{ backgroundColor: '#f59e0b' }}
-                  >
-                    🔄 Reasignar Proveedor
-                  </button>
-                )}
-
-                {incidencia.estado_cliente !== 'En espera' && incidencia.estado_cliente !== 'Anulada' && (
-                  <button
-                    onClick={() => setMostrarModalEspera(true)}
-                    className="px-3 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity"
-                    style={{ backgroundColor: '#6366f1' }}
-                  >
-                    ⏸️ Poner en Espera
-                  </button>
-                )}
-
-                {incidencia.estado_cliente !== 'Anulada' && (
-                  <button
-                    onClick={() => setMostrarModalAnular(true)}
-                    className="px-3 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity"
-                    style={{ backgroundColor: '#ef4444' }}
-                  >
-                    ❌ Anular Incidencia
+                    Asignar Proveedor
                   </button>
                 )}
 
@@ -582,21 +565,69 @@ ${documentosUrls.length > 0 ? `**Documentos adjuntos:** ${documentosUrls.length}
                   <button
                     onClick={() => setMostrarModalResolucionManual(true)}
                     className="px-3 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity"
-                    style={{ backgroundColor: PALETA.verdeClaro }}
+                    style={{ backgroundColor: PALETA.bg }}
                   >
-                    🔧 Resolver Manualmente
+                    Resolver Manualmente
                   </button>
                 )}
 
-                {tieneProveedorAsignado && (
+                {tieneProveedorAnulado && !tieneProveedorAsignado && incidencia.estado_cliente !== 'Anulada' && (
                   <button
-                    onClick={() => router.push(`/incidencias/${incidenciaId}/chat-proveedor`)}
+                    onClick={abrirModalProveedor}
                     className="px-3 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity"
-                    style={{ backgroundColor: '#8b5cf6' }}
+                    style={{ backgroundColor: PALETA.verdeClaro }}
                   >
-                    💬 Ver Chat Proveedor
+                    Reasignar Proveedor
                   </button>
                 )}
+
+                {incidencia.estado_cliente !== 'Anulada' && incidencia.estado_cliente !== 'En espera' && !tieneProveedorAsignado && (
+                  <button
+                    onClick={() => setMostrarModalEspera(true)}
+                    className="px-3 py-2 text-sm border bg-white rounded transition-colors"
+                    style={{
+                      borderColor: PALETA.verdeClaro,
+                      color: PALETA.verdeClaro
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = `${PALETA.verdeClaro}20`;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'white';
+                    }}
+                  >
+                    Poner en espera
+                  </button>
+                )}
+
+                {incidencia.estado_cliente !== 'Anulada' && (
+                  <button
+                    onClick={() => setMostrarModalAnular(true)}
+                    className="px-3 py-2 text-sm border border-red-500 text-red-600 bg-white rounded hover:bg-red-50 transition-colors"
+                  >
+                    Anular incidencia
+                  </button>
+                )}
+
+                {tieneProveedorAsignado && incidencia.estado_cliente !== 'Anulada' && (
+                  <button
+                    onClick={() => router.push(`/incidencias/${incidenciaId}/chat-proveedor`)}
+                    className="px-3 py-2 text-sm border bg-white rounded transition-colors"
+                    style={{
+                      borderColor: PALETA.bg,
+                      color: PALETA.bg
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = `${PALETA.bg}20`;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'white';
+                    }}
+                  >
+                    Cambiar al Chat Proveedor
+                  </button>
+                )}
+                </div>
               </div>
             </div>
           </div>
@@ -604,7 +635,7 @@ ${documentosUrls.length > 0 ? `**Documentos adjuntos:** ${documentosUrls.length}
 
         {/* Sección de seguimiento */}
         <div className="mb-8">
-          {tipoUsuario === 'Control' ? (
+          {perfil?.rol === 'Control' ? (
             <div className="text-white text-center">
               <h2 className="text-lg font-semibold mb-1 tracking-wider">CHAT CLIENTE</h2>
               <p className="text-sm opacity-80">#{incidencia.num_solicitud}</p>
@@ -616,8 +647,14 @@ ${documentosUrls.length > 0 ? `**Documentos adjuntos:** ${documentosUrls.length}
 
         {/* Área de comentarios */}
         <div className="bg-white rounded-lg shadow-sm flex flex-col h-[700px] relative">
+          {/* Botón flotante para ir al último mensaje */}
+          <ScrollToBottomButton
+            onClick={scrollToBottom}
+            show={comentarios.length > 3}
+          />
+
           {/* Lista de comentarios */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          <div ref={comentariosContainerRef} className="flex-1 overflow-y-auto p-6 space-y-4">
             {comentarios.length === 0 ? (
               <div className="text-center text-gray-500 py-8">
                 No hay comentarios aún. ¡Añade el primero!
@@ -629,7 +666,7 @@ ${documentosUrls.length > 0 ? `**Documentos adjuntos:** ${documentosUrls.length}
                   className={`flex ${
                     comentario.es_sistema
                       ? 'justify-center'
-                      : comentario.autor_email === userEmail ? 'justify-end' : 'justify-start'
+                      : comentario.autor_email === perfil?.email ? 'justify-end' : 'justify-start'
                   }`}
                 >
                   <div
@@ -641,7 +678,7 @@ ${documentosUrls.length > 0 ? `**Documentos adjuntos:** ${documentosUrls.length}
                     style={{
                       backgroundColor: comentario.es_sistema
                         ? '#fef3c7'
-                        : comentario.autor_email === userEmail
+                        : comentario.autor_email === perfil?.email
                           ? '#dcfce7'
                           : getColorEmisor(comentario.autor_rol || 'cliente')
                     }}
@@ -854,79 +891,37 @@ ${documentosUrls.length > 0 ? `**Documentos adjuntos:** ${documentosUrls.length}
         </div>
       </div>
 
+      {/* Historial de Estados del Cliente */}
+      <div className="px-6 mb-6">
+        <HistorialEstados
+          cambios={historialCliente}
+          titulo="HISTORIAL DE ESTADOS"
+        />
+      </div>
+
       {/* Modales */}
       {mostrarModalProveedor && (
         <ModalAsignarProveedor
           isOpen={mostrarModalProveedor}
           onClose={() => setMostrarModalProveedor(false)}
           incidenciaId={incidenciaId}
-          onProveedorAsignado={cargarDatos}
+          onSubmit={handleAsignarProveedor}
+          enviando={enviando}
+          esReasignacion={tieneProveedorAnulado}
         />
       )}
 
-      {mostrarModalEspera && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold mb-4">Poner Incidencia en Espera</h3>
-            <textarea
-              value={motivoEspera}
-              onChange={(e) => setMotivoEspera(e.target.value)}
-              placeholder="Motivo de la espera..."
-              className="w-full p-2 border rounded mb-4"
-              rows={3}
-            />
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => {
-                  setMostrarModalEspera(false);
-                  setMotivoEspera('');
-                }}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={cambiarAEspera}
-                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-              >
-                Confirmar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ModalPonerEnEspera
+        isOpen={mostrarModalEspera}
+        onClose={() => setMostrarModalEspera(false)}
+        onConfirm={handlePonerEnEspera}
+      />
 
-      {mostrarModalAnular && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold mb-4 text-red-600">Anular Incidencia</h3>
-            <textarea
-              value={motivoAnulacion}
-              onChange={(e) => setMotivoAnulacion(e.target.value)}
-              placeholder="Motivo de la anulación..."
-              className="w-full p-2 border rounded mb-4"
-              rows={3}
-            />
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => {
-                  setMostrarModalAnular(false);
-                  setMotivoAnulacion('');
-                }}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={anularIncidencia}
-                className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
-              >
-                Anular
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ModalAnular
+        isOpen={mostrarModalAnular}
+        onClose={() => setMostrarModalAnular(false)}
+        onConfirm={handleAnular}
+      />
 
       <ModalResolucionManual
         isOpen={mostrarModalResolucionManual}

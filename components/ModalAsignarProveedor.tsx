@@ -79,26 +79,6 @@ export default function ModalAsignarProveedor({
   const [imagenesAdicionales, setImagenesAdicionales] = useState<File[]>([]);
   const [cargandoRecursos, setCargandoRecursos] = useState(false);
 
-  useEffect(() => {
-    if (isOpen) {
-      cargarProveedores();
-      if (incidenciaId) {
-        cargarImagenes();
-        if (esReasignacion) {
-          cargarDocumentos();
-        }
-      }
-      setFormulario(prev => ({
-        ...prev,
-        descripcion_proveedor: descripcionInicial,
-        proveedor_id: '',
-        prioridad: '',
-        imagenes_excluidas: [],
-        documentos_incluidos: []
-      }));
-    }
-  }, [isOpen, descripcionInicial, incidenciaId, esReasignacion]);
-
   const cargarProveedores = async () => {
     try {
       const { data, error } = await supabase
@@ -113,6 +93,27 @@ export default function ModalAsignarProveedor({
       }
     } catch (error) {
       console.error("Error cargando proveedores:", error);
+    }
+  };
+
+  const cargarDescripcionIncidencia = async () => {
+    if (!incidenciaId) return;
+
+    try {
+      const { data, error } = await supabase
+        .from("incidencias")
+        .select("descripcion")
+        .eq("id", incidenciaId)
+        .single();
+
+      if (!error && data) {
+        setFormulario(prev => ({
+          ...prev,
+          descripcion_proveedor: data.descripcion || ''
+        }));
+      }
+    } catch (error) {
+      console.error("Error cargando descripción de incidencia:", error);
     }
   };
 
@@ -184,6 +185,34 @@ export default function ModalAsignarProveedor({
     }
   };
 
+  useEffect(() => {
+    if (isOpen) {
+      // Ejecutar todas las cargas en paralelo
+      const cargas = [cargarProveedores()];
+
+      if (incidenciaId) {
+        cargas.push(cargarDescripcionIncidencia());
+        cargas.push(cargarImagenes());
+        if (esReasignacion) {
+          cargas.push(cargarDocumentos());
+        }
+      }
+
+      // Esperar a que todas terminen en paralelo
+      Promise.all(cargas).catch(err =>
+        console.error("Error cargando datos del modal:", err)
+      );
+
+      setFormulario(prev => ({
+        ...prev,
+        proveedor_id: '',
+        prioridad: '',
+        imagenes_excluidas: [],
+        documentos_incluidos: []
+      }));
+    }
+  }, [isOpen, incidenciaId, esReasignacion]);
+
   const toggleImagenExcluida = (imagenId: string) => {
     setFormulario(prev => {
       const excluidas = prev.imagenes_excluidas || [];
@@ -236,15 +265,15 @@ export default function ModalAsignarProveedor({
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
       <div
-        className="rounded-lg p-8 max-w-3xl w-full mx-4 shadow my-8"
+        className="rounded-lg p-6 max-w-3xl w-full mx-4 shadow my-4"
         style={{ backgroundColor: PALETA.card }}
       >
-        <h3 className="text-xl font-semibold mb-6" style={{ color: PALETA.textoOscuro }}>
+        <h3 className="text-xl font-semibold mb-4" style={{ color: PALETA.textoOscuro }}>
           {esReasignacion ? 'Reasignar Incidencia a Proveedor' : 'Asignar Incidencia a Proveedor'}
         </h3>
 
         <form onSubmit={handleSubmit}>
-          <div className="space-y-6">
+          <div className="space-y-4">
             {/* Selección de Proveedor */}
             <div>
               <label className="block text-sm font-medium mb-2" style={{ color: PALETA.textoOscuro }}>
@@ -309,10 +338,11 @@ export default function ModalAsignarProveedor({
 
             {/* Gestión de Imagen Principal */}
             {imagenes.length > 0 && (
-              <div className="border rounded-lg p-4" style={{ borderColor: PALETA.verdeClaro }}>
-                <h4 className="font-semibold text-sm mb-3" style={{ color: PALETA.textoOscuro }}>
-                  Imagen Principal de la Incidencia
-                </h4>
+              <div>
+                <label className="block text-sm font-medium mb-2" style={{ color: PALETA.textoOscuro }}>
+                  Imagen Principal
+                </label>
+                <div className="border rounded-lg p-3" style={{ borderColor: '#000000' }}>
 
                 {cargandoRecursos ? (
                   <p className="text-sm text-gray-500">Cargando imagen...</p>
@@ -323,104 +353,105 @@ export default function ModalAsignarProveedor({
                       return (
                         <div key={imagen.id} className="space-y-3">
                           {imagen.url && (
-                            <div className="relative">
-                              <img
-                                src={imagen.url}
-                                alt={imagen.nombre_archivo}
-                                className="w-full max-h-48 object-contain rounded border"
-                                style={{ borderColor: '#e5e7eb' }}
-                              />
+                            <div className="flex items-start gap-3">
+                              {/* Thumbnail pequeño */}
+                              <div
+                                className="relative flex-shrink-0 cursor-pointer overflow-hidden rounded"
+                                onClick={() => window.open(imagen.url, '_blank')}
+                                title="Click para ver imagen completa"
+                              >
+                                <img
+                                  src={imagen.url}
+                                  alt={imagen.nombre_archivo}
+                                  className="w-24 h-24 object-cover rounded border border-gray-300 hover:scale-110 transition-transform duration-200"
+                                />
+                              </div>
+
+                              {/* Checkbox junto al thumbnail */}
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="checkbox"
+                                    id={`imagen-${imagen.id}`}
+                                    checked={!excluida}
+                                    onChange={() => toggleImagenExcluida(imagen.id)}
+                                    className="w-4 h-4"
+                                    style={{ accentColor: PALETA.verdeClaro }}
+                                  />
+                                  <label
+                                    htmlFor={`imagen-${imagen.id}`}
+                                    className="text-sm cursor-pointer"
+                                    style={{ color: PALETA.textoOscuro }}
+                                  >
+                                    Incluir esta imagen en el chat del proveedor
+                                  </label>
+                                </div>
+                                {excluida && (
+                                  <p className="text-sm text-red-600 italic mt-2">
+                                    Esta imagen NO será visible para el proveedor
+                                  </p>
+                                )}
+                                <p className="text-sm text-gray-500 mt-1">
+                                  Click en la imagen para verla completa
+                                </p>
+                              </div>
                             </div>
-                          )}
-                          <div className="flex items-center gap-3">
-                            <input
-                              type="checkbox"
-                              id={`imagen-${imagen.id}`}
-                              checked={!excluida}
-                              onChange={() => toggleImagenExcluida(imagen.id)}
-                              className="w-4 h-4"
-                              style={{ accentColor: PALETA.verdeClaro }}
-                            />
-                            <label
-                              htmlFor={`imagen-${imagen.id}`}
-                              className="text-sm cursor-pointer"
-                              style={{ color: PALETA.textoOscuro }}
-                            >
-                              Incluir esta imagen en el chat del proveedor
-                            </label>
-                          </div>
-                          {excluida && (
-                            <p className="text-xs text-red-600 italic">
-                              ⚠️ Esta imagen NO será visible para el proveedor
-                            </p>
                           )}
                         </div>
                       );
                     })}
                   </div>
                 )}
+                </div>
               </div>
             )}
 
             {/* Subir Imágenes Adicionales */}
-            <div className="border rounded-lg p-4" style={{ borderColor: PALETA.verdeClaro }}>
-              <h4 className="font-semibold text-sm mb-3" style={{ color: PALETA.textoOscuro }}>
-                Imágenes Adicionales (Opcional)
-              </h4>
-              <p className="text-xs mb-3" style={{ color: '#6b7280' }}>
-                Puedes agregar imágenes adicionales que se compartirán con el proveedor
-              </p>
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={(e) => {
-                  const files = Array.from(e.target.files || []);
-                  setImagenesAdicionales(prev => [...prev, ...files]);
-                }}
-                className="block w-full text-sm file:mr-4 file:rounded file:border-0 file:px-3 file:py-2 file:text-sm file:font-medium hover:file:brightness-95"
-                style={{
-                  color: PALETA.textoOscuro,
-                  accentColor: PALETA.verdeClaro
-                }}
-              />
-              {imagenesAdicionales.length > 0 && (
-                <div className="mt-3 space-y-2">
-                  <p className="text-xs font-medium" style={{ color: PALETA.textoOscuro }}>
-                    Imágenes seleccionadas ({imagenesAdicionales.length}):
-                  </p>
-                  <div className="space-y-1">
-                    {imagenesAdicionales.map((file, index) => (
-                      <div key={index} className="flex items-center justify-between text-xs p-2 bg-gray-50 rounded">
-                        <span className="truncate flex-1" style={{ color: PALETA.textoOscuro }}>
-                          {file.name}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => setImagenesAdicionales(prev => prev.filter((_, i) => i !== index))}
-                          className="ml-2 text-red-600 hover:text-red-800"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    ))}
-                  </div>
+            <div>
+              <label className="block text-sm font-medium mb-2" style={{ color: PALETA.textoOscuro }}>
+                Imágenes Adicionales
+              </label>
+              <div className="border rounded-lg p-3" style={{ borderColor: '#000000' }}>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <label className="px-4 py-2 text-sm font-medium rounded border cursor-pointer hover:bg-gray-50 transition-colors" style={{ borderColor: '#000000', color: PALETA.textoOscuro }}>
+                    Seleccionar archivos
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={(e) => {
+                        const files = Array.from(e.target.files || []);
+                        setImagenesAdicionales(prev => [...prev, ...files]);
+                      }}
+                      className="hidden"
+                    />
+                  </label>
+                  {imagenesAdicionales.map((file, index) => (
+                    <div key={index} className="flex items-center gap-1 text-xs px-2 py-1 bg-gray-100 rounded" style={{ color: PALETA.textoOscuro }}>
+                      <span className="max-w-[120px] truncate">{file.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => setImagenesAdicionales(prev => prev.filter((_, i) => i !== index))}
+                        className="text-red-600 hover:text-red-800 ml-1"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
                 </div>
-              )}
-              <p className="text-xs mt-2" style={{ color: '#9ca3af' }}>
-                Puedes seleccionar múltiples imágenes. Se compartirán con el proveedor al asignar.
-              </p>
+              </div>
             </div>
 
             {/* Documentos del Chat Anterior (solo en reasignación) */}
             {esReasignacion && documentos.length > 0 && (
-              <div className="border rounded-lg p-4" style={{ borderColor: PALETA.verdeClaro }}>
-                <h4 className="font-semibold text-sm mb-3" style={{ color: PALETA.textoOscuro }}>
+              <div>
+                <label className="block text-sm font-medium mb-2" style={{ color: PALETA.textoOscuro }}>
                   Documentos del Proveedor Anterior
-                </h4>
-                <p className="text-xs mb-3" style={{ color: '#6b7280' }}>
-                  Selecciona los documentos que quieres compartir con el nuevo proveedor
-                </p>
+                </label>
+                <div className="border rounded-lg p-3" style={{ borderColor: '#000000' }}>
+                  <p className="text-sm mb-2" style={{ color: '#6b7280' }}>
+                    Selecciona los documentos que quieres compartir con el nuevo proveedor
+                  </p>
 
                 <div className="space-y-2">
                   {documentos.map((doc) => {
@@ -430,8 +461,8 @@ export default function ModalAsignarProveedor({
                         key={doc.id}
                         className="flex items-center gap-3 p-3 border rounded cursor-pointer transition-all hover:bg-gray-50"
                         style={{
-                          borderColor: incluido ? PALETA.verdeClaro : '#e5e7eb',
-                          backgroundColor: incluido ? '#f0f9ff' : 'white'
+                          borderColor: incluido ? '#4b5563' : '#e5e7eb',
+                          backgroundColor: incluido ? '#f3f4f6' : 'white'
                         }}
                         onClick={() => toggleDocumentoIncluido(doc.id)}
                       >
@@ -446,7 +477,7 @@ export default function ModalAsignarProveedor({
                           <p className="text-sm font-medium" style={{ color: PALETA.textoOscuro }}>
                             {doc.nombre_archivo}
                           </p>
-                          <p className="text-xs" style={{ color: '#6b7280' }}>
+                          <p className="text-sm" style={{ color: '#6b7280' }}>
                             Subido por {doc.autor_rol} • {new Date(doc.creado_en).toLocaleDateString()}
                           </p>
                         </div>
@@ -454,11 +485,12 @@ export default function ModalAsignarProveedor({
                     );
                   })}
                 </div>
+                </div>
               </div>
             )}
           </div>
 
-          <div className="flex justify-end gap-3 mt-8">
+          <div className="flex justify-end gap-3 mt-6">
             <button
               type="button"
               onClick={handleClose}

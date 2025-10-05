@@ -55,11 +55,10 @@ The app uses Next.js App Router with route groups:
 **Key Database Tables** (referenced throughout codebase):
 - `personas` - Users with email, rol (Control/Gestor/Cliente/Proveedor), acceso_todos_centros flag
 - `personas_instituciones` - Many-to-many relationship between users and institutions
-- `instituciones` - Centers/institutions (tipo: 'Centro', 'Visitante1', etc.)
+- `instituciones` - Centers/institutions (tipo: 'Centro' or 'Proveedor'). Providers are stored as institutions with tipo='Proveedor'
 - `incidencias` - Core incidents table with estado_cliente, descripcion, num_solicitud, fecha, etc.
-- `proveedor_casos` - Provider assignments with estado_proveedor, prioridad, activo flag
+- `proveedor_casos` - Provider assignments with estado_proveedor, prioridad, activo flag. Links to instituciones table via proveedor_id
 - `historial_estados` - State change audit log (tracks cliente/proveedor state transitions)
-- `proveedores` - Provider master data
 - `citas_proveedores` - Provider appointments for calendar
 
 **Important Views**:
@@ -93,7 +92,8 @@ The app uses a consistent color scheme defined in components:
 
 - Incidents have dual states: `estado_cliente` (client-facing) and `estado_proveedor` (provider-facing)
 - State transitions MUST be logged via `registrarCambioEstado()` or `registrarCambiosEstado()`
-- When querying incidents, always join with relevant tables: `instituciones`, `proveedor_casos`, `proveedores`
+- When querying incidents, always join with relevant tables: `instituciones`, `proveedor_casos`
+- Providers are stored in `instituciones` table with tipo='Proveedor', not in a separate table
 
 ### Authentication Flow
 
@@ -106,7 +106,8 @@ The app uses a consistent color scheme defined in components:
 
 - TypeScript strict mode enabled
 - Path alias: `@/*` maps to project root
-- Define component-level types for Supabase query results (e.g., `type Incidencia`, `type Proveedor`)
+- Define component-level types for Supabase query results (e.g., `type Incidencia`)
+- When working with providers, use the `instituciones` table with tipo='Proveedor'
 
 ### Building for Production
 

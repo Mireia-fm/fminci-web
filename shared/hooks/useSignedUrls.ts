@@ -87,6 +87,9 @@ export function useSignedUrls(
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Crear una key estable basada en los IDs de adjuntos para evitar re-renders infinitos
+  const adjuntosKey = adjuntos?.map(a => a.id).join(',') || '';
+
   useEffect(() => {
     if (!adjuntos || adjuntos.length === 0) {
       setUrls({});
@@ -145,7 +148,7 @@ export function useSignedUrls(
     return () => {
       isMounted = false;
     };
-  }, [adjuntos, bucket]);
+  }, [adjuntosKey, bucket]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return { urls, loading, error };
 }
@@ -168,6 +171,9 @@ export function useComentarioUrls(
   const [urls, setUrls] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Crear una key estable basada en los IDs de comentarios para evitar re-renders infinitos
+  const comentariosKey = comentarios?.map(c => c.id).join(',') || '';
 
   useEffect(() => {
     if (!comentarios || comentarios.length === 0) {
@@ -235,7 +241,7 @@ export function useComentarioUrls(
     return () => {
       isMounted = false;
     };
-  }, [comentarios, bucket]);
+  }, [comentariosKey, bucket]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return { urls, loading, error };
 }
@@ -263,7 +269,14 @@ export function useAutoRefreshUrls(
     const loadUrls = async () => {
       const urlMap = await obtenerUrlsMultiples(storageKeys, bucket);
       if (isMounted) {
-        setUrls(urlMap);
+        // Filtrar URLs nulas
+        const filteredUrls = new Map<string, string>();
+        urlMap.forEach((value, key) => {
+          if (value !== null) {
+            filteredUrls.set(key, value);
+          }
+        });
+        setUrls(filteredUrls);
         setLastRefresh(new Date());
       }
     };

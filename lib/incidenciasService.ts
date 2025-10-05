@@ -75,7 +75,8 @@ export async function obtenerIncidenciasProveedor(proveedorId: string): Promise<
       proveedor_casos!inner(
         estado_proveedor,
         prioridad,
-        activo
+        activo,
+        proveedor_id
       )
     `)
     .eq("proveedor_casos.proveedor_id", proveedorId)
@@ -171,27 +172,51 @@ export async function obtenerConteoPorEstado(
   tipoEstado: "cliente" | "proveedor" = "cliente"
 ): Promise<{ estado: string; n: number }[]> {
   if (tipoEstado === "proveedor") {
-    // Para vista proveedor: contar TODOS los CASOS (activos y anulados)
-    // Esto permite que el proveedor vea su historial completo
+    // Para vista proveedor: contar INCIDENCIAS ÚNICAS (no casos repetidos)
+    // Esto hace que el conteo coincida con el listado de incidencias
+    const proveedorId = perfil.instituciones?.[0]?.institucion_id;
+    if (!proveedorId) {
+      return [];
+    }
+
     const { data, error } = await supabase
       .from("proveedor_casos")
-      .select("estado_proveedor, activo");
+      .select("incidencia_id, estado_proveedor, activo")
+      .eq("proveedor_id", proveedorId);
 
     if (error || !data) {
       console.error("Error cargando casos de proveedor:", error);
       return [];
     }
 
-    // Contar por estado
-    // - Casos activos (activo=true): se cuentan por su estado_proveedor
-    // - Casos anulados (activo=false): se cuentan como "Anulada"
-    const conteo: Record<string, number> = {};
+    // Agrupar por incidencia para contar incidencias únicas
+    // Una incidencia puede tener múltiples casos del mismo proveedor (reasignaciones)
+    const incidenciasPorEstado: Record<string, Set<string>> = {};
+
     data.forEach(caso => {
-      const estado = caso.activo === false ? "Anulada" : (caso.estado_proveedor || "Sin estado");
-      conteo[estado] = (conteo[estado] || 0) + 1;
+      const estado = caso.estado_proveedor || "Sin estado";
+
+      // Si el estado es "Anulada", contar independientemente de activo
+      // (compatibilidad con datos migrados de Wix donde Anulada tiene activo=true)
+      if (estado === "Anulada") {
+        if (!incidenciasPorEstado["Anulada"]) {
+          incidenciasPorEstado["Anulada"] = new Set();
+        }
+        incidenciasPorEstado["Anulada"].add(caso.incidencia_id);
+      }
+      // Para estados normales, solo contar casos activos
+      else if (caso.activo === true) {
+        if (!incidenciasPorEstado[estado]) {
+          incidenciasPorEstado[estado] = new Set();
+        }
+        incidenciasPorEstado[estado].add(caso.incidencia_id);
+      }
     });
 
-    return Object.entries(conteo).map(([estado, n]) => ({ estado, n }));
+    return Object.entries(incidenciasPorEstado).map(([estado, incidencias]) => ({
+      estado,
+      n: incidencias.size
+    }));
   }
 
   // Vista cliente: usar RPC para contar (evita límite de 1000 filas)

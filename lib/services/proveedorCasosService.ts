@@ -17,12 +17,10 @@ export interface ProveedorCaso {
   desasignado_en: string | null;
   desasignado_por: string | null;
   motivo_desasignacion: string | null;
-  proveedores?: {
+  instituciones?: {
     id: string;
     nombre: string;
-    email: string;
-    telefono: string | null;
-    especialidad: string | null;
+    direccion: string | null;
   };
 }
 
@@ -54,18 +52,18 @@ export async function obtenerProveedorActivo(
       .from('proveedor_casos')
       .select(`
         *,
-        proveedores(id, nombre, email, telefono, especialidad)
+        instituciones!proveedor_casos_proveedor_id_fkey(id, nombre, direccion)
       `)
       .eq('incidencia_id', incidenciaId)
       .eq('activo', true)
-      .single();
+      .maybeSingle();
 
     if (error) {
-      if (error.code === 'PGRST116') {
-        // No hay proveedor activo (es esperado en algunos casos)
-        return null;
-      }
       console.error('Error obteniendo proveedor activo:', error);
+      return null;
+    }
+
+    if (!data) {
       return null;
     }
 
@@ -87,7 +85,7 @@ export async function obtenerHistorialProveedores(
       .from('proveedor_casos')
       .select(`
         *,
-        proveedores(id, nombre, email, telefono, especialidad)
+        instituciones!proveedor_casos_proveedor_id_fkey(id, nombre, direccion)
       `)
       .eq('incidencia_id', incidenciaId)
       .order('asignado_en', { ascending: false });
@@ -97,7 +95,7 @@ export async function obtenerHistorialProveedores(
       return [];
     }
 
-    return data as ProveedorCaso[] || [];
+    return (data || []) as ProveedorCaso[];
   } catch (err) {
     console.error('Error inesperado en obtenerHistorialProveedores:', err);
     return [];
@@ -127,7 +125,7 @@ export async function asignarProveedor(
       })
       .select(`
         *,
-        proveedores(id, nombre, email, telefono, especialidad)
+        instituciones!proveedor_casos_proveedor_id_fkey(id, nombre, direccion)
       `)
       .single();
 

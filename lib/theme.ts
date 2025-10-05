@@ -48,10 +48,10 @@ export const ESTADOS_PROVEEDOR = [
   "Oferta aprobada",
   "Oferta a revisar",
   "Resuelta",
-  "Cerrada",
-  "Anulada",
   "Valorada",
-  "Pendiente valoración"
+  "Pendiente valoración",
+  "Cerrada",
+  "Anulada"
 ] as const;
 
 export type EstadoProveedor = typeof ESTADOS_PROVEEDOR[number];
