@@ -275,20 +275,40 @@ export async function valoracionEconomica(
       documentoUrl = urlData.publicUrl;
     }
 
-    // 2. Cambiar estado_proveedor a "Valorada"
+    // 2. Obtener estado actual del proveedor antes de cambiar
+    const { data: proveedorCasoActual } = await supabase
+      .from("proveedor_casos")
+      .select("estado_proveedor")
+      .eq("incidencia_id", incidenciaId)
+      .eq("activo", true)
+      .single();
+
+    const estadoAnterior = proveedorCasoActual?.estado_proveedor || null;
+
+    // 3. Cambiar estado_proveedor a "Valorada"
     await supabase
       .from("proveedor_casos")
       .update({ estado_proveedor: "Valorada" })
       .eq("incidencia_id", incidenciaId)
       .eq("activo", true);
 
-    // 3. Crear mensaje de valoración económica
+    // 4. Registrar cambio de estado en historial
+    await registrarCambioEstado({
+      incidenciaId,
+      tipoEstado: 'proveedor',
+      estadoAnterior,
+      estadoNuevo: 'Valorada',
+      autorId,
+      motivo: 'Valoración económica completada'
+    });
+
+    // 5. Crear mensaje de valoración económica
     const mensajeValoracion = `Valoración económica completada:
 • Importe sin IVA: €${importeSinIva}
 • Porcentaje IVA: ${porcentajeIva}%
 • Importe con IVA: €${importeConIva}${tieneOfertaAprobada ? '\n• Incidencia con oferta previa aprobada' : ''}`;
 
-    // 4. Insertar comentario solo en chat de proveedor
+    // 6. Insertar comentario solo en chat de proveedor
     const { error: comentarioError } = await supabase
       .from("comentarios")
       .insert({
