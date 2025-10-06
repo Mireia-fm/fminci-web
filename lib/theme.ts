@@ -5,6 +5,7 @@ export const PALETA = {
   btn: "#C9D7A7",          // Botones principales
   texto: "#EDF0E9",        // Texto claro
   textoOscuro: "#4b4b4b",  // Texto oscuro
+  placeholder: "#6b7280",  // Color placeholder (gray-500)
 
   // Colores para headers y filtros
   headerTable: "#D9B6A9",  // Header de tablas
@@ -49,7 +50,7 @@ export const ESTADOS_PROVEEDOR = [
   "Oferta a revisar",
   "Resuelta",
   "Valorada",
-  "Pendiente valoración",
+  "Revisar resolución",
   "Cerrada",
   "Anulada"
 ] as const;
@@ -77,7 +78,7 @@ export const COLORES_ESTADOS_PROVEEDOR: Record<EstadoProveedor, string> = {
   "Cerrada": PALETA.b6,              // Beige rosado
   "Anulada": PALETA.b8,              // Verde suave
   "Valorada": PALETA.b4,             // Verde oscuro
-  "Pendiente valoración": PALETA.b9, // Verde claro
+  "Revisar resolución": PALETA.b9,   // Verde claro (destacado para que llame la atención)
 };
 
 // Prioridades

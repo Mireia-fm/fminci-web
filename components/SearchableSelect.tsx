@@ -15,6 +15,7 @@ type SearchableSelectProps = {
   className?: string;
   style?: React.CSSProperties;
   focusColor?: string;
+  disabled?: boolean;
 };
 
 export default function SearchableSelect({
@@ -24,7 +25,8 @@ export default function SearchableSelect({
   placeholder,
   className = "",
   style = {},
-  focusColor = "#3B82F6"
+  focusColor = "#3B82F6",
+  disabled = false
 }: SearchableSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -124,24 +126,31 @@ export default function SearchableSelect({
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
           onClick={() => {
+            if (disabled) return;
             setIsOpen(!isOpen);
             if (!isOpen) {
               setHighlightedIndex(0);
             }
           }}
           placeholder={placeholder}
-          className="w-full px-3 py-1.5 rounded border text-sm h-8 bg-white pr-8 outline-none focus:ring-2"
+          className={`w-full px-3 py-1.5 rounded border border-black text-sm h-8 bg-white pr-8 outline-none ${
+            disabled ? 'opacity-50 cursor-not-allowed' : ''
+          }`}
           style={{
-            ...(style || {}),
-            '--tw-ring-opacity': '0.5'
+            ...(style || {})
           } as React.CSSProperties}
           onFocus={(e) => {
-            e.target.style.boxShadow = `0 0 0 2px ${focusColor}40`;
+            if (!disabled) {
+              e.target.style.borderColor = focusColor.replace('40', '');
+              e.target.style.boxShadow = `0 0 0 2px ${focusColor}`;
+            }
           }}
           onBlur={(e) => {
+            e.target.style.borderColor = '#000000';
             e.target.style.boxShadow = '';
           }}
           autoComplete="off"
+          disabled={disabled}
         />
         <div
           className="absolute right-2 top-1/2 transform -translate-y-1/2 pointer-events-none"

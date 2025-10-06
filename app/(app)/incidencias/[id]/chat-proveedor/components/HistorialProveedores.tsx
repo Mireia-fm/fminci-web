@@ -18,21 +18,21 @@ interface Props {
 
 /**
  * Componente para mostrar el historial de proveedores asignados
- * Solo se muestra si hay proveedores anulados (inactivos)
+ * Solo se muestra si hay proveedores anulados
  */
 export default function HistorialProveedores({ historial }: Props) {
-  // Solo mostrar si hay proveedores inactivos
-  const proveedoresAnulados = historial.filter(p => !p.activo);
+  // Filtrar solo proveedores con estado 'Anulada'
+  const proveedoresAnulados = historial.filter(p => p.estado_proveedor === 'Anulada');
 
   if (proveedoresAnulados.length === 0) {
     return null;
   }
 
   return (
-    <div className="px-6 mb-6">
+    <div className="px-6 mb-12">
       <div className="rounded-lg shadow-lg" style={{ backgroundColor: PALETA.card }}>
         <div
-          className="px-6 py-4 border-b rounded-t-lg"
+          className="px-6 py-3 border-b rounded-t-lg"
           style={{
             backgroundColor: PALETA.headerTable,
             color: PALETA.textoOscuro

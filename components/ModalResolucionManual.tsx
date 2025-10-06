@@ -15,7 +15,6 @@ interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (formulario: FormularioResolucionManual) => Promise<void>;
-  tieneProveedor: boolean;       // Determina qué campos mostrar
   enviando: boolean;
 }
 
@@ -23,7 +22,6 @@ export default function ModalResolucionManual({
   isOpen,
   onClose,
   onSubmit,
-  tieneProveedor,
   enviando
 }: ModalProps) {
   const [formulario, setFormulario] = useState<FormularioResolucionManual>({
@@ -79,87 +77,91 @@ export default function ModalResolucionManual({
         className="rounded-lg p-6 max-w-2xl w-full mx-4 shadow max-h-[90vh] overflow-y-auto"
         style={{ backgroundColor: PALETA.card }}
       >
-        <h3 className="text-xl font-semibold mb-4" style={{ color: PALETA.textoOscuro }}>
-          {tieneProveedor
-            ? 'Resolver Incidencia Manualmente (Control)'
-            : 'Resolver Incidencia Manualmente'}
+        <h3 className="text-xl font-semibold mb-2" style={{ color: PALETA.textoOscuro }}>
+          Resolver como Proveedor
         </h3>
+
+        <p className="text-sm mb-4" style={{ color: '#6b7280' }}>
+          Utiliza esta opción cuando el proveedor ha resuelto la incidencia fuera de la plataforma (por correo, teléfono, etc.) y necesitas registrar la resolución manualmente.
+        </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Descripción (obligatorio) */}
           <div>
             <label className="block text-sm font-medium mb-2" style={{ color: PALETA.textoOscuro }}>
-              {tieneProveedor ? 'Motivo de resolución manual *' : 'Descripción de la resolución *'}
+              Descripción de la resolución *
             </label>
             <textarea
               value={formulario.descripcion}
               onChange={(e) => setFormulario(prev => ({ ...prev, descripcion: e.target.value }))}
-              placeholder="Describe cómo se resolvió la incidencia..."
+              placeholder="Describe cómo se resolvió la incidencia (qué se hizo, cómo se solucionó el problema, etc.)..."
               className="w-full h-24 p-3 border rounded resize-none focus:outline-none text-sm"
               onFocus={(e) => e.target.style.boxShadow = `0 0 0 2px ${PALETA.verdeClaro}80`}
               onBlur={(e) => e.target.style.boxShadow = ''}
               required
             />
+            <p className="text-xs mt-1" style={{ color: '#6b7280' }}>
+              Ejemplo: &quot;Proveedor reparó la avería eléctrica en sala principal el 15/01/2025&quot;
+            </p>
           </div>
 
-          {/* Campos solo para resolución SIN proveedor */}
-          {!tieneProveedor && (
-            <>
-              {/* Proveedor externo */}
-              <div>
-                <label className="block text-sm font-medium mb-2" style={{ color: PALETA.textoOscuro }}>
-                  Proveedor externo (opcional)
-                </label>
-                <input
-                  type="text"
-                  value={formulario.proveedor_externo}
-                  onChange={(e) => setFormulario(prev => ({ ...prev, proveedor_externo: e.target.value }))}
-                  placeholder="Ej: Fontanería García SL"
-                  className="w-full p-2 border rounded focus:outline-none text-sm"
-                  onFocus={(e) => e.target.style.boxShadow = `0 0 0 2px ${PALETA.verdeClaro}80`}
-                  onBlur={(e) => e.target.style.boxShadow = ''}
-                />
-              </div>
+          {/* Proveedor que realizó el trabajo */}
+          <div>
+            <label className="block text-sm font-medium mb-2" style={{ color: PALETA.textoOscuro }}>
+              Proveedor que realizó el trabajo (opcional)
+            </label>
+            <input
+              type="text"
+              value={formulario.proveedor_externo}
+              onChange={(e) => setFormulario(prev => ({ ...prev, proveedor_externo: e.target.value }))}
+              placeholder="Ej: Fontanería García SL, Juan Pérez Electricidad, etc."
+              className="w-full p-2 border rounded focus:outline-none text-sm"
+              onFocus={(e) => e.target.style.boxShadow = `0 0 0 2px ${PALETA.verdeClaro}80`}
+              onBlur={(e) => e.target.style.boxShadow = ''}
+            />
+            <p className="text-xs mt-1" style={{ color: '#6b7280' }}>
+              Si el trabajo fue realizado por un proveedor externo, indica su nombre
+            </p>
+          </div>
 
-              {/* Importe */}
-              <div>
-                <label className="block text-sm font-medium mb-2" style={{ color: PALETA.textoOscuro }}>
-                  Importe (€, opcional)
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={formulario.importe || ''}
-                  onChange={(e) => setFormulario(prev => ({
-                    ...prev,
-                    importe: e.target.value ? parseFloat(e.target.value) : undefined
-                  }))}
-                  placeholder="0.00"
-                  className="w-full p-2 border rounded focus:outline-none text-sm"
-                  onFocus={(e) => e.target.style.boxShadow = `0 0 0 2px ${PALETA.verdeClaro}80`}
-                  onBlur={(e) => e.target.style.boxShadow = ''}
-                />
-              </div>
-            </>
-          )}
+          {/* Importe */}
+          <div>
+            <label className="block text-sm font-medium mb-2" style={{ color: PALETA.textoOscuro }}>
+              Importe del servicio (€, opcional)
+            </label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={formulario.importe || ''}
+              onChange={(e) => setFormulario(prev => ({
+                ...prev,
+                importe: e.target.value ? parseFloat(e.target.value) : undefined
+              }))}
+              placeholder="0.00"
+              className="w-full p-2 border rounded focus:outline-none text-sm"
+              onFocus={(e) => e.target.style.boxShadow = `0 0 0 2px ${PALETA.verdeClaro}80`}
+              onBlur={(e) => e.target.style.boxShadow = ''}
+            />
+            <p className="text-xs mt-1" style={{ color: '#6b7280' }}>
+              Coste total del servicio prestado
+            </p>
+          </div>
 
-          {/* Observaciones (solo con proveedor) */}
-          {tieneProveedor && (
-            <div>
-              <label className="block text-sm font-medium mb-2" style={{ color: PALETA.textoOscuro }}>
-                Observaciones adicionales (opcional)
-              </label>
-              <textarea
-                value={formulario.observaciones}
-                onChange={(e) => setFormulario(prev => ({ ...prev, observaciones: e.target.value }))}
-                placeholder="Información adicional sobre la resolución..."
-                className="w-full h-20 p-3 border rounded resize-none focus:outline-none text-sm"
-                onFocus={(e) => e.target.style.boxShadow = `0 0 0 2px ${PALETA.verdeClaro}80`}
-                onBlur={(e) => e.target.style.boxShadow = ''}
-              />
-            </div>
-          )}
+          {/* Observaciones adicionales */}
+          <div>
+            <label className="block text-sm font-medium mb-2" style={{ color: PALETA.textoOscuro }}>
+              Observaciones adicionales (opcional)
+            </label>
+            <textarea
+              value={formulario.observaciones}
+              onChange={(e) => setFormulario(prev => ({ ...prev, observaciones: e.target.value }))}
+              placeholder="Información adicional relevante: contacto del proveedor, forma de pago, garantía, etc."
+              className="w-full h-20 p-3 border rounded resize-none focus:outline-none text-sm"
+              onFocus={(e) => e.target.style.boxShadow = `0 0 0 2px ${PALETA.verdeClaro}80`}
+              onBlur={(e) => e.target.style.boxShadow = ''}
+            />
+          </div>
 
           {/* Adjuntar documentos */}
           <div>
@@ -202,7 +204,7 @@ export default function ModalResolucionManual({
               className="px-6 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity disabled:opacity-50"
               style={{ backgroundColor: PALETA.bg }}
             >
-              {enviando ? 'Resolviendo...' : 'Resolver Incidencia'}
+              {enviando ? 'Guardando su resolución...' : 'Resolver Incidencia'}
             </button>
           </div>
         </form>

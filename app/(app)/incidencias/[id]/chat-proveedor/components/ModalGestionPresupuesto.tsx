@@ -296,7 +296,7 @@ export default function ModalGestionPresupuesto({
                   className="px-6 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity disabled:opacity-50"
                   style={{ backgroundColor: PALETA.verdeClaro }}
                 >
-                  {enviando ? 'Procesando...' : 'Aprobar Presupuesto'}
+                  {enviando ? 'Procesando su solicitud...' : 'Aprobar Presupuesto'}
                 </button>
               </div>
             </>

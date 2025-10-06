@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabaseClient";
 import { registrarCambioEstado } from "@/lib/historialEstados";
 import { crearComentario } from "./comentariosService";
+import { sanitizarNombreArchivo } from "./storageService";
 
 export type FormularioAsignacionProveedor = {
   proveedor_id: string;
@@ -10,6 +11,8 @@ export type FormularioAsignacionProveedor = {
   imagenes_excluidas?: string[];
   documentos_incluidos?: string[];
   imagenes_adicionales?: File[];
+  es_proveedor_externo?: boolean;
+  cif_proveedor_externo?: string;
 };
 
 export async function asignarProveedorCompleto(
@@ -32,47 +35,120 @@ export async function asignarProveedorCompleto(
     asignadoPorId = persona?.id || null;
   }
 
+  // Si es proveedor externo, crear o buscar el proveedor en instituciones
+  let proveedorIdFinal = formulario.proveedor_id;
+
+  if (formulario.es_proveedor_externo && formulario.cif_proveedor_externo) {
+    // Buscar si ya existe un proveedor externo con este CIF
+    const { data: proveedorExistente } = await supabase
+      .from("instituciones")
+      .select("id")
+      .eq("tipo", "Proveedor")
+      .eq("cif", formulario.cif_proveedor_externo)
+      .maybeSingle();
+
+    if (proveedorExistente) {
+      // Usar el proveedor existente
+      proveedorIdFinal = proveedorExistente.id;
+    } else {
+      // Crear nuevo proveedor externo
+      const { data: nuevoProveedor, error: errorProveedor } = await supabase
+        .from("instituciones")
+        .insert({
+          nombre: `Proveedor Externo - ${formulario.cif_proveedor_externo}`,
+          tipo: "Proveedor",
+          cif: formulario.cif_proveedor_externo,
+          activo: true
+        })
+        .select("id")
+        .single();
+
+      if (errorProveedor) {
+        throw new Error(`Error al crear proveedor externo: ${errorProveedor.message}`);
+      }
+
+      proveedorIdFinal = nuevoProveedor.id;
+    }
+  }
+
   // Verificar si ya existe un caso activo
   const { data: casoExistente } = await supabase
     .from("proveedor_casos")
-    .select("id")
+    .select("id, estado_proveedor")
     .eq("incidencia_id", incidenciaId)
     .eq("activo", true)
     .maybeSingle();
 
+  let esReasignacion = false;
+  let nuevoProveedorCasoId: string | null = null;
+
   if (casoExistente) {
-    // Actualizar caso existente
-    await supabase
-      .from("proveedor_casos")
-      .update({
-        proveedor_id: formulario.proveedor_id,
-        descripcion_proveedor: formulario.descripcion_proveedor,
-        prioridad: formulario.prioridad,
-        estado_proveedor: formulario.estado_proveedor,
-        asignado_por: asignadoPorId,
-        asignado_en: new Date().toISOString(),
-        actualizado_en: new Date().toISOString()
-      })
-      .eq("id", casoExistente.id);
+    // Si el caso existe y está anulado, crear uno nuevo (sin tocar el anterior)
+    if (casoExistente.estado_proveedor === 'Anulada') {
+      esReasignacion = true;
+
+      // Crear nuevo caso para el nuevo proveedor con estado "Abierta"
+      const { data: nuevoCaso, error: insertError } = await supabase
+        .from("proveedor_casos")
+        .insert({
+          incidencia_id: incidenciaId,
+          proveedor_id: proveedorIdFinal,
+          descripcion_proveedor: formulario.descripcion_proveedor,
+          prioridad: formulario.prioridad,
+          estado_proveedor: 'Abierta', // Nuevo caso siempre empieza como "Abierta"
+          asignado_por: asignadoPorId,
+          asignado_en: new Date().toISOString(),
+          activo: true
+        })
+        .select('id')
+        .single();
+
+      if (insertError) {
+        console.error("Error creando nuevo proveedor_caso:", insertError);
+        throw new Error(`Error al reasignar proveedor: ${insertError.message}`);
+      }
+
+      nuevoProveedorCasoId = nuevoCaso?.id || null;
+    } else {
+      // Actualizar caso existente (no anulado)
+      await supabase
+        .from("proveedor_casos")
+        .update({
+          proveedor_id: proveedorIdFinal,
+          descripcion_proveedor: formulario.descripcion_proveedor,
+          prioridad: formulario.prioridad,
+          estado_proveedor: formulario.estado_proveedor,
+          asignado_por: asignadoPorId,
+          asignado_en: new Date().toISOString(),
+          actualizado_en: new Date().toISOString()
+        })
+        .eq("id", casoExistente.id);
+
+      nuevoProveedorCasoId = casoExistente.id;
+    }
   } else {
-    // Crear nuevo caso
-    const { error: insertError } = await supabase
+    // Crear nuevo caso (primera asignación) - siempre empieza como "Abierta"
+    const { data: nuevoCaso, error: insertError } = await supabase
       .from("proveedor_casos")
       .insert({
         incidencia_id: incidenciaId,
-        proveedor_id: formulario.proveedor_id,
+        proveedor_id: proveedorIdFinal,
         descripcion_proveedor: formulario.descripcion_proveedor,
         prioridad: formulario.prioridad,
-        estado_proveedor: formulario.estado_proveedor,
+        estado_proveedor: 'Abierta', // Primera asignación siempre empieza como "Abierta"
         asignado_por: asignadoPorId,
         asignado_en: new Date().toISOString(),
         activo: true
-      });
+      })
+      .select('id')
+      .single();
 
     if (insertError) {
       console.error("Error creando proveedor_caso:", insertError);
       throw new Error(`Error al asignar proveedor: ${insertError.message}`);
     }
+
+    nuevoProveedorCasoId = nuevoCaso?.id || null;
   }
 
   // Cambiar estado de la incidencia a "En tramitación" SOLO si no está ya en ese estado
@@ -94,7 +170,9 @@ export async function asignarProveedorCompleto(
       motivo: 'Proveedor asignado',
       metadatos: {
         accion: casoExistente ? 'reasignar_proveedor' : 'asignar_proveedor',
-        proveedor_id: formulario.proveedor_id
+        proveedor_id: proveedorIdFinal,
+        es_proveedor_externo: formulario.es_proveedor_externo || false,
+        ...(formulario.cif_proveedor_externo && { cif_proveedor_externo: formulario.cif_proveedor_externo })
       }
     });
   }
@@ -105,11 +183,13 @@ export async function asignarProveedorCompleto(
     estadoAnterior: null,
     estadoNuevo: formulario.estado_proveedor,
     autorId: asignadoPorId || undefined,
-    motivo: casoExistente ? 'Proveedor reasignado' : 'Proveedor asignado',
+    motivo: esReasignacion ? 'Proveedor reasignado tras anulación' : (casoExistente ? 'Proveedor reasignado' : 'Proveedor asignado'),
     metadatos: {
-      accion: casoExistente ? 'reasignar_proveedor' : 'asignar_proveedor',
-      proveedor_id: formulario.proveedor_id,
-      prioridad: formulario.prioridad
+      accion: esReasignacion ? 'reasignar_proveedor_tras_anulacion' : (casoExistente ? 'reasignar_proveedor' : 'asignar_proveedor'),
+      proveedor_id: proveedorIdFinal,
+      prioridad: formulario.prioridad,
+      es_proveedor_externo: formulario.es_proveedor_externo || false,
+      ...(formulario.cif_proveedor_externo && { cif_proveedor_externo: formulario.cif_proveedor_externo })
     }
   });
 
@@ -121,11 +201,12 @@ export async function asignarProveedorCompleto(
     operaciones.push(procesarImagenesExcluidas(formulario.imagenes_excluidas));
   }
 
-  // Procesar documentos incluidos
+  // Procesar documentos incluidos (con proveedor_caso_id)
   if (formulario.documentos_incluidos && formulario.documentos_incluidos.length > 0) {
     operaciones.push(
       procesarDocumentosIncluidos(
         incidenciaId,
+        nuevoProveedorCasoId,
         formulario.documentos_incluidos,
         asignadoPorId,
         userEmail
@@ -133,11 +214,12 @@ export async function asignarProveedorCompleto(
     );
   }
 
-  // Procesar imágenes adicionales
+  // Procesar imágenes adicionales (con proveedor_caso_id)
   if (formulario.imagenes_adicionales && formulario.imagenes_adicionales.length > 0) {
     operaciones.push(
       procesarImagenesAdicionales(
         incidenciaId,
+        nuevoProveedorCasoId,
         numSolicitud,
         formulario.imagenes_adicionales,
         asignadoPorId,
@@ -146,13 +228,15 @@ export async function asignarProveedorCompleto(
     );
   }
 
-  // Crear comentario de asignación
+  // Crear comentario de asignación (cliente - sin proveedor_caso_id)
   operaciones.push(
     crearComentarioAsignacion(
       incidenciaId,
-      formulario.proveedor_id,
+      proveedorIdFinal,
       asignadoPorId,
-      userEmail
+      userEmail,
+      formulario.es_proveedor_externo || false,
+      formulario.cif_proveedor_externo
     )
   );
 
@@ -174,6 +258,7 @@ async function procesarImagenesExcluidas(imagenesIds: string[]): Promise<void> {
 
 async function procesarDocumentosIncluidos(
   incidenciaId: string,
+  proveedorCasoId: string | null,
   documentosIds: string[],
   autorId: string | null,
   userEmail: string | null
@@ -195,6 +280,7 @@ async function procesarDocumentosIncluidos(
       if (adjunto) {
         const comentario = await crearComentario({
           incidencia_id: incidenciaId,
+          proveedor_caso_id: proveedorCasoId || undefined,
           ambito: 'proveedor',
           autor_id: autorId || '',
           autor_email: userEmail || '',
@@ -221,53 +307,61 @@ async function procesarDocumentosIncluidos(
 
 async function procesarImagenesAdicionales(
   incidenciaId: string,
+  proveedorCasoId: string | null,
   numSolicitud: string,
   imagenes: File[],
   autorId: string | null,
   userEmail: string | null
 ): Promise<void> {
-  // Subir todas las imágenes en paralelo
-  const uploadPromises = imagenes.map(async (imagenFile, index) => {
-    const safeName = imagenFile.name.replace(/\s+/g, "_");
+  // Subir todos los archivos en paralelo
+  const uploadPromises = imagenes.map(async (archivo, index) => {
+    const safeName = sanitizarNombreArchivo(archivo.name);
     const path = `incidencias/${numSolicitud}/${Date.now()}_${index}_${safeName}`;
 
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from("incidencias")
-      .upload(path, imagenFile, { upsert: false });
+      .upload(path, archivo, { upsert: false });
 
     if (!uploadError && uploadData) {
+      // Determinar tipo de archivo basado en la extensión
+      const extension = archivo.name.split('.').pop()?.toLowerCase() || '';
+      const tiposImagen = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'];
+      const tipo = tiposImagen.includes(extension) ? 'imagen' : 'documento';
+
       return {
         storage_key: uploadData.path,
-        nombre_archivo: imagenFile.name
+        nombre_archivo: archivo.name,
+        tipo
       };
     }
     return null;
   });
 
   const uploadResults = await Promise.all(uploadPromises);
-  const imagenesSubidas = uploadResults.filter((result): result is { storage_key: string; nombre_archivo: string } => result !== null);
+  const archivosSubidos = uploadResults.filter((result): result is { storage_key: string; nombre_archivo: string; tipo: string } => result !== null);
 
-  // Si hay imágenes subidas, crear un solo comentario y adjuntos en paralelo
-  if (imagenesSubidas.length > 0) {
+  // Si hay archivos subidos, crear un solo comentario y adjuntos en paralelo
+  if (archivosSubidos.length > 0) {
     const comentario = await crearComentario({
       incidencia_id: incidenciaId,
+      proveedor_caso_id: proveedorCasoId || undefined,
       ambito: 'proveedor',
       autor_id: autorId || '',
       autor_email: userEmail || '',
       autor_rol: 'Control',
-      cuerpo: `${imagenesSubidas.length} imagen${imagenesSubidas.length > 1 ? 'es' : ''} adicional${imagenesSubidas.length > 1 ? 'es' : ''} compartida${imagenesSubidas.length > 1 ? 's' : ''} por Control`,
+      cuerpo: `${archivosSubidos.length} archivo${archivosSubidos.length > 1 ? 's' : ''} adicional${archivosSubidos.length > 1 ? 'es' : ''} compartido${archivosSubidos.length > 1 ? 's' : ''} por Control`,
       es_sistema: true
     });
 
     if (comentario) {
       // Insertar todos los adjuntos en paralelo
-      const adjuntosData = imagenesSubidas.map(img => ({
+      const adjuntosData = archivosSubidos.map(archivo => ({
         incidencia_id: incidenciaId,
         comentario_id: comentario.id,
-        storage_key: img.storage_key,
-        nombre_archivo: img.nombre_archivo,
-        tipo: 'imagen',
-        categoria: 'imagen_comentario',
+        storage_key: archivo.storage_key,
+        nombre_archivo: archivo.nombre_archivo,
+        tipo: archivo.tipo,
+        categoria: 'archivo_comentario',
         visible_proveedor: true
       }));
 
@@ -280,7 +374,9 @@ async function crearComentarioAsignacion(
   incidenciaId: string,
   proveedorId: string,
   autorId: string | null,
-  userEmail: string | null
+  userEmail: string | null,
+  esProveedorExterno: boolean = false,
+  cifProveedorExterno?: string
 ): Promise<void> {
   const { data: proveedor } = await supabase
     .from("instituciones")
@@ -289,13 +385,18 @@ async function crearComentarioAsignacion(
     .single();
 
   if (proveedor) {
+    const mensajeBase = `La incidencia ha sido asignada al proveedor ${proveedor.nombre}`;
+    const mensajeCIF = esProveedorExterno && cifProveedorExterno
+      ? ` (CIF: ${cifProveedorExterno})`
+      : '';
+
     await crearComentario({
       incidencia_id: incidenciaId,
       ambito: 'cliente',
       autor_id: autorId || '',
       autor_email: userEmail || '',
       autor_rol: 'Control',
-      cuerpo: `La incidencia ha sido asignada al proveedor ${proveedor.nombre}.`,
+      cuerpo: `${mensajeBase}${mensajeCIF}.`,
       es_sistema: true
     });
   }

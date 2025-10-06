@@ -151,7 +151,8 @@ export function usePresupuestoGestion(
         .from("proveedor_casos")
         .update({ estado_proveedor: "Oferta aprobada" })
         .eq("incidencia_id", incidenciaId)
-        .eq("activo", true);
+        .eq("activo", true)
+        .neq("estado_proveedor", "Anulada");
 
       // 2. Actualizar estado del presupuesto
       await supabase
@@ -212,7 +213,8 @@ export function usePresupuestoGestion(
         .from("proveedor_casos")
         .update({ estado_proveedor: "Oferta a revisar" })
         .eq("incidencia_id", incidenciaId)
-        .eq("activo", true);
+        .eq("activo", true)
+        .neq("estado_proveedor", "Anulada");
 
       // 2. Actualizar estado del presupuesto
       await supabase

@@ -37,7 +37,7 @@ export default function DatosTecnicosIncidencia({
 
   return (
     <div
-      className="rounded-lg mb-6 shadow-lg"
+      className="rounded-lg mb-12 shadow-lg"
       style={{ backgroundColor: PALETA.card }}
     >
       <div

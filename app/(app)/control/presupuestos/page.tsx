@@ -192,7 +192,8 @@ export default function PresupuestosPage() {
         .from("proveedor_casos")
         .update({ estado_proveedor: "Oferta aprobada" })
         .eq("incidencia_id", presupuesto.incidencia_id)
-        .eq("activo", true);
+        .eq("activo", true)
+        .neq("estado_proveedor", "Anulada");
 
       if (estadoError) {
         console.error("Error actualizando estado proveedor:", estadoError);
@@ -275,7 +276,8 @@ export default function PresupuestosPage() {
         .from("proveedor_casos")
         .update({ estado_proveedor: "Oferta a revisar" })
         .eq("incidencia_id", presupuestoParaRechazar.incidencia_id)
-        .eq("activo", true);
+        .eq("activo", true)
+        .neq("estado_proveedor", "Anulada");
 
       if (estadoError) {
         console.error("Error actualizando estado proveedor:", estadoError);
@@ -607,7 +609,7 @@ El proveedor debe enviar una nueva propuesta.`,
                           className="px-4 py-2 text-white rounded text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
                           style={{ backgroundColor: PALETA.verdeClaro }}
                         >
-                          {enviando ? 'Procesando...' : 'Aprobar'}
+                          {enviando ? 'Procesando su solicitud...' : 'Aprobar'}
                         </button>
                         <button
                           onClick={() => abrirModalMotivoRevision(presupuesto)}
@@ -615,7 +617,7 @@ El proveedor debe enviar una nueva propuesta.`,
                           className="px-4 py-2 text-white rounded text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
                           style={{ backgroundColor: '#d4a574' }}
                         >
-                          {enviando ? 'Procesando...' : 'Mandar a revisar'}
+                          {enviando ? 'Procesando su solicitud...' : 'Mandar a revisar'}
                         </button>
                       </>
                     )}
@@ -888,7 +890,7 @@ El proveedor debe enviar una nueva propuesta.`,
                       className="px-6 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity disabled:opacity-50"
                       style={{ backgroundColor: '#d4a574' }}
                     >
-                      {enviando ? 'Procesando...' : 'Mandar a revisar'}
+                      {enviando ? 'Procesando su solicitud...' : 'Mandar a revisar'}
                     </button>
                     <button
                       onClick={() => aprobarPresupuesto(presupuestoSeleccionado)}
@@ -896,7 +898,7 @@ El proveedor debe enviar una nueva propuesta.`,
                       className="px-6 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity disabled:opacity-50"
                       style={{ backgroundColor: PALETA.verdeClaro }}
                     >
-                      {enviando ? 'Procesando...' : 'Aprobar Presupuesto'}
+                      {enviando ? 'Procesando su solicitud...' : 'Aprobar Presupuesto'}
                     </button>
                   </div>
                 )}
@@ -973,7 +975,7 @@ El proveedor debe enviar una nueva propuesta.`,
                   className="px-6 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity disabled:opacity-50"
                   style={{ backgroundColor: '#d4a574' }}
                 >
-                  {enviando ? 'Enviando...' : 'Mandar a Revisar'}
+                  {enviando ? 'Guardando sus cambios...' : 'Mandar a Revisar'}
                 </button>
               </div>
             </div>

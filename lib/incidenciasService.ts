@@ -174,15 +174,22 @@ export async function obtenerConteoPorEstado(
   if (tipoEstado === "proveedor") {
     // Para vista proveedor: contar INCIDENCIAS ÚNICAS (no casos repetidos)
     // Esto hace que el conteo coincida con el listado de incidencias
-    const proveedorId = perfil.instituciones?.[0]?.institucion_id;
-    if (!proveedorId) {
-      return [];
+
+    // Si es Control o tiene acceso a todos los centros, mostrar TODOS los proveedores
+    let query = supabase
+      .from("proveedor_casos")
+      .select("incidencia_id, estado_proveedor, activo");
+
+    // Si NO es Control, filtrar por proveedor específico
+    if (perfil.rol !== "Control" && !perfil.acceso_todos_centros) {
+      const proveedorId = perfil.instituciones?.[0]?.institucion_id;
+      if (!proveedorId) {
+        return [];
+      }
+      query = query.eq("proveedor_id", proveedorId);
     }
 
-    const { data, error } = await supabase
-      .from("proveedor_casos")
-      .select("incidencia_id, estado_proveedor, activo")
-      .eq("proveedor_id", proveedorId);
+    const { data, error } = await query;
 
     if (error || !data) {
       console.error("Error cargando casos de proveedor:", error);

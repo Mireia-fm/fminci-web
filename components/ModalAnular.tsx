@@ -6,7 +6,7 @@ import { PALETA } from "@/lib/theme";
 interface ModalAnularProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: (motivo: string) => Promise<void>;
+  onConfirm: (motivo: string, esDuplicada?: boolean) => Promise<void>;
 }
 
 export default function ModalAnular({
@@ -15,18 +15,23 @@ export default function ModalAnular({
   onConfirm
 }: ModalAnularProps) {
   const [motivo, setMotivo] = useState("");
+  const [esDuplicada, setEsDuplicada] = useState(false);
   const [enviando, setEnviando] = useState(false);
 
   const handleConfirm = async () => {
-    if (!motivo.trim()) {
-      alert("Por favor ingresa un motivo de anulación");
+    // Solo requerir motivo si NO está marcada como duplicada
+    if (!esDuplicada && !motivo.trim()) {
+      alert("Por favor ingrese un motivo de anulación");
       return;
     }
 
     try {
       setEnviando(true);
-      await onConfirm(motivo);
+      // Si está marcada como duplicada, usar "Duplicación" como motivo
+      const motivoFinal = esDuplicada ? "Duplicación" : motivo;
+      await onConfirm(motivoFinal, esDuplicada);
       setMotivo("");
+      setEsDuplicada(false);
       onClose();
     } catch (error) {
       console.error("Error al anular:", error);
@@ -37,6 +42,7 @@ export default function ModalAnular({
 
   const handleClose = () => {
     setMotivo("");
+    setEsDuplicada(false);
     onClose();
   };
 
@@ -48,16 +54,47 @@ export default function ModalAnular({
         <h3 className="text-xl font-semibold mb-4" style={{ color: PALETA.textoOscuro }}>
           Anular Incidencia
         </h3>
-        <textarea
-          value={motivo}
-          onChange={(e) => setMotivo(e.target.value)}
-          placeholder="Motivo de la anulación..."
-          className="w-full p-2 border rounded mb-4 text-sm focus:outline-none"
-          rows={3}
-          onFocus={(e) => e.target.style.boxShadow = `0 0 0 2px ${PALETA.verdeClaro}80`}
-          onBlur={(e) => e.target.style.boxShadow = ''}
-          disabled={enviando}
-        />
+
+        {/* Checkbox para incidencia duplicada */}
+        <div className="mb-4">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={esDuplicada}
+              onChange={(e) => setEsDuplicada(e.target.checked)}
+              className="w-4 h-4"
+              style={{ accentColor: PALETA.verdeClaro }}
+              disabled={enviando}
+            />
+            <span className="text-sm font-medium" style={{ color: PALETA.textoOscuro }}>
+              Esta incidencia está duplicada
+            </span>
+          </label>
+          {esDuplicada && (
+            <p className="text-xs text-gray-600 mt-2 ml-6">
+              Se registrará con el motivo &quot;Duplicación&quot; para llevar un seguimiento estadístico
+            </p>
+          )}
+        </div>
+
+        {/* Mostrar campo de motivo solo si NO está marcada como duplicada */}
+        {!esDuplicada && (
+          <div className="mb-4">
+            <label className="block text-sm font-medium mb-2" style={{ color: PALETA.textoOscuro }}>
+              Motivo de la anulación <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              value={motivo}
+              onChange={(e) => setMotivo(e.target.value)}
+              placeholder="Describa el motivo de la anulación"
+              className="w-full p-2 border rounded text-sm focus:outline-none"
+              rows={3}
+              onFocus={(e) => e.target.style.boxShadow = `0 0 0 2px ${PALETA.verdeClaro}80`}
+              onBlur={(e) => e.target.style.boxShadow = ''}
+              disabled={enviando}
+            />
+          </div>
+        )}
         <div className="flex justify-end gap-3">
           <button
             onClick={handleClose}
@@ -73,7 +110,7 @@ export default function ModalAnular({
             style={{ backgroundColor: PALETA.bg }}
             disabled={enviando}
           >
-            {enviando ? 'Procesando...' : 'Anular'}
+            {enviando ? 'Procesando su solicitud...' : 'Anular'}
           </button>
         </div>
       </div>

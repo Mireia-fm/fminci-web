@@ -16,6 +16,21 @@ export interface SubidaArchivoResult {
 }
 
 /**
+ * Sanitiza el nombre de archivo removiendo caracteres especiales
+ * para evitar errores en Supabase Storage
+ */
+export function sanitizarNombreArchivo(nombre: string): string {
+  // Remover caracteres no válidos y espacios
+  // Mantener solo letras, números, guiones, puntos y guiones bajos
+  return nombre
+    .normalize('NFD') // Descomponer caracteres acentuados
+    .replace(/[\u0300-\u036f]/g, '') // Eliminar marcas diacríticas
+    .replace(/[^a-zA-Z0-9._-]/g, '_') // Reemplazar caracteres especiales por guión bajo
+    .replace(/_{2,}/g, '_') // Reemplazar múltiples guiones bajos por uno solo
+    .replace(/^[._-]+|[._-]+$/g, ''); // Eliminar guiones/puntos al inicio o final
+}
+
+/**
  * Obtiene URL firmada para un archivo en Storage
  * Incluye lógica de fallback para buscar archivo si no se encuentra en ruta exacta
  */
@@ -144,7 +159,8 @@ export async function subirMultiples(
   const rutasExitosas: string[] = [];
 
   for (const file of files) {
-    const nombreArchivo = `${Date.now()}_${file.name}`;
+    const nombreSanitizado = sanitizarNombreArchivo(file.name);
+    const nombreArchivo = `${Date.now()}_${nombreSanitizado}`;
     const rutaCompleta = `${rutaBase}/${nombreArchivo}`;
 
     const { ruta, error } = await subirArchivo(file, rutaCompleta, bucket);

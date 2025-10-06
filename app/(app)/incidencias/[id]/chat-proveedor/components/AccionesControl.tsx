@@ -37,10 +37,10 @@ export default function AccionesControl({
   const incidenciaCerrada = incidencia.estado_cliente === "Cerrada" && estado === "Cerrada";
 
   return (
-    <div className="px-6 mb-6">
+    <div className="px-6 mb-12">
       <div className="rounded-lg shadow-lg" style={{ backgroundColor: PALETA.card }}>
         <div
-          className="px-6 py-4 border-b rounded-t-lg"
+          className="px-6 py-3 border-b rounded-t-lg"
           style={{
             backgroundColor: PALETA.headerTable,
             color: PALETA.textoOscuro
@@ -49,6 +49,15 @@ export default function AccionesControl({
           <h2 className="text-lg font-semibold">ACCIONES DE CONTROL</h2>
         </div>
         <div className="px-6 py-4">
+          {/* Mensaje de espera cuando está en revisión */}
+          {estado === "Revisar resolución" && (
+            <div className="mb-4 p-4 rounded-lg text-center" style={{ backgroundColor: PALETA.b9, color: PALETA.textoOscuro }}>
+              <p className="text-sm font-medium">
+                ⏳ Esperando revisión por parte del proveedor de la resolución
+              </p>
+            </div>
+          )}
+
           <div className="flex gap-3 justify-center flex-wrap">
             {/* Botón Anular - siempre disponible hasta que la incidencia esté completamente cerrada */}
             {!incidenciaCerrada && estado !== "Anulada" && (

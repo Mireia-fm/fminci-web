@@ -20,9 +20,10 @@ export default function HistorialEstados({ cambios, titulo }: HistorialEstadosPr
   const cambiosOrdenados = [...cambios].reverse();
 
   return (
-    <div className="rounded-lg shadow-lg" style={{ backgroundColor: PALETA.card }}>
+    <div className="px-6 mb-12">
+      <div className="rounded-lg shadow-lg" style={{ backgroundColor: PALETA.card }}>
       <div
-        className="px-6 py-4 border-b rounded-t-lg"
+        className="px-6 py-3 border-b rounded-t-lg"
         style={{
           backgroundColor: PALETA.headerTable,
           color: PALETA.textoOscuro
@@ -99,6 +100,7 @@ export default function HistorialEstados({ cambios, titulo }: HistorialEstadosPr
           </div>
         </div>
       </div>
+    </div>
     </div>
   );
 }

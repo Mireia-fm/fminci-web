@@ -31,11 +31,12 @@ export default function ModalCalendarizar({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div
-        className="rounded-lg p-8 max-w-md w-full mx-4 shadow"
-        style={{ backgroundColor: PALETA.card }}
-      >
+    <>
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div
+          className="rounded-lg p-8 max-w-md w-full mx-4 shadow"
+          style={{ backgroundColor: PALETA.card }}
+        >
         <h3 className="text-xl font-semibold mb-6" style={{ color: PALETA.textoOscuro }}>
           Calendarizar Visita
         </h3>
@@ -52,6 +53,10 @@ export default function ModalCalendarizar({
               onChange={(e) => setFechaVisita(e.target.value)}
               min={new Date().toISOString().split('T')[0]}
               className="w-full h-9 rounded border px-3 text-sm outline-none"
+              style={{
+                colorScheme: 'light',
+                color: fechaVisita ? '#000000' : '#6b7280'
+              }}
               onFocus={(e) => {
                 e.target.style.borderColor = PALETA.verdeClaro;
                 e.target.style.boxShadow = `0 0 0 2px ${PALETA.verdeClaro}40`;
@@ -104,5 +109,19 @@ export default function ModalCalendarizar({
         </div>
       </div>
     </div>
+
+    {/* Overlay de carga */}
+    {enviando && (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
+        <div className="bg-white rounded-lg p-8 shadow-2xl flex flex-col items-center gap-4">
+          <div className="w-16 h-16 border-4 border-t-transparent rounded-full animate-spin" style={{ borderColor: `${PALETA.verdeClaro} ${PALETA.verdeClaro} transparent ${PALETA.verdeClaro}` }}></div>
+          <p className="text-lg font-medium" style={{ color: PALETA.textoOscuro }}>
+            Calendarizando visita...
+          </p>
+          <p className="text-sm text-gray-500">Por favor, no cierres esta ventana</p>
+        </div>
+      </div>
+    )}
+  </>
   );
 }

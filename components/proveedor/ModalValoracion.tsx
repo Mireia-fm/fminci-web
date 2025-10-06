@@ -1,5 +1,5 @@
-import { useState, useMemo } from "react";
 import { PALETA } from "@/lib/theme";
+import SearchableSelect from "@/components/SearchableSelect";
 
 interface ModalValoracionProps {
   isOpen: boolean;
@@ -16,6 +16,7 @@ interface ModalValoracionProps {
   tieneOfertaAprobada: boolean;
   presupuestoActual?: { importe_total_sin_iva?: number | string } | null;
   enviando: boolean;
+  esEdicion?: boolean;
 }
 
 export default function ModalValoracion({
@@ -32,24 +33,9 @@ export default function ModalValoracion({
   setDocumentoJustificativo,
   tieneOfertaAprobada,
   presupuestoActual,
-  enviando
+  enviando,
+  esEdicion = false
 }: ModalValoracionProps) {
-  const [busquedaIva, setBusquedaIva] = useState('');
-  const [mostrarOpcionesIva, setMostrarOpcionesIva] = useState(false);
-
-  const opcionesIva = [
-    { valor: '4', texto: '4% - Tipo super reducido' },
-    { valor: '10', texto: '10% - Tipo reducido' },
-    { valor: '21', texto: '21% - Tipo general' }
-  ];
-
-  const opcionesFiltradas = useMemo(() => {
-    if (!busquedaIva) return opcionesIva;
-    return opcionesIva.filter(opcion =>
-      opcion.texto.toLowerCase().includes(busquedaIva.toLowerCase()) ||
-      opcion.valor.includes(busquedaIva)
-    );
-  }, [busquedaIva]);
 
   if (!isOpen) return null;
 
@@ -57,7 +43,6 @@ export default function ModalValoracion({
     setImporteSinIva('');
     setImporteConIva('');
     setPorcentajeIva('');
-    setBusquedaIva('');
     setDocumentoJustificativo(null);
     onClose();
   };
@@ -74,14 +59,12 @@ export default function ModalValoracion({
     }
   };
 
-  const handleIvaSelect = (opcion: { valor: string; texto: string }) => {
-    setPorcentajeIva(opcion.valor);
-    setBusquedaIva(opcion.texto);
-    setMostrarOpcionesIva(false);
+  const handleIvaChange = (value: string) => {
+    setPorcentajeIva(value);
 
     // Recalcular el importe con IVA
     const sinIva = parseFloat(importeSinIva) || 0;
-    const iva = parseFloat(opcion.valor) || 0;
+    const iva = parseFloat(value) || 0;
     const multiplier = 1 + (iva / 100);
     const conIva = (sinIva * multiplier).toFixed(2);
     setImporteConIva(conIva);
@@ -104,11 +87,12 @@ export default function ModalValoracion({
   })();
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div
-        className="rounded-lg p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow"
-        style={{ backgroundColor: PALETA.card }}
-      >
+    <>
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div
+          className="rounded-lg p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow"
+          style={{ backgroundColor: PALETA.card }}
+        >
         <h3 className="text-xl font-semibold mb-6" style={{ color: PALETA.textoOscuro }}>
           Valoración Económica
           {tieneOfertaAprobada && (
@@ -129,13 +113,13 @@ export default function ModalValoracion({
               step="0.01"
               value={importeSinIva}
               onChange={(e) => handleImporteSinIvaChange(e.target.value)}
-              className="w-full h-9 rounded border px-3 text-sm outline-none"
+              className="w-full h-9 rounded border border-black px-3 text-sm outline-none placeholder:text-gray-500"
               onFocus={(e) => {
                 e.target.style.borderColor = PALETA.verdeClaro;
                 e.target.style.boxShadow = `0 0 0 2px ${PALETA.verdeClaro}40`;
               }}
               onBlur={(e) => {
-                e.target.style.borderColor = '';
+                e.target.style.borderColor = '#000000';
                 e.target.style.boxShadow = '';
               }}
               placeholder="0.00"
@@ -144,51 +128,22 @@ export default function ModalValoracion({
           </div>
 
           {/* Porcentaje de IVA */}
-          <div className="relative">
+          <div>
             <label className="block text-sm font-medium mb-2" style={{ color: PALETA.textoOscuro }}>
               Porcentaje de IVA (%) *
             </label>
-            <div className="relative">
-              <input
-                type="text"
-                value={busquedaIva}
-                onChange={(e) => {
-                  setBusquedaIva(e.target.value);
-                  setMostrarOpcionesIva(true);
-                }}
-                onFocus={(e) => {
-                  e.target.style.borderColor = PALETA.verdeClaro;
-                  e.target.style.boxShadow = `0 0 0 2px ${PALETA.verdeClaro}40`;
-                  setMostrarOpcionesIva(true);
-                }}
-                onBlur={(e) => {
-                  e.target.style.borderColor = '';
-                  e.target.style.boxShadow = '';
-                  setTimeout(() => setMostrarOpcionesIva(false), 200);
-                }}
-                className="w-full h-9 rounded border px-3 text-sm outline-none"
-                placeholder="Seleccionar porcentaje de IVA..."
-                required
-              />
-
-              {/* Dropdown de opciones */}
-              {mostrarOpcionesIva && opcionesFiltradas.length > 0 && (
-                <div
-                  className="absolute top-full left-0 right-0 bg-white border border-gray-300 rounded-md shadow-lg z-50 max-h-40 overflow-y-auto"
-                  style={{ marginTop: '2px' }}
-                >
-                  {opcionesFiltradas.map((opcion) => (
-                    <div
-                      key={opcion.valor}
-                      className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm"
-                      onClick={() => handleIvaSelect(opcion)}
-                    >
-                      {opcion.texto}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <SearchableSelect
+              value={porcentajeIva}
+              onChange={handleIvaChange}
+              placeholder="Seleccione"
+              options={[
+                { value: "0", label: "0% - Exento" },
+                { value: "4", label: "4% - Tipo super reducido" },
+                { value: "10", label: "10% - Tipo reducido" },
+                { value: "21", label: "21% - Tipo general" }
+              ]}
+              focusColor={`${PALETA.verdeClaro}40`}
+            />
           </div>
 
           {/* Importe con IVA */}
@@ -201,13 +156,13 @@ export default function ModalValoracion({
               step="0.01"
               value={importeConIva}
               onChange={(e) => setImporteConIva(e.target.value)}
-              className="w-full h-9 rounded border px-3 text-sm outline-none"
+              className="w-full h-9 rounded border border-black px-3 text-sm outline-none placeholder:text-gray-500"
               onFocus={(e) => {
                 e.target.style.borderColor = PALETA.verdeClaro;
                 e.target.style.boxShadow = `0 0 0 2px ${PALETA.verdeClaro}40`;
               }}
               onBlur={(e) => {
-                e.target.style.borderColor = '';
+                e.target.style.borderColor = '#000000';
                 e.target.style.boxShadow = '';
               }}
               placeholder="0.00"
@@ -231,20 +186,43 @@ export default function ModalValoracion({
                 Documento justificativo
                 <span className="text-red-500"> *</span>
               </label>
-              <div className="relative">
-                <input
-                  type="file"
-                  accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
-                  onChange={(e) => setDocumentoJustificativo(e.target.files?.[0] || null)}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                  required={true}
-                />
-                <div className="w-full h-9 rounded border px-3 text-sm bg-white flex items-center justify-center cursor-pointer hover:bg-gray-50">
-                  <span className="text-3xl">+</span>
+              {!documentoJustificativo ? (
+                <div>
+                  <input
+                    id="file-input-justificativo"
+                    type="file"
+                    accept=".pdf"
+                    onChange={(e) => setDocumentoJustificativo(e.target.files?.[0] || null)}
+                    className="hidden"
+                    required={true}
+                  />
+                  <label
+                    htmlFor="file-input-justificativo"
+                    className="inline-block px-3 py-2 rounded text-sm font-medium cursor-pointer transition-all"
+                    style={{ backgroundColor: PALETA.verdeClaro, color: '#4b4b4b' }}
+                    onMouseEnter={(e) => e.currentTarget.style.filter = 'brightness(0.95)'}
+                    onMouseLeave={(e) => e.currentTarget.style.filter = 'brightness(1)'}
+                  >
+                    Seleccionar archivo
+                  </label>
                 </div>
-              </div>
-              {documentoJustificativo && (
-                <p className="text-xs text-gray-600 mt-1">{documentoJustificativo.name}</p>
+              ) : (
+                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded border border-gray-300">
+                  <div className="flex-1">
+                    <p className="text-sm text-gray-700">{documentoJustificativo.name}</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {(documentoJustificativo.size / 1024).toFixed(1)} KB
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setDocumentoJustificativo(null)}
+                    className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-gray-200 text-gray-600 hover:bg-gray-300 transition-colors text-xs"
+                    title="Quitar archivo"
+                  >
+                    ✕
+                  </button>
+                </div>
               )}
               {!tieneOfertaAprobada && (
                 <p className="text-xs text-red-600 mt-1">
@@ -275,12 +253,26 @@ export default function ModalValoracion({
             onClick={onSubmit}
             disabled={isDisabled}
             className="px-6 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity disabled:opacity-50"
-            style={{ backgroundColor: PALETA.verdeClaro }}
+            style={{ backgroundColor: PALETA.bg }}
           >
-            {enviando ? 'Valorando...' : 'Confirmar Valoración Económica'}
+            {enviando ? (esEdicion ? 'Guardando sus cambios...' : 'Guardando su valoración...') : (esEdicion ? 'Guardar cambios' : 'Marcar como Valorada')}
           </button>
         </div>
       </div>
     </div>
+
+    {/* Overlay de carga */}
+    {enviando && (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
+        <div className="bg-white rounded-lg p-8 shadow-2xl flex flex-col items-center gap-4">
+          <div className="w-16 h-16 border-4 border-t-transparent rounded-full animate-spin" style={{ borderColor: `${PALETA.verdeClaro} ${PALETA.verdeClaro} transparent ${PALETA.verdeClaro}` }}></div>
+          <p className="text-lg font-medium" style={{ color: PALETA.textoOscuro }}>
+            {esEdicion ? 'Guardando sus cambios...' : 'Guardando su valoración...'}
+          </p>
+          <p className="text-sm text-gray-500">Por favor, no cierres esta ventana</p>
+        </div>
+      </div>
+    )}
+  </>
   );
 }

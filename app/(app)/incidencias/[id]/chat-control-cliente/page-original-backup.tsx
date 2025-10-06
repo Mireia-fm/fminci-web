@@ -1648,7 +1648,7 @@ ${documentosUrls.length > 0 ? `**Documentos adjuntos:** ${documentosUrls.length}
                 className="px-6 py-2 text-white rounded disabled:opacity-50 hover:opacity-90 transition-opacity"
                 style={{ backgroundColor: PALETA.bg }}
               >
-                {enviando ? "Enviando..." : "Enviar"}
+                {enviando ? "Guardando sus cambios..." : "Enviar"}
               </button>
             </div>
           </form>
@@ -1803,7 +1803,6 @@ ${documentosUrls.length > 0 ? `**Documentos adjuntos:** ${documentosUrls.length}
         isOpen={mostrarModalResolucionManual}
         onClose={() => setMostrarModalResolucionManual(false)}
         onSubmit={resolverManualmenteSinProveedor}
-        tieneProveedor={false}
         enviando={enviando}
       />
     </div>

@@ -29,7 +29,8 @@ export function useProveedorActions(
   // Estados del modal de resolución
   const [mostrarModalResolver, setMostrarModalResolver] = useState(false);
   const [solucionAplicada, setSolucionAplicada] = useState('');
-  const [imagenResolucion, setImagenResolucion] = useState<File | null>(null);
+  const [fechaRealizacion, setFechaRealizacion] = useState('');
+  const [imagenesResolucion, setImagenesResolucion] = useState<File[]>([]);
   const [documentoResolucion, setDocumentoResolucion] = useState<File | null>(null);
 
   // Estado de envío
@@ -41,6 +42,11 @@ export function useProveedorActions(
   const handleResolverIncidencia = async () => {
     if (!solucionAplicada || !solucionAplicada.trim()) {
       alert('Por favor, complete la solución aplicada');
+      return;
+    }
+
+    if (!fechaRealizacion) {
+      alert('Por favor, ingrese la fecha de realización del trabajo');
       return;
     }
 
@@ -56,7 +62,8 @@ export function useProveedorActions(
         incidenciaId,
         numeroIncidencia: incidencia.num_solicitud,
         solucionAplicada,
-        imagenResolucion: imagenResolucion || undefined,
+        fechaRealizacion,
+        imagenesResolucion: imagenesResolucion.length > 0 ? imagenesResolucion : undefined,
         documentoResolucion: documentoResolucion || undefined,
         tieneOfertaAprobada,
         autorId: perfil.persona_id,
@@ -83,7 +90,8 @@ export function useProveedorActions(
   const cerrarModal = () => {
     setMostrarModalResolver(false);
     setSolucionAplicada('');
-    setImagenResolucion(null);
+    setFechaRealizacion('');
+    setImagenesResolucion([]);
     setDocumentoResolucion(null);
   };
 
@@ -95,8 +103,10 @@ export function useProveedorActions(
     // Estados del formulario
     solucionAplicada,
     setSolucionAplicada,
-    imagenResolucion,
-    setImagenResolucion,
+    fechaRealizacion,
+    setFechaRealizacion,
+    imagenesResolucion,
+    setImagenesResolucion,
     documentoResolucion,
     setDocumentoResolucion,
 

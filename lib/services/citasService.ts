@@ -1,8 +1,10 @@
 import { supabase } from "@/lib/supabaseClient";
 import { registrarCambioEstado } from "@/lib/historialEstados";
+import { crearComentario } from "./comentariosService";
 
 export interface CalendarizarVisitaParams {
   incidenciaId: string;
+  proveedorCasoId?: string;
   fechaVisita: string;
   horarioVisita: 'mañana' | 'tarde';
   autorId: string;
@@ -21,7 +23,7 @@ export interface CalendarizarVisitaResult {
 export async function calendarizarVisita(
   params: CalendarizarVisitaParams
 ): Promise<CalendarizarVisitaResult> {
-  const { incidenciaId, fechaVisita, horarioVisita, autorId } = params;
+  const { incidenciaId, proveedorCasoId, fechaVisita, horarioVisita, autorId } = params;
 
   try {
     // 1. Obtener estado anterior y cambiar estado_proveedor a "En resolución"
@@ -96,21 +98,27 @@ export async function calendarizarVisita(
       ? 'horario de mañana'
       : 'horario de tarde';
 
-    // 4. Agregar comentario visible en ambos chats
+    // 4. Agregar comentario visible en ambos chats (con proveedor_caso_id para el chat proveedor)
     const mensajeVisita = `Visita programada para el ${fechaFormateada} en ${horarioTexto}.`;
 
-    const { error: errorComentario } = await supabase
-      .from("comentarios")
-      .insert({
+    // Necesitamos obtener email del autor para crearComentario
+    const { data: autorData } = await supabase
+      .from("personas")
+      .select("email, rol")
+      .eq("id", autorId)
+      .single();
+
+    if (autorData) {
+      await crearComentario({
         incidencia_id: incidenciaId,
+        proveedor_caso_id: proveedorCasoId,
         autor_id: autorId,
+        autor_email: autorData.email || '',
+        autor_rol: autorData.rol || 'Proveedor',
         cuerpo: mensajeVisita,
         ambito: 'ambos',
         es_sistema: true
       });
-
-    if (errorComentario) {
-      console.error("Error insertando comentario:", errorComentario);
     }
 
     return {

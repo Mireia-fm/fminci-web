@@ -545,15 +545,21 @@ export default function IncidenciasListado() {
 
   const manejarClickIncidencia = async (incidenciaId: string) => {
     if (perfil?.rol === "Control") {
-      // Si es Control, verificar si tiene proveedor asignado y mostrar modal
+      // Si es Control, verificar si tiene proveedor asignado
       const incidencia = incidencias.find(inc => inc.id === incidenciaId);
       const tieneProveedor = incidencia?.proveedor_casos &&
                            incidencia.proveedor_casos.length > 0 &&
                            incidencia.proveedor_casos.some(pc => pc.estado_proveedor && pc.activo);
 
-      setTieneProveedorAsignado(!!tieneProveedor);
-      setIncidenciaSeleccionada(incidenciaId);
-      setMostrarModal(true);
+      if (!tieneProveedor) {
+        // Sin proveedor asignado: ir directamente a chat-control-cliente
+        router.push(`/incidencias/${incidenciaId}/chat-control-cliente`);
+      } else {
+        // Con proveedor asignado: mostrar modal de selección
+        setTieneProveedorAsignado(true);
+        setIncidenciaSeleccionada(incidenciaId);
+        setMostrarModal(true);
+      }
     } else {
       // Para otros tipos, redirigir directamente
       redirigirAChat(incidenciaId, perfil?.rol || null);
@@ -643,6 +649,10 @@ export default function IncidenciasListado() {
                 value={filtroFecha}
                 onChange={(e) => setFiltroFecha(e.target.value)}
                 className="px-3 py-1.5 rounded border text-sm h-8 bg-white w-full"
+                style={{
+                  colorScheme: 'light',
+                  color: filtroFecha ? '#000000' : '#6b7280'
+                }}
               />
             </div>
 

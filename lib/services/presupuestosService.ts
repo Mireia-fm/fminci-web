@@ -1,9 +1,12 @@
 import { supabase } from "@/lib/supabaseClient";
 import { registrarCambioEstado } from "@/lib/historialEstados";
+import { sanitizarNombreArchivo } from "./storageService";
+import { crearComentario } from "./comentariosService";
 
 export interface OfertarPresupuestoParams {
   incidenciaId: string;
   numeroIncidencia: string;
+  proveedorCasoId?: string;
   fechaEstimadaInicio: string;
   duracionEstimada: string;
   importeTotalSinIva: string;
@@ -28,6 +31,7 @@ export async function ofertarPresupuesto(
   const {
     incidenciaId,
     numeroIncidencia,
+    proveedorCasoId,
     fechaEstimadaInicio,
     duracionEstimada,
     importeTotalSinIva,
@@ -39,7 +43,8 @@ export async function ofertarPresupuesto(
 
   try {
     // 1. Subir documento del presupuesto
-    const nombreArchivo = `${Date.now()}_${documentoPresupuesto.name}`;
+    const nombreSanitizado = sanitizarNombreArchivo(documentoPresupuesto.name);
+    const nombreArchivo = `${Date.now()}_${nombreSanitizado}`;
     const ruta = `incidencias/${numeroIncidencia}/presupuestos/${nombreArchivo}`;
 
     const { error: uploadError } = await supabase.storage
@@ -93,7 +98,8 @@ export async function ofertarPresupuesto(
       .from("proveedor_casos")
       .update({ estado_proveedor: "Ofertada" })
       .eq("incidencia_id", incidenciaId)
-      .eq("activo", true);
+      .eq("activo", true)
+      .neq("estado_proveedor", "Anulada");
 
     // 5. Registrar cambio de estado en el historial
     await registrarCambioEstado({
@@ -125,23 +131,19 @@ export async function ofertarPresupuesto(
 
 Documento adjunto: ${documentoPresupuesto.name}`;
 
-    const { data: comentarioCreado, error: comentarioError } = await supabase
-      .from("comentarios")
-      .insert({
-        incidencia_id: incidenciaId,
-        ambito: 'proveedor',
-        autor_id: autorId,
-        autor_email: autorEmail,
-        autor_rol: 'Proveedor',
-        cuerpo: mensajePresupuesto,
-        es_sistema: false
-      })
-      .select()
-      .single();
+    const comentarioCreado = await crearComentario({
+      incidencia_id: incidenciaId,
+      proveedor_caso_id: proveedorCasoId,
+      ambito: 'proveedor',
+      autor_id: autorId,
+      autor_email: autorEmail,
+      autor_rol: 'Proveedor',
+      cuerpo: mensajePresupuesto,
+      es_sistema: false
+    });
 
-    if (comentarioError) {
-      console.error("Error creando comentario:", comentarioError);
-      throw comentarioError;
+    if (!comentarioCreado) {
+      throw new Error("Error creando comentario del presupuesto");
     }
 
     // 7. Agregar el documento como adjunto al comentario

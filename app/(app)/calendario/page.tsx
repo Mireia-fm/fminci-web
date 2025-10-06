@@ -476,7 +476,9 @@ export default function CalendarioPage() {
                   onChange={(e) => setFormularioVisita({ ...formularioVisita, fecha_visita: e.target.value })}
                   className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2"
                   style={{
-                    borderColor: PALETA.verdeSombra
+                    borderColor: PALETA.verdeSombra,
+                    colorScheme: 'light',
+                    color: formularioVisita.fecha_visita ? '#000000' : '#6b7280'
                   }}
                 />
               </div>
@@ -518,7 +520,7 @@ export default function CalendarioPage() {
                 className="px-6 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity disabled:opacity-50"
                 style={{ backgroundColor: PALETA.verdeClaro }}
               >
-                {enviando ? 'Creando...' : 'Crear Visita'}
+                {enviando ? 'Creando su visita...' : 'Crear Visita'}
               </button>
             </div>
           </div>

@@ -8,6 +8,7 @@ export type AmbitoComentario = 'cliente' | 'proveedor' | 'ambos';
 
 export interface NuevoComentario {
   incidencia_id: string;
+  proveedor_caso_id?: string; // Vincula el comentario a una asignación específica de proveedor
   ambito: AmbitoComentario;
   autor_id: string;
   autor_email: string;
@@ -19,6 +20,7 @@ export interface NuevoComentario {
 export interface Comentario {
   id: string;
   incidencia_id: string;
+  proveedor_caso_id?: string | null; // Vincula el comentario a una asignación específica de proveedor
   ambito: AmbitoComentario;
   autor_id: string;
   autor_email: string;
@@ -46,10 +48,12 @@ export interface Adjunto {
 
 /**
  * Obtiene comentarios de una incidencia filtrados por ámbito
+ * Si se especifica proveedorCasoId, filtra comentarios de esa asignación específica
  */
 export async function obtenerComentarios(
   incidenciaId: string,
-  ambito?: AmbitoComentario
+  ambito?: AmbitoComentario,
+  proveedorCasoId?: string
 ): Promise<Comentario[]> {
   try {
     let query = supabase
@@ -65,6 +69,12 @@ export async function obtenerComentarios(
     // Filtrar por ámbito si se especifica
     if (ambito) {
       query = query.or(`ambito.eq.${ambito},ambito.eq.ambos`);
+    }
+
+    // Filtrar por proveedor_caso_id si se especifica
+    // Importante: esto separa los comentarios por asignación de proveedor
+    if (proveedorCasoId) {
+      query = query.eq('proveedor_caso_id', proveedorCasoId);
     }
 
     const { data, error } = await query;
@@ -84,6 +94,7 @@ export async function obtenerComentarios(
 /**
  * Crea un nuevo comentario
  * Retorna el comentario creado con su ID
+ * Si el comentario es de ámbito 'proveedor', debe incluir proveedor_caso_id
  */
 export async function crearComentario(
   comentario: NuevoComentario
@@ -93,6 +104,7 @@ export async function crearComentario(
       .from('comentarios')
       .insert({
         incidencia_id: comentario.incidencia_id,
+        proveedor_caso_id: comentario.proveedor_caso_id || null,
         ambito: comentario.ambito,
         autor_id: comentario.autor_id,
         autor_email: comentario.autor_email,
@@ -197,7 +209,7 @@ export async function crearAdjuntos(
     categoria?: string;
     visible_proveedor?: boolean;
   }>
-): Promise<boolean> {
+): Promise<Adjunto[]> {
   try {
     const adjuntos = archivos.map(archivo => ({
       comentario_id: comentarioId,
@@ -209,19 +221,20 @@ export async function crearAdjuntos(
       visible_proveedor: archivo.visible_proveedor !== undefined ? archivo.visible_proveedor : true
     }));
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('adjuntos')
-      .insert(adjuntos);
+      .insert(adjuntos)
+      .select('*');
 
     if (error) {
       console.error('Error creando adjuntos:', error);
-      return false;
+      return [];
     }
 
-    return true;
+    return (data as Adjunto[]) || [];
   } catch (err) {
     console.error('Error inesperado en crearAdjuntos:', err);
-    return false;
+    return [];
   }
 }
 
@@ -294,4 +307,25 @@ export async function eliminarAdjunto(adjuntoId: string): Promise<boolean> {
     console.error('Error inesperado en eliminarAdjunto:', err);
     return false;
   }
+}
+
+/**
+ * Obtiene comentarios específicos de una asignación de proveedor
+ * Usado en chat-proveedor para ver solo comentarios de esta asignación
+ */
+export async function obtenerComentariosProveedorCaso(
+  incidenciaId: string,
+  proveedorCasoId: string
+): Promise<Comentario[]> {
+  return obtenerComentarios(incidenciaId, 'proveedor', proveedorCasoId);
+}
+
+/**
+ * Obtiene comentarios de cliente (sin filtrar por proveedor_caso_id)
+ * Los comentarios de cliente son globales a la incidencia
+ */
+export async function obtenerComentariosCliente(
+  incidenciaId: string
+): Promise<Comentario[]> {
+  return obtenerComentarios(incidenciaId, 'cliente');
 }

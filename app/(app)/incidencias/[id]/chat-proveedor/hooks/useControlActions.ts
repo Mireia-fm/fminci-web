@@ -62,7 +62,7 @@ export function useControlActions(
       // 1. Obtener información del proveedor y estado anterior antes de anular
       const { data: proveedorInfo } = await supabase
         .from("proveedor_casos")
-        .select("proveedor_id, estado_proveedor")
+        .select("id, proveedor_id, estado_proveedor")
         .eq("incidencia_id", incidenciaId)
         .eq("activo", true)
         .single();
@@ -72,6 +72,7 @@ export function useControlActions(
       }
 
       const estadoAnterior = proveedorInfo.estado_proveedor;
+      const proveedorCasoId = proveedorInfo.id;
 
       // 2. Cancelar todas las citas programadas de ESTA incidencia específica
       const { error: citasError } = await supabase
@@ -86,12 +87,12 @@ export function useControlActions(
         // No lanzamos error, solo registramos - no debería bloquear la anulación
       }
 
-      // 3. Marcar proveedor_caso como anulado e inactivo
+      // 3. Marcar proveedor_caso como anulado (mantener activo=true hasta reasignación)
       const { error: updateError } = await supabase
         .from("proveedor_casos")
         .update({
           estado_proveedor: "Anulada",
-          activo: false,
+          // NO cambiar activo=false aquí - se hace al reasignar a otro proveedor
           motivo_anulacion: motivoAnulacion,
           anulado_en: fechaAnulacion.toISOString(),
           anulado_por: perfil.persona_id,
@@ -135,20 +136,19 @@ export function useControlActions(
         }
       });
 
-      // 6. Comentario en el chat del proveedor (mantener historial)
+      // 6. Comentario en el chat del proveedor (vinculado a esta asignación)
       const mensajeAnulacion = `Asignación anulada por Control. Motivo: ${motivoAnulacion}`;
 
-      await supabase
-        .from("comentarios")
-        .insert({
-          incidencia_id: incidenciaId,
-          ambito: 'proveedor',
-          autor_id: perfil.persona_id,
-          autor_email: perfil.email,
-          autor_rol: 'Control',
-          cuerpo: mensajeAnulacion,
-          es_sistema: true
-        });
+      await crearComentario({
+        incidencia_id: incidenciaId,
+        proveedor_caso_id: proveedorCasoId,
+        ambito: 'proveedor',
+        autor_id: perfil.persona_id,
+        autor_email: perfil.email,
+        autor_rol: 'Control',
+        cuerpo: mensajeAnulacion,
+        es_sistema: true
+      });
 
       setMostrarModalAnular(false);
       setMotivoAnulacion('');
@@ -193,7 +193,8 @@ export function useControlActions(
         .from("proveedor_casos")
         .update({ estado_proveedor: "Cerrada" })
         .eq("incidencia_id", incidenciaId)
-        .eq("activo", true);
+        .eq("activo", true)
+        .neq("estado_proveedor", "Anulada");
 
       // 2. Cambiar estado_cliente a "Cerrada"
       await supabase
@@ -284,7 +285,8 @@ export function useControlActions(
         .from("proveedor_casos")
         .update({ estado_proveedor: "Resuelta" })
         .eq("incidencia_id", incidenciaId)
-        .eq("activo", true);
+        .eq("activo", true)
+        .neq("estado_proveedor", "Anulada");
 
       // Registrar cambios de estado
       await registrarCambioEstado({

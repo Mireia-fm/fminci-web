@@ -27,6 +27,9 @@ import ModalCalendarizar from "@/components/proveedor/ModalCalendarizar";
 import ModalOferta from "@/components/proveedor/ModalOferta";
 import ModalValoracion from "@/components/proveedor/ModalValoracion";
 import ModalResolver from "@/components/proveedor/ModalResolver";
+import ModalRechazarResolucion from "@/components/ModalRechazarResolucion";
+import ModalMotivoRevision from "@/components/ModalMotivoRevision";
+import ModalCerrarIncidencia from "@/components/ModalCerrarIncidencia";
 
 type Adjunto = {
   id: string;
@@ -44,6 +47,7 @@ type Incidencia = {
   estado_proveedor?: string;
   prioridad_proveedor?: string;
   descripcion_proveedor?: string;
+  tipo_revision?: string | null;
   centro?: string;
   fecha?: string;
   hora?: string;
@@ -60,6 +64,7 @@ type Incidencia = {
 type Comentario = {
   id: string;
   incidencia_id: string;
+  proveedor_caso_id?: string | null;
   ambito: 'cliente' | 'proveedor' | 'ambos';
   proveedor_id?: string | null;
   autor_id?: string | null;
@@ -96,10 +101,39 @@ export default function ChatProveedor() {
   const [enviando, setEnviando] = useState(false);
 
   // Estados de proveedor
+  const [proveedorCasoId, setProveedorCasoId] = useState<string | null>(null);
   const [fechaAsignacionProveedor, setFechaAsignacionProveedor] = useState<string | null>(null);
   const [direccionCentro, setDireccionCentro] = useState<string | null>(null);
   const [tieneOfertaAprobada, setTieneOfertaAprobada] = useState(false);
   const [tuvoOfertaAprobada, setTuvoOfertaAprobada] = useState(false);
+  const [tieneResolucion, setTieneResolucion] = useState(false);
+  const [tieneResolucionManual, setTieneResolucionManual] = useState(false);
+  const [resolucionExistente, setResolucionExistente] = useState<{
+    solucion_aplicada: string;
+    fecha_realizacion: string;
+  } | null>(null);
+  const [tieneValoracion, setTieneValoracion] = useState(false);
+  const [valoracionExistente, setValoracionExistente] = useState<{
+    id: string;
+    importe_sin_iva: number;
+    porcentaje_iva: number;
+    importe_con_iva: number;
+  } | null>(null);
+  const [resumenResolucion, setResumenResolucion] = useState<{
+    solucion_aplicada: string;
+    fecha_realizacion: string;
+    tiene_imagenes: boolean;
+    tiene_documento: boolean;
+    imagenes_urls?: string[];
+    documento_url?: string;
+  } | null>(null);
+  const [resumenValoracion, setResumenValoracion] = useState<{
+    importe_sin_iva: number;
+    porcentaje_iva: number;
+    importe_con_iva: number;
+    tiene_documento: boolean;
+    documento_url?: string;
+  } | null>(null);
 
   // Modales de proveedor
   const [mostrarModalVisita, setMostrarModalVisita] = useState(false);
@@ -117,7 +151,8 @@ export default function ChatProveedor() {
   const [importeTotalSinIva, setImporteTotalSinIva] = useState('');
   const [documentoPresupuesto, setDocumentoPresupuesto] = useState<File | null>(null);
   const [solucionAplicada, setSolucionAplicada] = useState('');
-  const [imagenResolucion, setImagenResolucion] = useState<File | null>(null);
+  const [fechaRealizacion, setFechaRealizacion] = useState('');
+  const [imagenesResolucion, setImagenesResolucion] = useState<File[]>([]);
   const [documentoResolucion, setDocumentoResolucion] = useState<File | null>(null);
   const [importeSinIva, setImporteSinIva] = useState('');
   const [importeConIva, setImporteConIva] = useState('');
@@ -127,14 +162,13 @@ export default function ChatProveedor() {
   // Modales de Control
   const [mostrarModalAnular, setMostrarModalAnular] = useState(false);
   const [mostrarModalCerrar, setMostrarModalCerrar] = useState(false);
+  const [mostrarModalRechazarResolucion, setMostrarModalRechazarResolucion] = useState(false);
   const [mostrarModalGestionPresupuesto, setMostrarModalGestionPresupuesto] = useState(false);
   const [mostrarModalResolucionManual, setMostrarModalResolucionManual] = useState(false);
   const [mostrarModalMotivoRevision, setMostrarModalMotivoRevision] = useState(false);
 
   // Estados para modales de Control
   const [motivoAnulacion, setMotivoAnulacion] = useState('');
-  const [motivoCierre, setMotivoCierre] = useState('');
-  const [motivoRevision, setMotivoRevision] = useState('');
   const [presupuestoActual, setPresupuestoActual] = useState<{
     id: string;
     importe_total: number;
@@ -251,23 +285,28 @@ export default function ChatProveedor() {
         let estadoProveedor = null;
         let prioridadProveedor = null;
         let descripcionProveedor = null;
+        let tipoRevision = null;
 
         if (perfil.rol === 'Control' || perfil.rol === 'Proveedor') {
           const { data: proveedorCaso } = await supabase
             .from("proveedor_casos")
-            .select("asignado_en, estado_proveedor, prioridad, descripcion_proveedor, activo")
+            .select("id, asignado_en, estado_proveedor, prioridad, descripcion_proveedor, activo, tipo_revision")
             .eq("incidencia_id", incidenciaId)
+            .eq("activo", true)
+            .neq("estado_proveedor", "Anulada") // Filtrar anuladas
             .order("asignado_en", { ascending: false })
             .limit(1)
             .maybeSingle();
 
           if (proveedorCaso) {
+            setProveedorCasoId(proveedorCaso.id);
             if (proveedorCaso.asignado_en) {
               setFechaAsignacionProveedor(proveedorCaso.asignado_en);
             }
             estadoProveedor = proveedorCaso.estado_proveedor;
             prioridadProveedor = proveedorCaso.prioridad;
             descripcionProveedor = proveedorCaso.descripcion_proveedor;
+            tipoRevision = proveedorCaso.tipo_revision;
           }
         }
 
@@ -300,6 +339,7 @@ export default function ChatProveedor() {
           estado_proveedor: estadoProveedor,
           prioridad_proveedor: prioridadProveedor,
           descripcion_proveedor: descripcionProveedor,
+          tipo_revision: tipoRevision,
           adjuntos_principales: adjuntosPrincipales
         });
 
@@ -324,21 +364,138 @@ export default function ChatProveedor() {
         setPresupuestoActual(ofertaData);
       }
 
-      // Cargar comentarios con adjuntos
-      const { data: comentariosData } = await supabase
-        .from("comentarios")
+      // Verificar si existe resolución técnica y cargar sus datos
+      const { data: resolucionData } = await supabase
+        .from("resoluciones_tecnicas")
+        .select("id, solucion_aplicada, fecha_realizacion")
+        .eq("incidencia_id", incidenciaId)
+        .order("creado_en", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      setTieneResolucion(!!resolucionData);
+      if (resolucionData) {
+        setResolucionExistente({
+          solucion_aplicada: resolucionData.solucion_aplicada,
+          fecha_realizacion: resolucionData.fecha_realizacion
+        });
+
+        // Cargar adjuntos de la resolución para el resumen
+        const { data: adjuntosResolucion } = await supabase
+          .from("adjuntos")
+          .select("tipo, storage_key")
+          .eq("incidencia_id", incidenciaId)
+          .eq("resolucion_tecnica_id", resolucionData.id);
+
+        const imagenes = adjuntosResolucion?.filter(adj => adj.tipo === 'imagen') || [];
+        const documento = adjuntosResolucion?.find(adj => adj.tipo === 'documento');
+
+        const imagenesUrls = await Promise.all(
+          imagenes.map(async (img) => {
+            const { data: urlData } = await supabase.storage
+              .from("incidencias")
+              .createSignedUrl(img.storage_key, 3600); // URL válida por 1 hora
+            return urlData?.signedUrl || '';
+          })
+        );
+
+        let documentoUrl = undefined;
+        if (documento) {
+          const { data: urlData } = await supabase.storage
+            .from("incidencias")
+            .createSignedUrl(documento.storage_key, 3600); // URL válida por 1 hora
+          documentoUrl = urlData?.signedUrl;
+        }
+
+        setResumenResolucion({
+          solucion_aplicada: resolucionData.solucion_aplicada,
+          fecha_realizacion: resolucionData.fecha_realizacion,
+          tiene_imagenes: imagenes.length > 0,
+          tiene_documento: !!documento,
+          imagenes_urls: imagenesUrls.filter(url => url !== ''),
+          documento_url: documentoUrl
+        });
+      }
+
+      // Verificar si existe valoración económica y cargar sus datos
+      const { data: valoracionData } = await supabase
+        .from("valoraciones_economicas")
         .select(`
-          *,
-          adjuntos(id, tipo, nombre_archivo, storage_key, categoria)
+          id,
+          importe_sin_iva,
+          porcentaje_iva,
+          importe_con_iva,
+          documento_adjunto_id,
+          adjuntos:documento_adjunto_id(storage_key)
         `)
         .eq("incidencia_id", incidenciaId)
-        .in("ambito", ["proveedor", "ambos"])
-        .not("cuerpo", "is", null)
-        .order("creado_en", { ascending: true });
+        .order("creado_en", { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-      setComentarios(comentariosData || []);
+      setTieneValoracion(!!valoracionData);
+      if (valoracionData) {
+        setValoracionExistente({
+          id: valoracionData.id,
+          importe_sin_iva: valoracionData.importe_sin_iva,
+          porcentaje_iva: valoracionData.porcentaje_iva,
+          importe_con_iva: valoracionData.importe_con_iva
+        });
 
-      // Verificar si alguna vez se aprobó una oferta
+        // Obtener URL del documento adjunto si existe
+        let documentoUrl = undefined;
+        const adjuntoData = valoracionData.adjuntos as unknown as { storage_key: string } | null | undefined;
+
+        if (adjuntoData?.storage_key) {
+          const { data: urlData } = await supabase.storage
+            .from("incidencias")
+            .createSignedUrl(adjuntoData.storage_key, 3600); // URL válida por 1 hora
+          documentoUrl = urlData?.signedUrl;
+        }
+
+        setResumenValoracion({
+          importe_sin_iva: valoracionData.importe_sin_iva,
+          porcentaje_iva: valoracionData.porcentaje_iva,
+          importe_con_iva: valoracionData.importe_con_iva,
+          tiene_documento: !!adjuntoData?.storage_key,
+          documento_url: documentoUrl
+        });
+      }
+
+      // Cargar comentarios con adjuntos
+      // Solo cargar comentarios si tenemos proveedor_caso_id
+      let comentariosData: Comentario[] = [];
+      if (perfil.rol === 'Control' || perfil.rol === 'Proveedor') {
+        // Obtener el proveedor_caso_id activo
+        const { data: proveedorCasoActivo } = await supabase
+          .from("proveedor_casos")
+          .select("id")
+          .eq("incidencia_id", incidenciaId)
+          .eq("activo", true)
+          .neq("estado_proveedor", "Anulada")
+          .maybeSingle();
+
+        if (proveedorCasoActivo) {
+          // Filtrar comentarios por proveedor_caso_id
+          const { data: comentarios } = await supabase
+            .from("comentarios")
+            .select(`
+              *,
+              adjuntos(id, tipo, nombre_archivo, storage_key, categoria)
+            `)
+            .eq("incidencia_id", incidenciaId)
+            .eq("proveedor_caso_id", proveedorCasoActivo.id)
+            .in("ambito", ["proveedor", "ambos"])
+            .not("cuerpo", "is", null)
+            .order("creado_en", { ascending: true });
+
+          comentariosData = comentarios || [];
+        }
+      }
+
+      setComentarios(comentariosData);
+
+      // Verificar si alguna vez se aprobó una oferta y si hay resolución manual
       const { data: historialData } = await supabase
         .from("historial_estados")
         .select("*")
@@ -349,6 +506,15 @@ export default function ChatProveedor() {
         registro => registro.estado_nuevo === 'Oferta aprobada'
       );
       setTuvoOfertaAprobada(!!tuvoOfertaAprobadaEnHistorial);
+
+      // Verificar si existe resolución manual (hecha por Control)
+      const hayResolucionManual = historialData?.some(
+        registro => {
+          const metadatos = registro.metadatos as Record<string, unknown> | null;
+          return metadatos && metadatos.accion === 'resolucion_manual_control';
+        }
+      );
+      setTieneResolucionManual(!!hayResolucionManual);
 
       // Cargar historial de estados del proveedor
       const { data: historialProveedorData } = await supabase
@@ -378,9 +544,10 @@ export default function ChatProveedor() {
       // Subir archivos usando el hook
       const { imagenUrl, documentoUrl } = await uploadFiles();
 
-      // Crear comentario
+      // Crear comentario con proveedor_caso_id
       const comentarioCreado = await crearComentario({
         incidencia_id: incidenciaId,
+        proveedor_caso_id: proveedorCasoId || undefined,
         ambito: 'proveedor',
         autor_id: perfil.persona_id,
         autor_email: perfil.email,
@@ -391,8 +558,9 @@ export default function ChatProveedor() {
 
       if (comentarioCreado) {
         // Si hay archivos, crear adjuntos
+        let adjuntosCreados: Adjunto[] = [];
         if (imagenUrl || documentoUrl) {
-          const adjuntos = [];
+          const adjuntos: Array<{ storage_key: string; nombre_archivo: string; tipo: string }> = [];
           if (imagenUrl) {
             adjuntos.push({
               storage_key: imagenUrl,
@@ -409,15 +577,26 @@ export default function ChatProveedor() {
           }
 
           if (adjuntos.length > 0) {
-            await crearAdjuntos(comentarioCreado.id, incidenciaId, adjuntos);
+            adjuntosCreados = await crearAdjuntos(comentarioCreado.id, incidenciaId, adjuntos);
           }
         }
+
+        // Añadir el comentario al estado local sin recargar toda la página
+        const nuevoComentarioCompleto = {
+          ...comentarioCreado,
+          personas: {
+            nombre: perfil.email,
+            email: perfil.email
+          },
+          adjuntos: adjuntosCreados || []
+        };
+
+        setComentarios(prev => [...prev, nuevoComentarioCompleto]);
       }
 
-      // Limpiar y recargar
+      // Limpiar formulario
       setNuevoComentario("");
       limpiarArchivos();
-      await cargarDatos();
 
     } catch (error) {
       console.error("Error enviando comentario:", error);
@@ -436,6 +615,7 @@ export default function ChatProveedor() {
 
       const result = await calendarizarVisita({
         incidenciaId,
+        proveedorCasoId: proveedorCasoId || undefined,
         fechaVisita,
         horarioVisita: horarioVisita as 'mañana' | 'tarde',
         autorId: perfil.persona_id
@@ -469,6 +649,7 @@ export default function ChatProveedor() {
       const result = await ofertarPresupuesto({
         incidenciaId,
         numeroIncidencia: incidencia.num_solicitud,
+        proveedorCasoId: proveedorCasoId || undefined,
         fechaEstimadaInicio,
         duracionEstimada,
         importeTotalSinIva,
@@ -499,7 +680,7 @@ export default function ChatProveedor() {
   };
 
   const handleResolverIncidencia = async () => {
-    if (!perfil || !incidencia || !solucionAplicada) return;
+    if (!perfil || !incidencia || !solucionAplicada || !fechaRealizacion) return;
 
     try {
       setEnviando(true);
@@ -511,7 +692,8 @@ export default function ChatProveedor() {
         incidenciaId,
         numeroIncidencia: incidencia.num_solicitud,
         solucionAplicada,
-        imagenResolucion,
+        fechaRealizacion,
+        imagenesResolucion,
         documentoResolucion,
         tieneOfertaAprobada,
         autorId: perfil.persona_id,
@@ -521,7 +703,8 @@ export default function ChatProveedor() {
       if (result.success) {
         setMostrarModalResolver(false);
         setSolucionAplicada('');
-        setImagenResolucion(null);
+        setFechaRealizacion('');
+        setImagenesResolucion([]);
         setDocumentoResolucion(null);
         cargarDatos();
       } else {
@@ -553,7 +736,9 @@ export default function ChatProveedor() {
         documentoJustificativo,
         tieneOfertaAprobada,
         autorId: perfil.persona_id,
-        autorEmail: userEmail || perfil.email
+        autorEmail: userEmail || perfil.email,
+        valoracionExistenteId: valoracionExistente?.id || null,
+        esEdicion: !!valoracionExistente
       });
 
       if (result.success) {
@@ -646,6 +831,7 @@ export default function ChatProveedor() {
       // Comentario en el chat
       await crearComentario({
         incidencia_id: incidenciaId,
+        proveedor_caso_id: proveedorCasoId || undefined,
         ambito: 'proveedor',
         autor_id: perfil.persona_id,
         autor_email: perfil.email,
@@ -666,12 +852,10 @@ export default function ChatProveedor() {
     }
   };
 
-  const cerrarIncidencia = async () => {
+  const cerrarIncidencia = async (motivoCierre: string) => {
     if (!perfil) return;
 
     try {
-      setEnviando(true);
-
       // Obtener estados actuales
       const { data: estadosActuales } = await supabase
         .from("proveedor_casos")
@@ -694,7 +878,8 @@ export default function ChatProveedor() {
         .from("proveedor_casos")
         .update({ estado_proveedor: "Cerrada" })
         .eq("incidencia_id", incidenciaId)
-        .eq("activo", true);
+        .eq("activo", true)
+        .neq("estado_proveedor", "Anulada");
 
       await supabase
         .from("incidencias")
@@ -741,14 +926,106 @@ export default function ChatProveedor() {
         es_sistema: true
       });
 
-      setMostrarModalCerrar(false);
-      setMotivoCierre('');
       cargarDatos();
 
     } catch (error) {
       console.error("Error cerrando incidencia:", error);
-    } finally {
-      setEnviando(false);
+      throw error; // Re-lanzar para que el modal lo maneje
+    }
+  };
+
+  const rechazarResolucion = async (tipoRechazo: 'tecnica' | 'economica' | 'ambas', motivoRechazo: string) => {
+    if (!perfil || !motivoRechazo.trim()) return;
+
+    try {
+      // Obtener estado actual del caso activo no anulado
+      const { data: estadoActual } = await supabase
+        .from("proveedor_casos")
+        .select("estado_proveedor")
+        .eq("incidencia_id", incidenciaId)
+        .eq("activo", true)
+        .neq("estado_proveedor", "Anulada")
+        .single();
+
+      const estadoAnterior = estadoActual?.estado_proveedor || null;
+
+      // Cambiar estado a "Revisar resolución" y guardar el tipo de revisión
+      const { data: updateData, error: updateError } = await supabase
+        .from("proveedor_casos")
+        .update({
+          estado_proveedor: "Revisar resolución",
+          tipo_revision: tipoRechazo
+        })
+        .eq("incidencia_id", incidenciaId)
+        .eq("activo", true)
+        .neq("estado_proveedor", "Anulada")
+        .select();
+
+      if (updateError) {
+        console.error("Error actualizando estado_proveedor:", updateError);
+        throw updateError;
+      }
+
+      console.log("Estado actualizado:", updateData);
+
+      // Definir textos según tipo de rechazo
+      const tiposRechazo = {
+        tecnica: {
+          titulo: 'RESOLUCIÓN TÉCNICA RECHAZADA',
+          instruccion: 'Por favor, revise y corrija la resolución técnica según las indicaciones.'
+        },
+        economica: {
+          titulo: 'VALORACIÓN ECONÓMICA RECHAZADA',
+          instruccion: 'Por favor, revise y corrija la valoración económica según las indicaciones.'
+        },
+        ambas: {
+          titulo: 'RESOLUCIÓN Y VALORACIÓN RECHAZADAS',
+          instruccion: 'Por favor, revise y corrija tanto la resolución técnica como la valoración económica.'
+        }
+      };
+
+      const textoRechazo = tiposRechazo[tipoRechazo];
+
+      // Registrar cambio de estado
+      await registrarCambioEstado({
+        incidenciaId,
+        tipoEstado: 'proveedor',
+        estadoAnterior,
+        estadoNuevo: 'Revisar resolución',
+        autorId: perfil.persona_id,
+        motivo: 'Control rechazó la resolución',
+        metadatos: {
+          accion: 'rechazar_resolucion',
+          tipo_rechazo: tipoRechazo,
+          motivo_rechazo: motivoRechazo
+        }
+      });
+
+      // Crear comentario en el chat del proveedor
+      await crearComentario({
+        incidencia_id: incidenciaId,
+        proveedor_caso_id: proveedorCasoId || undefined,
+        ambito: 'proveedor',
+        autor_id: perfil.persona_id,
+        autor_email: perfil.email,
+        autor_rol: 'Control',
+        cuerpo: `${textoRechazo.titulo}
+
+Aspecto rechazado: ${tipoRechazo === 'tecnica' ? 'Resolución técnica' : tipoRechazo === 'economica' ? 'Valoración económica' : 'Ambas (técnica y económica)'}
+
+Motivo detallado:
+${motivoRechazo}
+
+${textoRechazo.instruccion}`,
+        es_sistema: false
+      });
+
+      cargarDatos();
+
+    } catch (error) {
+      console.error("Error rechazando resolución:", error);
+      alert('Error al rechazar la resolución');
+      throw error; // Re-lanzar para que el modal lo maneje
     }
   };
 
@@ -771,7 +1048,8 @@ export default function ChatProveedor() {
         .from("proveedor_casos")
         .update({ estado_proveedor: "Resuelta" })
         .eq("incidencia_id", incidenciaId)
-        .eq("activo", true);
+        .eq("activo", true)
+        .neq("estado_proveedor", "Anulada");
 
       // Registrar cambios de estado
       await registrarCambioEstado({
@@ -801,6 +1079,7 @@ export default function ChatProveedor() {
       // Comentarios
       await crearComentario({
         incidencia_id: incidenciaId,
+        proveedor_caso_id: proveedorCasoId || undefined,
         ambito: 'proveedor',
         autor_id: perfil.persona_id,
         autor_email: perfil.email,
@@ -896,7 +1175,8 @@ export default function ChatProveedor() {
         .from("proveedor_casos")
         .update({ estado_proveedor: "Oferta aprobada" })
         .eq("incidencia_id", incidenciaId)
-        .eq("activo", true);
+        .eq("activo", true)
+        .neq("estado_proveedor", "Anulada");
 
       await supabase
         .from("presupuestos")
@@ -919,6 +1199,7 @@ export default function ChatProveedor() {
 
       await crearComentario({
         incidencia_id: incidenciaId,
+        proveedor_caso_id: proveedorCasoId || undefined,
         ambito: 'proveedor',
         autor_id: perfil.persona_id,
         autor_email: perfil.email,
@@ -937,17 +1218,16 @@ export default function ChatProveedor() {
     }
   };
 
-  const mandarARevisar = async () => {
+  const mandarARevisar = async (motivoRevision: string) => {
     if (!perfil || !presupuestoActual || !motivoRevision.trim()) return;
 
     try {
-      setEnviando(true);
-
       await supabase
         .from("proveedor_casos")
         .update({ estado_proveedor: "Oferta a revisar" })
         .eq("incidencia_id", incidenciaId)
-        .eq("activo", true);
+        .eq("activo", true)
+        .neq("estado_proveedor", "Anulada");
 
       await supabase
         .from("presupuestos")
@@ -969,6 +1249,7 @@ export default function ChatProveedor() {
 
       await crearComentario({
         incidencia_id: incidenciaId,
+        proveedor_caso_id: proveedorCasoId || undefined,
         ambito: 'proveedor',
         autor_id: perfil.persona_id,
         autor_email: perfil.email,
@@ -977,15 +1258,12 @@ export default function ChatProveedor() {
         es_sistema: true
       });
 
-      setMostrarModalMotivoRevision(false);
       setMostrarModalGestionPresupuesto(false);
-      setMotivoRevision('');
       cargarDatos();
 
     } catch (error) {
       console.error("Error mandando a revisar:", error);
-    } finally {
-      setEnviando(false);
+      throw error; // Re-lanzar para que el modal lo maneje
     }
   };
 
@@ -1019,11 +1297,23 @@ export default function ChatProveedor() {
 
       {/* Contenido */}
       <div className="px-6 pb-6">
+        {/* Título de la sección */}
+        <div className="mb-12">
+          {perfil?.rol === 'Control' ? (
+            <div className="text-white text-center">
+              <h2 className="text-lg font-semibold mb-1 tracking-wider">CHAT PROVEEDOR</h2>
+              <p className="text-sm opacity-80">#{incidencia.num_solicitud}</p>
+            </div>
+          ) : (
+            <h2 className="text-white text-center text-lg font-semibold mb-4 tracking-wider">SEGUIMIENTO</h2>
+          )}
+        </div>
+
         {/* Datos Técnicos de la Incidencia - específicos para proveedor */}
-        <div className="mb-6">
+        <div className="mb-12">
           <div className="rounded-lg shadow-lg" style={{ backgroundColor: PALETA.card }}>
             <div
-              className="px-6 py-4 mb-6 border-b rounded-t-lg"
+              className="px-6 py-3 border-b rounded-t-lg"
               style={{
                 backgroundColor: PALETA.headerTable,
                 color: PALETA.textoOscuro
@@ -1087,23 +1377,6 @@ export default function ChatProveedor() {
                         </tr>
 
                         <tr>
-                          <td className="py-2 font-semibold" style={{ color: PALETA.textoOscuro }}>
-                            Fecha de Creación:
-                          </td>
-                          <td className="py-2" style={{ color: PALETA.textoOscuro }}>
-                            {incidencia.fecha && incidencia.hora
-                              ? new Date(`${incidencia.fecha}T${incidencia.hora}`).toLocaleString('es-ES', {
-                                  day: '2-digit',
-                                  month: '2-digit',
-                                  year: 'numeric',
-                                  hour: '2-digit',
-                                  minute: '2-digit'
-                                })
-                              : '-'}
-                          </td>
-                        </tr>
-
-                        <tr style={{ backgroundColor: `${PALETA.headerTable}20` }}>
                           <td className="py-2 font-semibold" style={{ color: PALETA.textoOscuro }}>
                             Fecha de Asignación:
                           </td>
@@ -1203,10 +1476,10 @@ export default function ChatProveedor() {
 
         {/* Panel de acciones para Control */}
         {perfil?.rol === "Control" && (
-          <div className="mb-6">
+          <div className="mb-12">
             <div className="rounded-lg shadow-lg" style={{ backgroundColor: PALETA.card }}>
               <div
-                className="px-6 py-4 border-b rounded-t-lg"
+                className="px-6 py-3 border-b rounded-t-lg"
                 style={{
                   backgroundColor: PALETA.headerTable,
                   color: PALETA.textoOscuro
@@ -1219,84 +1492,464 @@ export default function ChatProveedor() {
                   const estado = incidencia.estado_proveedor;
                   const incidenciaCerrada = incidencia.estado_cliente === "Cerrada" && estado === "Cerrada";
 
-                  return (
-                    <div className="flex gap-3 justify-center flex-wrap">
-                      {!incidenciaCerrada && estado !== "Anulada" && (
-                        <button
-                          type="button"
-                          onClick={() => setMostrarModalAnular(true)}
-                          className="px-3 py-2 text-sm border border-red-500 text-red-600 bg-white rounded hover:bg-red-50 transition-colors"
-                        >
-                          Anular asignación proveedor
-                        </button>
-                      )}
+                  // Estado Cerrada: Mostrar información aprobada
+                  if (incidenciaCerrada) {
+                    // Verificar si tiene datos de resolución y valoración
+                    if (resumenResolucion && resumenValoracion) {
+                      return (
+                        <div className="space-y-6">
+                          {/* Mensaje de incidencia cerrada */}
+                          <div className="bg-green-50 rounded-lg p-4" style={{ border: `2px solid ${PALETA.verdeClaro}` }}>
+                            <p className="text-sm font-semibold" style={{ color: PALETA.verdeClaro }}>
+                              ✓ Incidencia cerrada y aprobada
+                            </p>
+                          </div>
 
-                      {estado === "Anulada" && (
+                          {/* Resumen de Resolución Técnica Aprobada */}
+                          <div className="bg-gray-50 rounded-lg p-4">
+                            <h3 className="font-semibold text-base mb-3 uppercase" style={{ color: PALETA.textoOscuro }}>
+                              Resolución Técnica Aprobada
+                            </h3>
+                            <div className="space-y-2 text-sm">
+                              <div>
+                                <span className="font-medium">Solución aplicada:</span>
+                                <p className="text-gray-700 mt-1">{resumenResolucion.solucion_aplicada}</p>
+                              </div>
+                              <div>
+                                <span className="font-medium">Fecha de realización:</span>
+                                <span className="ml-2 text-gray-700">
+                                  {new Date(resumenResolucion.fecha_realizacion).toLocaleDateString('es-ES')}
+                                </span>
+                              </div>
+                              <div className="flex flex-col gap-2 text-xs">
+                                {resumenResolucion.tiene_imagenes && resumenResolucion.imagenes_urls && resumenResolucion.imagenes_urls.length > 0 && (
+                                  <div className="flex flex-wrap gap-2">
+                                    {resumenResolucion.imagenes_urls.map((url, index) => (
+                                      <a
+                                        key={index}
+                                        href={url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-blue-600 hover:text-blue-800 underline cursor-pointer"
+                                      >
+                                        📷 Imagen {index + 1}
+                                      </a>
+                                    ))}
+                                  </div>
+                                )}
+                                {resumenResolucion.tiene_documento && resumenResolucion.documento_url && (
+                                  <a
+                                    href={resumenResolucion.documento_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-blue-600 hover:text-blue-800 underline cursor-pointer"
+                                  >
+                                    📄 Parte de trabajo adjunto
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Resumen de Valoración Económica Aprobada */}
+                          <div className="bg-gray-50 rounded-lg p-4">
+                            <h3 className="font-semibold text-base mb-3 uppercase" style={{ color: PALETA.textoOscuro }}>
+                              Valoración Económica Aprobada
+                            </h3>
+                            <div className="space-y-2 text-sm">
+                              <div className="flex justify-between">
+                                <span className="font-medium">Importe sin IVA:</span>
+                                <span className="text-gray-700">{resumenValoracion.importe_sin_iva.toFixed(2)}€</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="font-medium">IVA ({resumenValoracion.porcentaje_iva}%):</span>
+                                <span className="text-gray-700">
+                                  {(resumenValoracion.importe_con_iva - resumenValoracion.importe_sin_iva).toFixed(2)}€
+                                </span>
+                              </div>
+                              <div className="flex justify-between pt-2 border-t">
+                                <span className="font-bold">Total con IVA:</span>
+                                <span className="font-bold text-black">{resumenValoracion.importe_con_iva.toFixed(2)}€</span>
+                              </div>
+                              {resumenValoracion.tiene_documento && resumenValoracion.documento_url && (
+                                <a
+                                  href={resumenValoracion.documento_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs text-blue-600 hover:text-blue-800 underline cursor-pointer"
+                                >
+                                  📄 Documento justificativo adjunto
+                                </a>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Botón para ir al chat cliente */}
+                          <div className="flex justify-center pt-2 border-t">
+                            <button
+                              type="button"
+                              onClick={() => router.push(`/incidencias/${incidenciaId}/chat-control-cliente`)}
+                              className="px-4 py-2 text-sm border bg-white rounded transition-colors"
+                              style={{
+                                borderColor: PALETA.bg,
+                                color: PALETA.bg
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.backgroundColor = `${PALETA.bg}15`;
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.backgroundColor = 'white';
+                              }}
+                            >
+                              Ir al Chat Cliente
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    } else {
+                      // Incidencia cerrada migrada sin datos de resolución/valoración
+                      return (
+                        <div className="space-y-6">
+                          {/* Mensaje de incidencia cerrada migrada */}
+                          <div className="bg-green-50 rounded-lg p-4" style={{ border: `2px solid ${PALETA.verdeClaro}` }}>
+                            <p className="text-sm font-semibold" style={{ color: PALETA.verdeClaro }}>
+                              ✓ Incidencia cerrada
+                            </p>
+                            <p className="text-xs text-gray-600 mt-2">
+                              Esta incidencia fue migrada desde el sistema anterior y no dispone de formularios de resolución técnica o valoración económica registrados.
+                            </p>
+                          </div>
+
+                          {/* Botón para ir al chat cliente */}
+                          <div className="flex justify-center pt-2 border-t">
+                            <button
+                              type="button"
+                              onClick={() => router.push(`/incidencias/${incidenciaId}/chat-control-cliente`)}
+                              className="px-4 py-2 text-sm border bg-white rounded transition-colors"
+                              style={{
+                                borderColor: PALETA.bg,
+                                color: PALETA.bg
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.backgroundColor = `${PALETA.bg}15`;
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.backgroundColor = 'white';
+                              }}
+                            >
+                              Ir al Chat Cliente
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    }
+                  }
+
+                  // Estado Valorada: Mostrar resumen y aprobación
+                  if (estado === "Valorada") {
+                    // Verificar si tiene datos de resolución y valoración
+                    if (resumenResolucion && resumenValoracion) {
+                      return (
+                        <div className="space-y-6">
+                          {/* Mensaje informativo */}
+                          <div className="bg-white rounded-lg p-4" style={{ border: `2px solid ${PALETA.verdeClaro}` }}>
+                            <p className="text-sm font-medium" style={{ color: PALETA.textoOscuro }}>
+                              La incidencia está lista para cerrarse. Revise la información y apruebe o rechace la resolución.
+                            </p>
+                          </div>
+
+                          {/* Resumen de Resolución Técnica */}
+                          <div className="bg-gray-50 rounded-lg p-4">
+                            <h3 className="font-semibold text-base mb-3 uppercase" style={{ color: PALETA.textoOscuro }}>
+                              Resolución Técnica
+                            </h3>
+                            <div className="space-y-2 text-sm">
+                              <div>
+                                <span className="font-medium">Solución aplicada:</span>
+                                <p className="text-gray-700 mt-1">{resumenResolucion.solucion_aplicada}</p>
+                              </div>
+                              <div>
+                                <span className="font-medium">Fecha de realización:</span>
+                                <span className="ml-2 text-gray-700">
+                                  {new Date(resumenResolucion.fecha_realizacion).toLocaleDateString('es-ES')}
+                                </span>
+                              </div>
+                              <div className="flex flex-col gap-2 text-xs">
+                                {resumenResolucion.tiene_imagenes && resumenResolucion.imagenes_urls && resumenResolucion.imagenes_urls.length > 0 && (
+                                  <div className="flex flex-wrap gap-2">
+                                    {resumenResolucion.imagenes_urls.map((url, index) => (
+                                      <a
+                                        key={index}
+                                        href={url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-blue-600 hover:text-blue-800 underline cursor-pointer"
+                                      >
+                                        📷 Imagen {index + 1}
+                                      </a>
+                                    ))}
+                                  </div>
+                                )}
+                                {resumenResolucion.tiene_documento && resumenResolucion.documento_url && (
+                                  <a
+                                    href={resumenResolucion.documento_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-blue-600 hover:text-blue-800 underline cursor-pointer"
+                                  >
+                                    📄 Parte de trabajo adjunto
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Resumen de Valoración Económica */}
+                          <div className="bg-gray-50 rounded-lg p-4">
+                            <h3 className="font-semibold text-base mb-3 uppercase" style={{ color: PALETA.textoOscuro }}>
+                              Valoración Económica
+                            </h3>
+                            <div className="space-y-2 text-sm">
+                              <div className="flex justify-between">
+                                <span className="font-medium">Importe sin IVA:</span>
+                                <span className="text-gray-700">{resumenValoracion.importe_sin_iva.toFixed(2)}€</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="font-medium">IVA ({resumenValoracion.porcentaje_iva}%):</span>
+                                <span className="text-gray-700">
+                                  {(resumenValoracion.importe_con_iva - resumenValoracion.importe_sin_iva).toFixed(2)}€
+                                </span>
+                              </div>
+                              <div className="flex justify-between pt-2 border-t">
+                                <span className="font-bold">Total con IVA:</span>
+                                <span className="font-bold text-black">{resumenValoracion.importe_con_iva.toFixed(2)}€</span>
+                              </div>
+                              {resumenValoracion.tiene_documento && resumenValoracion.documento_url && (
+                                <a
+                                  href={resumenValoracion.documento_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs text-blue-600 hover:text-blue-800 underline cursor-pointer"
+                                >
+                                  📄 Documento justificativo adjunto
+                                </a>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Botones de acción */}
+                          <div className="flex gap-3 justify-center pt-2">
+                            <button
+                              type="button"
+                              onClick={() => setMostrarModalRechazarResolucion(true)}
+                              className="px-6 py-3 text-sm font-medium bg-white rounded hover:opacity-80 transition-opacity"
+                              style={{ border: `2px solid ${PALETA.verdeClaro}`, color: PALETA.verdeClaro }}
+                            >
+                              Rechazar Resolución
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setMostrarModalCerrar(true)}
+                              className="px-6 py-3 text-sm font-medium text-white rounded hover:opacity-90 transition-opacity"
+                              style={{ backgroundColor: PALETA.verdeClaro }}
+                            >
+                              Aprobar y Cerrar Incidencia
+                            </button>
+                          </div>
+
+                          {/* Acciones comunes */}
+                          <div className="flex gap-3 justify-center flex-wrap pt-4 border-t">
+                            <button
+                              type="button"
+                              onClick={() => router.push(`/incidencias/${incidenciaId}/chat-control-cliente`)}
+                              className="px-4 py-2 text-sm border bg-white rounded transition-colors"
+                              style={{
+                                borderColor: PALETA.bg,
+                                color: PALETA.bg
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.backgroundColor = `${PALETA.bg}15`;
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.backgroundColor = 'white';
+                              }}
+                            >
+                              Ir al Chat Cliente
+                            </button>
+
+                            {!incidenciaCerrada && (
+                              <button
+                                type="button"
+                                onClick={() => setMostrarModalAnular(true)}
+                                className="px-3 py-2 text-sm border border-red-500 text-red-600 bg-white rounded hover:bg-red-50 transition-colors"
+                              >
+                                Anular Asignación de Proveedor
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    } else {
+                      // Incidencia migrada sin datos de resolución/valoración
+                      return (
+                        <div className="space-y-6">
+                          {/* Mensaje informativo para incidencias migradas */}
+                          <div className="bg-yellow-50 rounded-lg p-4" style={{ border: `2px solid #fbbf24` }}>
+                            <p className="text-sm font-medium text-gray-800">
+                              Esta incidencia fue migrada desde el sistema anterior y está marcada como &quot;Valorada&quot;.
+                            </p>
+                            <p className="text-xs text-gray-600 mt-2">
+                              No dispone de formularios de resolución técnica o valoración económica registrados en el nuevo sistema.
+                              Puede aprobar y cerrar la incidencia o rechazarla para que el proveedor complete los datos.
+                            </p>
+                          </div>
+
+                          {/* Botones de acción */}
+                          <div className="flex gap-3 justify-center pt-2">
+                            <button
+                              type="button"
+                              onClick={() => setMostrarModalRechazarResolucion(true)}
+                              className="px-6 py-3 text-sm font-medium bg-white rounded hover:opacity-80 transition-opacity"
+                              style={{ border: `2px solid ${PALETA.verdeClaro}`, color: PALETA.verdeClaro }}
+                            >
+                              Rechazar Resolución
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setMostrarModalCerrar(true)}
+                              className="px-6 py-3 text-sm font-medium text-white rounded hover:opacity-90 transition-opacity"
+                              style={{ backgroundColor: PALETA.verdeClaro }}
+                            >
+                              Aprobar y Cerrar Incidencia
+                            </button>
+                          </div>
+
+                          {/* Acciones comunes */}
+                          <div className="flex gap-3 justify-center flex-wrap pt-4 border-t">
+                            <button
+                              type="button"
+                              onClick={() => router.push(`/incidencias/${incidenciaId}/chat-control-cliente`)}
+                              className="px-4 py-2 text-sm border bg-white rounded transition-colors"
+                              style={{
+                                borderColor: PALETA.bg,
+                                color: PALETA.bg
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.backgroundColor = `${PALETA.bg}15`;
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.backgroundColor = 'white';
+                              }}
+                            >
+                              Ir al Chat Cliente
+                            </button>
+
+                            {!incidenciaCerrada && (
+                              <button
+                                type="button"
+                                onClick={() => setMostrarModalAnular(true)}
+                                className="px-3 py-2 text-sm border border-red-500 text-red-600 bg-white rounded hover:bg-red-50 transition-colors"
+                              >
+                                Anular Asignación de Proveedor
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    }
+                  }
+
+                  // Otros estados
+                  return (
+                    <div className="space-y-4">
+                      {/* Acciones específicas por estado */}
+                      <div className="flex gap-3 justify-center flex-wrap">
+                        {estado === "Anulada" && (
+                          <button
+                            type="button"
+                            onClick={() => router.push(`/incidencias/${incidenciaId}/chat-control-cliente`)}
+                            className="px-4 py-2 text-white rounded hover:opacity-90 transition-opacity"
+                            style={{ backgroundColor: PALETA.verdeClaro }}
+                          >
+                            Reasignar Proveedor
+                          </button>
+                        )}
+
+                        {estado === "Ofertada" && (
+                          <button
+                            type="button"
+                            onClick={abrirModalGestionPresupuesto}
+                            className="px-4 py-2 text-white rounded hover:opacity-90 transition-opacity"
+                            style={{ backgroundColor: PALETA.verdeClaro }}
+                          >
+                            Gestionar Presupuesto
+                          </button>
+                        )}
+
+                        {estado === "Resuelta" && (
+                          <button
+                            type="button"
+                            onClick={() => setMostrarModalValorarIncidencia(true)}
+                            className="px-4 py-2 text-white rounded hover:opacity-90 transition-opacity"
+                            style={{ backgroundColor: "#059669" }}
+                          >
+                            Valorar Incidencia
+                          </button>
+                        )}
+
+                        {tieneResolucionManual && (
+                          <button
+                            type="button"
+                            onClick={() => router.push(`/incidencias/${incidenciaId}/resolver-proveedor`)}
+                            className="px-4 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity"
+                            style={{ backgroundColor: PALETA.verdeClaro }}
+                          >
+                            Editar Resolución Manual
+                          </button>
+                        )}
+
+                        {estado !== "Valorada" && estado !== "Cerrada" && estado !== "Anulada" && (
+                          <button
+                            type="button"
+                            onClick={() => router.push(`/incidencias/${incidenciaId}/resolver-proveedor`)}
+                            className="px-4 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity"
+                            style={{ backgroundColor: PALETA.verdeClaro }}
+                          >
+                            Resolver como Proveedor
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Acciones comunes */}
+                      <div className="flex gap-3 justify-center flex-wrap pt-2 border-t">
                         <button
                           type="button"
                           onClick={() => router.push(`/incidencias/${incidenciaId}/chat-control-cliente`)}
-                          className="px-4 py-2 text-white rounded hover:opacity-90 transition-opacity"
-                          style={{ backgroundColor: PALETA.verdeClaro }}
+                          className="px-4 py-2 text-sm border bg-white rounded transition-colors"
+                          style={{
+                            borderColor: PALETA.bg,
+                            color: PALETA.bg
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = `${PALETA.bg}15`;
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = 'white';
+                          }}
                         >
-                          Reasignar Proveedor
+                          Ir al Chat Cliente
                         </button>
-                      )}
 
-                      {estado === "Valorada" && (
-                        <button
-                          type="button"
-                          onClick={() => setMostrarModalCerrar(true)}
-                          className="px-4 py-2 text-white rounded hover:opacity-90 transition-opacity"
-                          style={{ backgroundColor: PALETA.verdeClaro }}
-                        >
-                          Cerrar Incidencia
-                        </button>
-                      )}
-
-                      {estado === "Ofertada" && (
-                        <button
-                          type="button"
-                          onClick={abrirModalGestionPresupuesto}
-                          className="px-4 py-2 text-white rounded hover:opacity-90 transition-opacity"
-                          style={{ backgroundColor: PALETA.verdeClaro }}
-                        >
-                          Gestionar Presupuesto
-                        </button>
-                      )}
-
-                      {estado === "Resuelta" && (
-                        <button
-                          type="button"
-                          onClick={() => setMostrarModalValorarIncidencia(true)}
-                          className="px-4 py-2 text-white rounded hover:opacity-90 transition-opacity"
-                          style={{ backgroundColor: "#059669" }}
-                        >
-                          Valorar Incidencia
-                        </button>
-                      )}
-
-                      <button
-                        type="button"
-                        onClick={() => router.push(`/incidencias/${incidenciaId}/chat-control-cliente`)}
-                        className="px-4 py-2 text-sm border rounded hover:bg-gray-50 transition-colors"
-                        style={{
-                          borderColor: PALETA.bg,
-                          color: PALETA.bg
-                        }}
-                      >
-                        Cambiar al Chat Cliente
-                      </button>
-
-                      {incidencia.estado_proveedor !== 'Cerrada' && incidencia.estado_proveedor !== 'Anulada' && (
-                        <button
-                          type="button"
-                          onClick={() => setMostrarModalResolucionManual(true)}
-                          className="px-4 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity"
-                          style={{ backgroundColor: PALETA.verdeClaro }}
-                        >
-                          Resolver Manualmente
-                        </button>
-                      )}
+                        {!incidenciaCerrada && estado !== "Anulada" && (
+                          <button
+                            type="button"
+                            onClick={() => setMostrarModalAnular(true)}
+                            className="px-3 py-2 text-sm border border-red-500 text-red-600 bg-white rounded hover:bg-red-50 transition-colors"
+                          >
+                            Anular Asignación de Proveedor
+                          </button>
+                        )}
+                      </div>
                     </div>
                   );
                 })()}
@@ -1307,10 +1960,10 @@ export default function ChatProveedor() {
 
         {/* Botones de acciones del proveedor */}
         {perfil?.rol === 'Proveedor' && (
-          <div className="mb-6">
+          <div className="mb-12">
             <div className="rounded-lg shadow-lg" style={{ backgroundColor: PALETA.card }}>
               <div
-                className="px-6 py-4 border-b rounded-t-lg"
+                className="px-6 py-3 border-b rounded-t-lg"
                 style={{
                   backgroundColor: PALETA.headerTable,
                   color: PALETA.textoOscuro
@@ -1326,6 +1979,7 @@ export default function ChatProveedor() {
                     calendarizar: false,
                     ofertar: false,
                     resolver: false,
+                    volverResolver: false,
                     valorar: false
                   };
 
@@ -1340,7 +1994,7 @@ export default function ChatProveedor() {
                       break;
 
                     case "Ofertada":
-                      mensaje = '⏳ Esperando respuesta de Control sobre la oferta enviada';
+                      mensaje = 'Esperando respuesta de Control sobre la oferta enviada';
                       break;
 
                     case "Oferta aprobada":
@@ -1350,27 +2004,39 @@ export default function ChatProveedor() {
 
                     case "Oferta a revisar":
                       botonesDisponibles.ofertar = true;
-                      mensaje = '🔄 Oferta rechazada - Debe revisar y presentar una nueva oferta';
+                      mensaje = 'Oferta rechazada - Debe revisar y presentar una nueva oferta';
                       break;
 
                     case "Resuelta":
                       botonesDisponibles.valorar = true;
-                      mensaje = '✅ Incidencia resuelta - Puede proceder con la valoración económica';
+                      botonesDisponibles.volverResolver = true;
+                      mensaje = 'Incidencia resuelta - Puede proceder con la valoración económica';
                       break;
 
                     case "Pendiente valoración":
                       botonesDisponibles.valorar = true;
-                      mensaje = '📋 Incidencia lista para valorar';
+                      mensaje = 'Incidencia lista para valorar';
                       break;
 
                     case "Valorada":
+                      botonesDisponibles.valorar = true;
+                      botonesDisponibles.volverResolver = true;
+                      mensaje = 'Incidencia valorada - Puede editar la resolución o valoración';
+                      break;
+
+                    case "Revisar resolución":
+                      botonesDisponibles.valorar = true;
+                      botonesDisponibles.volverResolver = true;
+                      mensaje = 'Control ha solicitado revisar la resolución - Revise el motivo en el chat y corrija';
+                      break;
+
                     case "Cerrada":
                     case "Anulada":
-                      mensaje = '🔒 Incidencia finalizada - No hay acciones disponibles';
+                      mensaje = 'Incidencia finalizada - No hay acciones disponibles';
                       break;
 
                     default:
-                      mensaje = '⚠️ Estado desconocido - Contacte con soporte si persiste';
+                      mensaje = 'Estado desconocido - Contacte con soporte si persiste';
                   }
 
                   if (tuvoOfertaAprobada) {
@@ -1394,7 +2060,7 @@ export default function ChatProveedor() {
                               className="px-4 py-2 text-white rounded hover:opacity-90 transition-opacity"
                               style={{ backgroundColor: PALETA.verdeClaro }}
                             >
-                              📅 Calendarizar Visita
+                              Calendarizar Visita
                             </button>
                           )}
 
@@ -1403,35 +2069,69 @@ export default function ChatProveedor() {
                               type="button"
                               onClick={() => setMostrarModalPresupuesto(true)}
                               className="px-4 py-2 text-white rounded hover:opacity-90 transition-opacity"
-                              style={{ backgroundColor: "#2563eb" }}
+                              style={{ backgroundColor: PALETA.verdeClaro }}
                             >
-                              💰 Ofertar Presupuesto
+                              Ofertar Presupuesto
                             </button>
                           )}
 
                           {botonesDisponibles.resolver && (
                             <button
                               type="button"
-                              onClick={() => setMostrarModalResolver(true)}
+                              onClick={() => {
+                                // Precargar datos si existe resolución
+                                if (resolucionExistente) {
+                                  setSolucionAplicada(resolucionExistente.solucion_aplicada);
+                                  setFechaRealizacion(resolucionExistente.fecha_realizacion);
+                                }
+                                setMostrarModalResolver(true);
+                              }}
                               className="px-4 py-2 text-white rounded hover:opacity-90 transition-opacity"
-                              style={{ backgroundColor: "#059669" }}
+                              style={{ backgroundColor: PALETA.verdeClaro }}
                             >
-                              ✅ Resolver Incidencia
+                              Resolver Incidencia
                             </button>
                           )}
                         </div>
                       )}
 
-                      {botonesDisponibles.valorar && (
-                        <div className="flex justify-center mt-3">
-                          <button
-                            type="button"
-                            onClick={() => setMostrarModalValorarIncidencia(true)}
-                            className="px-4 py-2 text-white rounded hover:opacity-90 transition-opacity"
-                            style={{ backgroundColor: "#dc2626" }}
-                          >
-                            💵 Valorar Económicamente
-                          </button>
+                      {(botonesDisponibles.valorar || botonesDisponibles.volverResolver) && (
+                        <div className="flex gap-3 justify-center mt-3">
+                          {botonesDisponibles.volverResolver && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                // Precargar datos si existe resolución
+                                if (resolucionExistente) {
+                                  setSolucionAplicada(resolucionExistente.solucion_aplicada);
+                                  setFechaRealizacion(resolucionExistente.fecha_realizacion);
+                                }
+                                setMostrarModalResolver(true);
+                              }}
+                              className="px-4 py-2 text-white rounded hover:opacity-90 transition-opacity"
+                              style={{ backgroundColor: PALETA.verdeClaro }}
+                            >
+                              {resolucionExistente ? 'Editar resolución' : 'Volver a Resolver'}
+                            </button>
+                          )}
+                          {botonesDisponibles.valorar && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                // Precargar datos si existe valoración
+                                if (valoracionExistente) {
+                                  setImporteSinIva(valoracionExistente.importe_sin_iva.toString());
+                                  setPorcentajeIva(valoracionExistente.porcentaje_iva.toString());
+                                  setImporteConIva(valoracionExistente.importe_con_iva.toString());
+                                }
+                                setMostrarModalValorarIncidencia(true);
+                              }}
+                              className="px-4 py-2 text-white rounded hover:opacity-90 transition-opacity"
+                              style={{ backgroundColor: PALETA.verdeClaro }}
+                            >
+                              {valoracionExistente ? 'Editar valoración' : 'Valorar Económicamente'}
+                            </button>
+                          )}
                         </div>
                       )}
                     </>
@@ -1442,20 +2142,20 @@ export default function ChatProveedor() {
           </div>
         )}
 
-        {/* Sección de seguimiento */}
-        <div className="mb-8">
-          {perfil?.rol === 'Control' ? (
-            <div className="text-white text-center">
-              <h2 className="text-lg font-semibold mb-1 tracking-wider">CHAT PROVEEDOR</h2>
-              <p className="text-sm opacity-80">#{incidencia.num_solicitud}</p>
-            </div>
-          ) : (
-            <h2 className="text-white text-center text-lg font-semibold mb-4 tracking-wider">SEGUIMIENTO</h2>
-          )}
-        </div>
-
         {/* Área de comentarios */}
-        <div className="bg-white rounded-lg shadow-sm flex flex-col h-[700px] relative">
+        <div className="bg-white rounded-lg shadow-sm flex flex-col h-[700px] relative mb-12">
+          {/* Header de comentarios */}
+          <div
+            className="px-6 py-3 border-b rounded-t-lg flex justify-between items-center"
+            style={{
+              backgroundColor: PALETA.headerTable,
+              color: PALETA.textoOscuro
+            }}
+          >
+            <h2 className="text-lg font-semibold">COMENTARIOS</h2>
+            <p className="text-sm opacity-75">#{incidencia.num_solicitud}</p>
+          </div>
+
           {/* Botón flotante para ir al último mensaje */}
           <ScrollToBottomButton
             onClick={scrollToBottom}
@@ -1465,8 +2165,8 @@ export default function ChatProveedor() {
           {/* Lista de comentarios */}
           <div ref={comentariosContainerRef} className="flex-1 overflow-y-auto p-6 space-y-4">
             {comentarios.length === 0 ? (
-              <div className="text-center text-gray-500 py-8">
-                No hay comentarios aún. ¡Añade el primero!
+              <div className="text-center text-gray-500 py-8 text-sm">
+                No hay comentarios aún. Añada el primero.
               </div>
             ) : (
               comentarios.map((comentario) => (
@@ -1590,7 +2290,7 @@ export default function ChatProveedor() {
             <textarea
               value={nuevoComentario}
               onChange={(e) => setNuevoComentario(e.target.value)}
-              placeholder="Añadir comentario"
+              placeholder="Escriba aquí su comentario"
               className="w-full h-24 p-3 border rounded focus:outline-none resize-none text-sm"
               style={{ borderColor: PALETA.textoOscuro }}
               onFocus={(e) => {
@@ -1604,26 +2304,44 @@ export default function ChatProveedor() {
 
             {/* Preview de archivos seleccionados */}
             {(imagenSeleccionada || documentoSeleccionado) && (
-              <div className="flex gap-2 flex-wrap">
+              <div className="flex flex-col gap-2 mb-3">
                 {imagenSeleccionada && (
-                  <div className="flex items-center gap-2 bg-white px-3 py-2 rounded border border-gray-300">
-                    <span className="text-gray-700 text-sm">{imagenSeleccionada.name}</span>
+                  <div className="flex items-center gap-3 p-3 bg-gray-50 rounded border border-gray-300">
+                    <img
+                      src={URL.createObjectURL(imagenSeleccionada)}
+                      alt="Vista previa"
+                      className="w-16 h-16 object-cover rounded border border-gray-300"
+                    />
+                    <div className="flex-1">
+                      <p className="text-sm text-gray-700">{imagenSeleccionada.name}</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {(imagenSeleccionada.size / 1024).toFixed(1)} KB
+                      </p>
+                    </div>
                     <button
                       type="button"
                       onClick={() => seleccionarImagen(null)}
-                      className="text-gray-500 hover:text-gray-700 text-sm"
+                      className="text-gray-400 hover:text-gray-600 text-xl font-bold px-2"
                     >
                       ×
                     </button>
                   </div>
                 )}
                 {documentoSeleccionado && (
-                  <div className="flex items-center gap-2 bg-white px-3 py-2 rounded border border-gray-300">
-                    <span className="text-gray-700 text-sm">{documentoSeleccionado.name}</span>
+                  <div className="flex items-center gap-3 p-3 bg-gray-50 rounded border border-gray-300">
+                    <div className="w-16 h-16 flex items-center justify-center bg-blue-100 rounded border border-gray-300">
+                      <span className="text-2xl">📄</span>
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm text-gray-700">{documentoSeleccionado.name}</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {(documentoSeleccionado.size / 1024).toFixed(1)} KB
+                      </p>
+                    </div>
                     <button
                       type="button"
                       onClick={() => seleccionarDocumento(null)}
-                      className="text-gray-500 hover:text-gray-700 text-sm"
+                      className="text-gray-400 hover:text-gray-600 text-xl font-bold px-2"
                     >
                       ×
                     </button>
@@ -1641,7 +2359,10 @@ export default function ChatProveedor() {
                   accept="image/*"
                   onChange={(e) => {
                     const file = e.target.files?.[0];
-                    if (file) seleccionarImagen(file);
+                    if (file) {
+                      seleccionarImagen(file);
+                    }
+                    e.target.value = ''; // Reset input para permitir seleccionar el mismo archivo
                   }}
                   className="hidden"
                 />
@@ -1682,7 +2403,7 @@ export default function ChatProveedor() {
                 className="ml-auto px-6 py-2 text-white rounded hover:opacity-90 transition-opacity disabled:opacity-50"
                 style={{ backgroundColor: PALETA.verdeClaro }}
               >
-                {enviando ? 'Enviando...' : 'Enviar'}
+                {enviando ? 'Guardando sus cambios...' : 'Enviar'}
               </button>
             </div>
           </form>
@@ -1690,12 +2411,10 @@ export default function ChatProveedor() {
       </div>
 
       {/* Historial de Estados del Proveedor */}
-      <div className="px-6 mb-6">
-        <HistorialEstados
-          cambios={historialProveedor}
-          titulo="HISTORIAL DE ESTADOS DEL PROVEEDOR"
-        />
-      </div>
+      <HistorialEstados
+        cambios={historialProveedor}
+        titulo="HISTORIAL DE ESTADOS DEL PROVEEDOR"
+      />
 
       {/* Modales de Proveedor */}
       <ModalCalendarizar
@@ -1743,18 +2462,22 @@ export default function ChatProveedor() {
         onClose={() => {
           setMostrarModalResolver(false);
           setSolucionAplicada('');
-          setImagenResolucion(null);
+          setFechaRealizacion('');
+          setImagenesResolucion([]);
           setDocumentoResolucion(null);
         }}
         onSubmit={handleResolverIncidencia}
         solucionAplicada={solucionAplicada}
         setSolucionAplicada={setSolucionAplicada}
-        imagenResolucion={imagenResolucion}
-        setImagenResolucion={setImagenResolucion}
+        fechaRealizacion={fechaRealizacion}
+        setFechaRealizacion={setFechaRealizacion}
+        imagenesResolucion={imagenesResolucion}
+        setImagenesResolucion={setImagenesResolucion}
         documentoResolucion={documentoResolucion}
         setDocumentoResolucion={setDocumentoResolucion}
         tieneOfertaAprobada={tieneOfertaAprobada}
         enviando={enviando}
+        esEdicion={!!resolucionExistente}
       />
 
       <ModalValoracion
@@ -1777,6 +2500,7 @@ export default function ChatProveedor() {
         tieneOfertaAprobada={tieneOfertaAprobada}
         presupuestoActual={presupuestoActual}
         enviando={enviando}
+        esEdicion={!!valoracionExistente}
       />
 
       {/* Modales de Control */}
@@ -1814,37 +2538,17 @@ export default function ChatProveedor() {
       )}
 
       {mostrarModalCerrar && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-lg font-semibold mb-4">Cerrar Incidencia</h3>
-            <textarea
-              value={motivoCierre}
-              onChange={(e) => setMotivoCierre(e.target.value)}
-              placeholder="Motivo del cierre (opcional)"
-              className="w-full p-3 border rounded mb-4"
-              rows={4}
-            />
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => {
-                  setMostrarModalCerrar(false);
-                  setMotivoCierre('');
-                }}
-                className="px-4 py-2 border rounded hover:bg-gray-50"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={cerrarIncidencia}
-                disabled={enviando}
-                className="px-4 py-2 text-white rounded hover:opacity-90 disabled:opacity-50"
-                style={{ backgroundColor: PALETA.verdeClaro }}
-              >
-                {enviando ? 'Cerrando...' : 'Cerrar'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <ModalCerrarIncidencia
+          onClose={() => setMostrarModalCerrar(false)}
+          onCerrar={cerrarIncidencia}
+        />
+      )}
+
+      {mostrarModalRechazarResolucion && (
+        <ModalRechazarResolucion
+          onClose={() => setMostrarModalRechazarResolucion(false)}
+          onRechazar={rechazarResolucion}
+        />
       )}
 
       {mostrarModalGestionPresupuesto && (
@@ -1922,43 +2626,16 @@ export default function ChatProveedor() {
       )}
 
       {mostrarModalMotivoRevision && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-lg font-semibold mb-4">Motivo de Revisión</h3>
-            <textarea
-              value={motivoRevision}
-              onChange={(e) => setMotivoRevision(e.target.value)}
-              placeholder="Explique por qué se rechaza el presupuesto"
-              className="w-full p-3 border rounded mb-4"
-              rows={4}
-            />
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => {
-                  setMostrarModalMotivoRevision(false);
-                  setMotivoRevision('');
-                }}
-                className="px-4 py-2 border rounded hover:bg-gray-50"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={mandarARevisar}
-                disabled={!motivoRevision.trim() || enviando}
-                className="px-4 py-2 bg-orange-500 text-white rounded hover:bg-orange-600 disabled:opacity-50"
-              >
-                {enviando ? 'Enviando...' : 'Enviar a Revisar'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <ModalMotivoRevision
+          onClose={() => setMostrarModalMotivoRevision(false)}
+          onEnviar={mandarARevisar}
+        />
       )}
 
       <ModalResolucionManual
         isOpen={mostrarModalResolucionManual}
         onClose={() => setMostrarModalResolucionManual(false)}
         onSubmit={resolverManualmenteConProveedor}
-        tieneProveedor={true}
         enviando={enviando}
       />
     </div>

@@ -54,10 +54,10 @@ export default function DatosProveedorIncidencia({
     incidencia.adjuntos_principales.some(adjunto => imageUrls[adjunto.id]);
 
   return (
-    <div className="px-6 mb-6">
+    <div className="px-6 mb-12">
       <div className="rounded-lg shadow-lg" style={{ backgroundColor: PALETA.card }}>
         <div
-          className="px-6 py-4 mb-6 border-b rounded-t-lg"
+          className="px-6 py-3 border-b rounded-t-lg"
           style={{
             backgroundColor: PALETA.headerTable,
             color: PALETA.textoOscuro

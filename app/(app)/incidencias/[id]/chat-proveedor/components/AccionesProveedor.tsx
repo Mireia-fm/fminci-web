@@ -7,6 +7,7 @@ type Incidencia = {
   id: string;
   num_solicitud: string;
   estado_proveedor?: string;
+  tipo_revision?: string | null;
 };
 
 interface Props {
@@ -75,6 +76,27 @@ export default function AccionesProveedor({
       mensaje = '📋 Incidencia lista para valorar';
       break;
 
+    case "Revisar resolución":
+      // Habilitar botones según el tipo de revisión solicitado
+      const tipoRevision = incidencia.tipo_revision;
+      if (tipoRevision === 'tecnica') {
+        botonesDisponibles.resolver = true;
+        mensaje = '🔄 Resolución técnica rechazada - Debe revisar y corregir la resolución técnica';
+      } else if (tipoRevision === 'economica') {
+        botonesDisponibles.valorar = true;
+        mensaje = '🔄 Valoración económica rechazada - Debe revisar y corregir la valoración económica';
+      } else if (tipoRevision === 'ambas') {
+        botonesDisponibles.resolver = true;
+        botonesDisponibles.valorar = true;
+        mensaje = '🔄 Resolución y valoración rechazadas - Debe revisar y corregir ambos aspectos';
+      } else {
+        // Fallback si no se especificó tipo_revision (no debería pasar)
+        botonesDisponibles.resolver = true;
+        botonesDisponibles.valorar = true;
+        mensaje = '🔄 Resolución rechazada - Revise los comentarios de Control';
+      }
+      break;
+
     case "Valorada":
     case "Cerrada":
     case "Anulada":
@@ -92,10 +114,10 @@ export default function AccionesProveedor({
   }
 
   return (
-    <div className="px-6 mb-6">
+    <div className="px-6 mb-12">
       <div className="rounded-lg shadow-lg" style={{ backgroundColor: PALETA.card }}>
         <div
-          className="px-6 py-4 border-b rounded-t-lg"
+          className="px-6 py-3 border-b rounded-t-lg"
           style={{
             backgroundColor: PALETA.headerTable,
             color: PALETA.textoOscuro

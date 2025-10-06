@@ -73,7 +73,7 @@ export default function ModalPonerEnEspera({
             style={{ backgroundColor: PALETA.bg }}
             disabled={enviando}
           >
-            {enviando ? 'Procesando...' : 'Confirmar'}
+            {enviando ? 'Procesando su solicitud...' : 'Confirmar'}
           </button>
         </div>
       </div>

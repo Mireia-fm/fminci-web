@@ -29,6 +29,8 @@ type FormularioProveedor = {
   imagenes_excluidas?: string[]; // IDs de imágenes a excluir
   documentos_incluidos?: string[]; // IDs de documentos del chat anterior a incluir
   imagenes_adicionales?: File[]; // Nuevas imágenes para subir
+  es_proveedor_externo?: boolean; // Indica si es un proveedor externo
+  cif_proveedor_externo?: string; // CIF del proveedor externo
 };
 
 type Imagen = {
@@ -72,7 +74,9 @@ export default function ModalAsignarProveedor({
     prioridad: '',
     estado_proveedor: 'Abierta',
     imagenes_excluidas: [],
-    documentos_incluidos: []
+    documentos_incluidos: [],
+    es_proveedor_externo: false,
+    cif_proveedor_externo: ''
   });
   const [imagenes, setImagenes] = useState<Imagen[]>([]);
   const [documentos, setDocumentos] = useState<Documento[]>([]);
@@ -208,7 +212,9 @@ export default function ModalAsignarProveedor({
         proveedor_id: '',
         prioridad: '',
         imagenes_excluidas: [],
-        documentos_incluidos: []
+        documentos_incluidos: [],
+        es_proveedor_externo: false,
+        cif_proveedor_externo: ''
       }));
     }
   }, [isOpen, incidenciaId, esReasignacion]);
@@ -255,19 +261,35 @@ export default function ModalAsignarProveedor({
       proveedor_id: '',
       descripcion_proveedor: '',
       prioridad: '',
-      estado_proveedor: 'Abierta'
+      estado_proveedor: 'Abierta',
+      es_proveedor_externo: false,
+      cif_proveedor_externo: ''
     });
     onClose();
   };
 
   if (!isOpen) return null;
 
+  const estaBloqueado = enviando || cargandoRecursos;
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
       <div
-        className="rounded-lg p-6 max-w-3xl w-full mx-4 shadow my-4"
+        className="rounded-lg p-6 max-w-3xl w-full mx-4 shadow my-4 relative"
         style={{ backgroundColor: PALETA.card }}
       >
+        {/* Overlay de bloqueo */}
+        {estaBloqueado && (
+          <div className="absolute inset-0 bg-white bg-opacity-60 rounded-lg z-10 flex items-center justify-center">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto mb-2"></div>
+              <p className="text-sm font-medium text-gray-700">
+                {enviando ? 'Asignando proveedor...' : 'Cargando recursos...'}
+              </p>
+            </div>
+          </div>
+        )}
+
         <h3 className="text-xl font-semibold mb-4" style={{ color: PALETA.textoOscuro }}>
           {esReasignacion ? 'Reasignar Incidencia a Proveedor' : 'Asignar Incidencia a Proveedor'}
         </h3>
@@ -281,18 +303,57 @@ export default function ModalAsignarProveedor({
               </label>
               <SearchableSelect
                 value={formulario.proveedor_id}
-                onChange={(value) => setFormulario(prev => ({
-                  ...prev,
-                  proveedor_id: value
-                }))}
-                options={proveedores.map(proveedor => ({
-                  value: proveedor.id,
-                  label: proveedor.nombre
-                }))}
+                onChange={(value) => {
+                  const esExterno = value === 'EXTERNO';
+                  setFormulario(prev => ({
+                    ...prev,
+                    proveedor_id: value,
+                    es_proveedor_externo: esExterno,
+                    cif_proveedor_externo: esExterno ? prev.cif_proveedor_externo : ''
+                  }));
+                }}
+                options={[
+                  ...proveedores.map(proveedor => ({
+                    value: proveedor.id,
+                    label: proveedor.nombre
+                  })),
+                  { value: 'EXTERNO', label: '➕ Proveedor externo' }
+                ]}
                 placeholder="Seleccionar proveedor"
                 focusColor={PALETA.verdeClaro}
+                disabled={estaBloqueado}
               />
             </div>
+
+            {/* Campo CIF para Proveedor Externo */}
+            {formulario.es_proveedor_externo && (
+              <div>
+                <label className="block text-sm font-medium mb-2" style={{ color: PALETA.textoOscuro }}>
+                  CIF del Proveedor Externo *
+                </label>
+                <input
+                  type="text"
+                  value={formulario.cif_proveedor_externo}
+                  onChange={(e) => setFormulario(prev => ({
+                    ...prev,
+                    cif_proveedor_externo: e.target.value.toUpperCase()
+                  }))}
+                  placeholder="Ej: A12345678"
+                  className="w-full rounded border p-3 text-sm outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                  onFocus={(e) => {
+                    e.target.style.boxShadow = `0 0 0 2px ${PALETA.verdeClaro}80`;
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.boxShadow = '';
+                  }}
+                  maxLength={9}
+                  disabled={estaBloqueado}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Introduce el CIF del proveedor externo (9 caracteres)
+                </p>
+              </div>
+            )}
 
             {/* Descripción para el Proveedor */}
             <div>
@@ -306,13 +367,14 @@ export default function ModalAsignarProveedor({
                   descripcion_proveedor: e.target.value
                 }))}
                 placeholder="Instrucciones específicas o detalles adicionales para el proveedor..."
-                className="min-h-[80px] w-full rounded border p-3 text-sm outline-none"
+                className="min-h-[80px] w-full rounded border p-3 text-sm outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                 onFocus={(e) => {
                   e.target.style.boxShadow = `0 0 0 2px ${PALETA.verdeClaro}80`;
                 }}
                 onBlur={(e) => {
                   e.target.style.boxShadow = '';
                 }}
+                disabled={estaBloqueado}
               />
             </div>
 
@@ -333,6 +395,7 @@ export default function ModalAsignarProveedor({
                 ]}
                 placeholder="Seleccionar prioridad"
                 focusColor={PALETA.verdeClaro}
+                disabled={estaBloqueado}
               />
             </div>
 
@@ -375,8 +438,9 @@ export default function ModalAsignarProveedor({
                                     id={`imagen-${imagen.id}`}
                                     checked={!excluida}
                                     onChange={() => toggleImagenExcluida(imagen.id)}
-                                    className="w-4 h-4"
+                                    className="w-4 h-4 disabled:opacity-50 disabled:cursor-not-allowed"
                                     style={{ accentColor: PALETA.verdeClaro }}
+                                    disabled={estaBloqueado}
                                   />
                                   <label
                                     htmlFor={`imagen-${imagen.id}`}
@@ -406,40 +470,76 @@ export default function ModalAsignarProveedor({
               </div>
             )}
 
-            {/* Subir Imágenes Adicionales */}
+            {/* Subir Archivos Adicionales */}
             <div>
               <label className="block text-sm font-medium mb-2" style={{ color: PALETA.textoOscuro }}>
-                Imágenes Adicionales
+                Archivos Adicionales
               </label>
-              <div className="border rounded-lg p-3" style={{ borderColor: '#000000' }}>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <label className="px-4 py-2 text-sm font-medium rounded border cursor-pointer hover:bg-gray-50 transition-colors" style={{ borderColor: '#000000', color: PALETA.textoOscuro }}>
-                    Seleccionar archivos
-                    <input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      onChange={(e) => {
-                        const files = Array.from(e.target.files || []);
-                        setImagenesAdicionales(prev => [...prev, ...files]);
-                      }}
-                      className="hidden"
-                    />
-                  </label>
-                  {imagenesAdicionales.map((file, index) => (
-                    <div key={index} className="flex items-center gap-1 text-xs px-2 py-1 bg-gray-100 rounded" style={{ color: PALETA.textoOscuro }}>
-                      <span className="max-w-[120px] truncate">{file.name}</span>
-                      <button
-                        type="button"
-                        onClick={() => setImagenesAdicionales(prev => prev.filter((_, i) => i !== index))}
-                        className="text-red-600 hover:text-red-800 ml-1"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ))}
-                </div>
+              <div>
+                <input
+                  id="file-input-adicionales"
+                  type="file"
+                  accept="*/*"
+                  multiple
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files || []);
+                    setImagenesAdicionales(prev => [...prev, ...files]);
+                  }}
+                  className="hidden"
+                  disabled={estaBloqueado}
+                />
+                <label
+                  htmlFor="file-input-adicionales"
+                  className={`inline-block px-3 py-2 rounded text-sm font-medium transition-all ${
+                    estaBloqueado ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                  }`}
+                  style={{ backgroundColor: '#C9D7A7', color: '#4b4b4b' }}
+                  onMouseEnter={(e) => !estaBloqueado && (e.currentTarget.style.filter = 'brightness(0.95)')}
+                  onMouseLeave={(e) => e.currentTarget.style.filter = 'brightness(1)'}
+                >
+                  Seleccionar archivos
+                </label>
               </div>
+              {imagenesAdicionales.length > 0 && (
+                <div className="mt-2 space-y-2">
+                  {imagenesAdicionales.map((file, index) => {
+                    const esImagen = file.type.startsWith('image/');
+                    return (
+                      <div key={index} className="flex items-center gap-3 p-3 bg-gray-50 rounded border border-gray-300">
+                        {/* Vista previa para imágenes */}
+                        {esImagen && (
+                          <img
+                            src={URL.createObjectURL(file)}
+                            alt="Vista previa"
+                            className="w-16 h-16 object-cover rounded border border-gray-300"
+                          />
+                        )}
+                        {/* Icono para documentos */}
+                        {!esImagen && (
+                          <div className="w-16 h-16 flex items-center justify-center bg-blue-100 rounded border border-gray-300">
+                            <span className="text-2xl">📄</span>
+                          </div>
+                        )}
+                        <div className="flex-1">
+                          <p className="text-sm text-gray-700">{file.name}</p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {(file.size / 1024).toFixed(1)} KB
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setImagenesAdicionales(prev => prev.filter((_, i) => i !== index))}
+                          className="text-gray-400 hover:text-gray-600 text-xl font-bold px-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Quitar archivo"
+                          disabled={estaBloqueado}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Documentos del Chat Anterior (solo en reasignación) */}
@@ -459,19 +559,22 @@ export default function ModalAsignarProveedor({
                     return (
                       <div
                         key={doc.id}
-                        className="flex items-center gap-3 p-3 border rounded cursor-pointer transition-all hover:bg-gray-50"
+                        className={`flex items-center gap-3 p-3 border rounded transition-all hover:bg-gray-50 ${
+                          estaBloqueado ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+                        }`}
                         style={{
                           borderColor: incluido ? '#4b5563' : '#e5e7eb',
                           backgroundColor: incluido ? '#f3f4f6' : 'white'
                         }}
-                        onClick={() => toggleDocumentoIncluido(doc.id)}
+                        onClick={() => !estaBloqueado && toggleDocumentoIncluido(doc.id)}
                       >
                         <input
                           type="checkbox"
                           checked={incluido}
                           onChange={() => {}}
-                          className="w-4 h-4"
+                          className="w-4 h-4 disabled:opacity-50 disabled:cursor-not-allowed"
                           style={{ accentColor: PALETA.verdeClaro }}
+                          disabled={estaBloqueado}
                         />
                         <div className="flex-1">
                           <p className="text-sm font-medium" style={{ color: PALETA.textoOscuro }}>
@@ -494,19 +597,29 @@ export default function ModalAsignarProveedor({
             <button
               type="button"
               onClick={handleClose}
-              className="px-4 py-2 text-sm rounded border hover:bg-gray-50 transition-colors"
+              className="px-4 py-2 text-sm rounded border hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ color: PALETA.textoOscuro, borderColor: '#d1d5db' }}
-              disabled={enviando}
+              disabled={estaBloqueado}
             >
               Cancelar
             </button>
             <button
               type="submit"
-              disabled={!formulario.proveedor_id || !formulario.prioridad || enviando}
+              disabled={
+                !formulario.proveedor_id ||
+                !formulario.prioridad ||
+                (formulario.es_proveedor_externo && !formulario.cif_proveedor_externo) ||
+                enviando
+              }
               className="px-6 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity disabled:opacity-50"
               style={{
                 backgroundColor: PALETA.fondo,
-                opacity: (!formulario.proveedor_id || !formulario.prioridad || enviando) ? 0.5 : 1
+                opacity: (
+                  !formulario.proveedor_id ||
+                  !formulario.prioridad ||
+                  (formulario.es_proveedor_externo && !formulario.cif_proveedor_externo) ||
+                  enviando
+                ) ? 0.5 : 1
               }}
             >
               {enviando ? 'Asignando...' : 'Asignar Proveedor'}

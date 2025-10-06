@@ -177,7 +177,7 @@ export default function GestionProveedores() {
 
   const getRatingStars = (rating: number) => {
     const stars = Math.round(rating);
-    return "⭐".repeat(stars) + "☆".repeat(5 - stars);
+    return "★".repeat(stars) + "☆".repeat(5 - stars);
   };
 
   const getPerformanceColor = (percentage: number) => {
@@ -235,7 +235,7 @@ export default function GestionProveedores() {
           <div className="p-4 rounded-lg" style={{ backgroundColor: PALETA.card }}>
             <h3 className="text-sm font-medium text-gray-600 mb-1">Valoración Promedio</h3>
             <p className="text-2xl font-bold text-yellow-600">
-              {(proveedores.reduce((sum, p) => sum + p.metricas.valoracionPromedio, 0) / proveedores.length || 0).toFixed(1)} ⭐
+              {(proveedores.reduce((sum, p) => sum + p.metricas.valoracionPromedio, 0) / proveedores.length || 0).toFixed(1)}
             </p>
           </div>
         </div>
@@ -313,7 +313,7 @@ export default function GestionProveedores() {
                   {/* Métricas de Rendimiento */}
                   <div className="border-t pt-4">
                     <h4 className="font-medium mb-3" style={{ color: PALETA.textoOscuro }}>
-                      📊 Métricas de Rendimiento
+                      Métricas de Rendimiento
                     </h4>
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                       <div className="text-center">

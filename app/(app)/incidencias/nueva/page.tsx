@@ -499,12 +499,48 @@ export default function NuevaIncidenciaPage() {
           {/* Imagen (OPCIONAL) + preview */}
           <div>
             <label className="mb-1 block text-sm text-gray-600">Imagen (opcional)</label>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => setImagen(e.target.files?.[0] ?? null)}
-              className="block w-full text-sm file:mr-4 file:rounded file:border-0 file:bg-[#C9D7A7] file:px-3 file:py-2 file:text-sm file:font-medium hover:file:brightness-95"
-            />
+            {!imagen ? (
+              <div>
+                <input
+                  id="file-input-imagen"
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setImagen(e.target.files?.[0] ?? null)}
+                  className="hidden"
+                />
+                <label
+                  htmlFor="file-input-imagen"
+                  className="inline-block px-3 py-2 rounded text-sm font-medium cursor-pointer transition-all"
+                  style={{ backgroundColor: '#C9D7A7', color: '#4b4b4b' }}
+                  onMouseEnter={(e) => e.currentTarget.style.filter = 'brightness(0.95)'}
+                  onMouseLeave={(e) => e.currentTarget.style.filter = 'brightness(1)'}
+                >
+                  Seleccionar imagen
+                </label>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded border border-gray-300">
+                <img
+                  src={URL.createObjectURL(imagen)}
+                  alt="Vista previa"
+                  className="w-16 h-16 object-cover rounded border border-gray-300"
+                />
+                <div className="flex-1">
+                  <p className="text-sm text-gray-700">{imagen.name}</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {(imagen.size / 1024).toFixed(1)} KB
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setImagen(null)}
+                  className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-gray-200 text-gray-600 hover:bg-gray-300 transition-colors text-xs"
+                  title="Quitar imagen"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Descripción */}
