@@ -86,9 +86,9 @@ export default function AccionesProveedor({
         botonesDisponibles.valorar = true;
         mensaje = '🔄 Valoración económica rechazada - Debe revisar y corregir la valoración económica';
       } else if (tipoRevision === 'ambas') {
+        // Flujo secuencial: primero técnica, luego económica
         botonesDisponibles.resolver = true;
-        botonesDisponibles.valorar = true;
-        mensaje = '🔄 Resolución y valoración rechazadas - Debe revisar y corregir ambos aspectos';
+        mensaje = '🔄 Resolución técnica y valoración económica rechazadas - Primero debe corregir la resolución técnica';
       } else {
         // Fallback si no se especificó tipo_revision (no debería pasar)
         botonesDisponibles.resolver = true;

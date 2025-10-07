@@ -210,11 +210,11 @@ export async function resolverIncidencia(
       let nuevoTipoRevision = null;
 
       if (esCorreccionRevision) {
-        // Si era 'ambas', pasa a 'Resuelta' y cambia tipo_revision a 'economica' (falta económica)
+        // Si era 'ambas', mantiene 'Revisar resolución' y cambia tipo_revision a 'economica' (falta económica)
         // Si era solo 'tecnica', pasa a 'Valorada' (corrección completa)
         // Si era 'economica' (no debería pasar por aquí en resolverIncidencia), pasa a 'Valorada'
         if (tipoRevisionActual === 'ambas') {
-          nuevoEstadoProveedor = 'Resuelta';
+          nuevoEstadoProveedor = 'Revisar resolución';
           nuevoTipoRevision = 'economica'; // Falta corregir económica
         } else {
           // Solo técnica -> directo a Valorada para que Control pueda cerrar
@@ -249,11 +249,22 @@ export async function resolverIncidencia(
 
     // Solo registrar cambio de estado si se actualizó
     if (debeActualizarEstado) {
-      const nuevoEstadoProveedor = esCorreccionRevision ? "Valorada" : "Resuelta";
+      // Determinar nuevo estado para el registro (debe coincidir con la lógica anterior)
+      let nuevoEstadoProveedorRegistro = "Resuelta";
+      if (esCorreccionRevision && tipoRevisionActual === 'ambas') {
+        nuevoEstadoProveedorRegistro = 'Revisar resolución';
+      } else if (esCorreccionRevision) {
+        nuevoEstadoProveedorRegistro = 'Valorada';
+      }
+
       let motivoProveedor = 'Incidencia resuelta por proveedor';
       let motivoCliente = 'Incidencia resuelta por proveedor';
 
-      if (esCorreccionRevision) {
+      if (esCorreccionRevision && tipoRevisionActual === 'ambas') {
+        motivoProveedor = 'Resolución técnica corregida - pendiente corrección valoración económica';
+        motivoCliente = 'Resolución técnica corregida por el proveedor';
+        metadatosResolucion.accion = 'corregir_resolucion_tecnica_parcial';
+      } else if (esCorreccionRevision) {
         motivoProveedor = 'Resolución técnica corregida - lista para revisión final de Control';
         motivoCliente = 'Resolución técnica corregida por el proveedor';
         metadatosResolucion.accion = 'corregir_resolucion_tecnica';
@@ -266,7 +277,7 @@ export async function resolverIncidencia(
         incidenciaId,
         tipoEstado: 'proveedor',
         estadoAnterior: estadoProveedorAnterior || undefined,
-        estadoNuevo: nuevoEstadoProveedor,
+        estadoNuevo: nuevoEstadoProveedorRegistro,
         autorId,
         motivo: motivoProveedor,
         metadatos: metadatosResolucion
