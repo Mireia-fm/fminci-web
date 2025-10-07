@@ -22,7 +22,11 @@ export interface ValoracionEconomicaParams {
   porcentajeIva: string;
   documentoJustificativo?: File | null;
   tieneOfertaAprobada: boolean;
-  presupuestoActual?: { importe_total_sin_iva: string | number } | null;
+  presupuestoActual?: {
+    importe_total_sin_iva: string | number;
+    id?: string;
+    documento_adjunto_id?: string | null;
+  } | null;
   autorId: string;
   autorEmail: string;
   numeroIncidencia: string;
@@ -560,8 +564,14 @@ Importe total con IVA: ${importeConIvaNum.toFixed(2)}€${
       throw new Error("Error creando comentario de valoración");
     }
 
-    // 8. Subir documento justificativo como adjunto si existe
-    if (documentoJustificativo && !importeCoincide && comentarioCreado && valoracionCreada) {
+    // 8. Gestionar documento justificativo
+    // Lógica:
+    // - Si se subió un nuevo documento: usarlo
+    // - Si NO se subió documento pero el importe coincide con la oferta: usar documento de la oferta
+    // - Si NO se subió documento y NO coincide: error (documento es obligatorio)
+
+    if (documentoJustificativo && comentarioCreado && valoracionCreada) {
+      // Caso 1: Se subió un nuevo documento justificativo
       const nombreSanitizado = sanitizarNombreArchivo(documentoJustificativo.name);
       const fileName = `justificante_${Date.now()}_${nombreSanitizado}`;
       const storagePath = `incidencias/${numeroIncidencia}/valoracion/${fileName}`;
@@ -603,6 +613,19 @@ Importe total con IVA: ${importeConIvaNum.toFixed(2)}€${
           .update({ documento_adjunto_id: adjuntoCreado.id })
           .eq("id", valoracionCreada.id);
       }
+    } else if (!documentoJustificativo && importeCoincide && presupuestoActual?.documento_adjunto_id) {
+      // Caso 2: No se subió documento pero el importe coincide con la oferta aprobada
+      // Usar el documento de la oferta
+      console.log('📎 Usando documento de la oferta aprobada:', presupuestoActual.documento_adjunto_id);
+
+      await supabase
+        .from("valoraciones_economicas")
+        .update({ documento_adjunto_id: presupuestoActual.documento_adjunto_id })
+        .eq("id", valoracionCreada.id);
+    } else if (!documentoJustificativo && !importeCoincide) {
+      // Caso 3: No se subió documento y el importe NO coincide con la oferta
+      // El documento es obligatorio
+      throw new Error("El documento justificativo es obligatorio cuando el importe no coincide con la oferta aprobada");
     }
 
     return { success: true };

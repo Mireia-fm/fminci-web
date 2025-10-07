@@ -196,6 +196,7 @@ export default function ChatProveedor() {
     fecha_estimada_inicio?: string;
     duracion_estimada?: string;
     descripcion_breve?: string;
+    documento_adjunto_id?: string | null;
   } | null>(null);
   const [cargandoPresupuesto, setCargandoPresupuesto] = useState(false);
   const [documentoPresupuestoUrl, setDocumentoPresupuestoUrl] = useState<string | null>(null);

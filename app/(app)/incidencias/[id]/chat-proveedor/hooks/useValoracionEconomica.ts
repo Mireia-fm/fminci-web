@@ -10,6 +10,7 @@ type PresupuestoType = {
   importe_total_sin_iva?: number;
   presupuesto_detallado_url?: string;
   estado: string;
+  documento_adjunto_id?: string | null;
 };
 
 type Incidencia = {
@@ -100,6 +101,11 @@ export function useValoracionEconomica(
         importeConIva,
         documentoJustificativo: (documentoRequerido && documentoJustificativo) ? documentoJustificativo : undefined,
         tieneOfertaAprobada,
+        presupuestoActual: presupuestoActual ? {
+          importe_total_sin_iva: presupuestoActual.importe_total_sin_iva || 0,
+          id: presupuestoActual.id,
+          documento_adjunto_id: presupuestoActual.documento_adjunto_id
+        } : null,
         autorId: perfil.persona_id,
         autorEmail: perfil.email
       });
