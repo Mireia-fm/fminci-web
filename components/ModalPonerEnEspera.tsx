@@ -51,7 +51,7 @@ export default function ModalPonerEnEspera({
         <textarea
           value={motivo}
           onChange={(e) => setMotivo(e.target.value)}
-          placeholder="Motivo de la espera..."
+          placeholder="Escriba el motivo de la espera"
           className="w-full p-2 border rounded mb-4 text-sm focus:outline-none"
           rows={3}
           onFocus={(e) => e.target.style.boxShadow = `0 0 0 2px ${PALETA.verdeClaro}80`}

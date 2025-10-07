@@ -616,13 +616,23 @@ export default function ChatProveedor() {
           }
         }
 
-        setResumenValoracion({
+        const valoracionResumen = {
           importe_sin_iva: valoracionData.importe_sin_iva,
           porcentaje_iva: valoracionData.porcentaje_iva,
           importe_con_iva: valoracionData.importe_con_iva,
           tiene_documento: !!storageKey,
           documento_url: documentoUrl
+        };
+
+        console.log('📊 VALORACIÓN ECONÓMICA CARGADA:', {
+          documento_adjunto_id: valoracionData.documento_adjunto_id,
+          storageKey,
+          documentoUrl,
+          tiene_documento: valoracionResumen.tiene_documento,
+          resumen_completo: valoracionResumen
         });
+
+        setResumenValoracion(valoracionResumen);
       }
 
       // Verificar si alguna vez se aprobó una oferta y si hay resolución manual
@@ -1727,16 +1737,22 @@ ${textoRechazo.instruccion}`,
                                 <span className="font-bold">Total con IVA:</span>
                                 <span className="font-bold text-black">{resumenValoracion.importe_con_iva.toFixed(2)}€</span>
                               </div>
-                              {resumenValoracion.tiene_documento && resumenValoracion.documento_url && (
-                                <a
-                                  href={resumenValoracion.documento_url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-xs text-blue-600 hover:text-blue-800 underline cursor-pointer"
-                                >
-                                  📄 Documento justificativo adjunto
-                                </a>
-                              )}
+                              <div className="mt-2 pt-2 border-t text-xs">
+                                {resumenValoracion.tiene_documento && resumenValoracion.documento_url ? (
+                                  <a
+                                    href={resumenValoracion.documento_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-blue-600 hover:text-blue-800 underline cursor-pointer block"
+                                  >
+                                    📄 Documento justificativo adjunto
+                                  </a>
+                                ) : (
+                                  <span className="text-gray-500 italic block">
+                                    Sin documento justificativo adjunto
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
 
@@ -1880,16 +1896,22 @@ ${textoRechazo.instruccion}`,
                                 <span className="font-bold">Total con IVA:</span>
                                 <span className="font-bold text-black">{resumenValoracion.importe_con_iva.toFixed(2)}€</span>
                               </div>
-                              {resumenValoracion.tiene_documento && resumenValoracion.documento_url && (
-                                <a
-                                  href={resumenValoracion.documento_url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-xs text-blue-600 hover:text-blue-800 underline cursor-pointer"
-                                >
-                                  📄 Documento justificativo adjunto
-                                </a>
-                              )}
+                              <div className="mt-2 pt-2 border-t text-xs">
+                                {resumenValoracion.tiene_documento && resumenValoracion.documento_url ? (
+                                  <a
+                                    href={resumenValoracion.documento_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-blue-600 hover:text-blue-800 underline cursor-pointer block"
+                                  >
+                                    📄 Documento justificativo adjunto
+                                  </a>
+                                ) : (
+                                  <span className="text-gray-500 italic block">
+                                    Sin documento justificativo adjunto
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
 
