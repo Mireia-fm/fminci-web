@@ -16,6 +16,7 @@ export type Incidencia = {
     nombre: string;
   }[] | null;
   proveedor_casos?: {
+    id?: string;
     estado_proveedor: string;
     prioridad?: string;
     activo?: boolean;
@@ -35,7 +36,7 @@ const SELECT_INCIDENCIAS_BASE = `
   institucion_id,
   email,
   instituciones(nombre),
-  proveedor_casos(estado_proveedor, prioridad, activo, proveedor_id)
+  proveedor_casos(id, estado_proveedor, prioridad, activo, proveedor_id)
 `;
 
 /**
@@ -45,7 +46,7 @@ export async function obtenerTodasIncidencias(): Promise<Incidencia[]> {
   const { data, error } = await supabase
     .from("incidencias")
     .select(SELECT_INCIDENCIAS_BASE)
-    .order("fecha_creacion", { ascending: false });
+    .order("reportado_at_utc", { ascending: false });
 
   if (error) {
     console.error("Error cargando incidencias:", error);
@@ -73,6 +74,7 @@ export async function obtenerIncidenciasProveedor(proveedorId: string): Promise<
       institucion_id,
       instituciones(nombre),
       proveedor_casos!inner(
+        id,
         estado_proveedor,
         prioridad,
         activo,
@@ -80,7 +82,7 @@ export async function obtenerIncidenciasProveedor(proveedorId: string): Promise<
       )
     `)
     .eq("proveedor_casos.proveedor_id", proveedorId)
-    .order("fecha_creacion", { ascending: false });
+    .order("reportado_at_utc", { ascending: false });
 
   if (error) {
     console.error("Error cargando incidencias de proveedor:", error);
@@ -102,7 +104,7 @@ export async function obtenerIncidenciasPorInstituciones(institucionIds: string[
     .from("incidencias")
     .select(SELECT_INCIDENCIAS_BASE)
     .in("institucion_id", institucionIds)
-    .order("fecha_creacion", { ascending: false });
+    .order("reportado_at_utc", { ascending: false });
 
   if (error) {
     console.error("Error cargando incidencias por instituciones:", error);

@@ -334,11 +334,8 @@ export default function NuevaIncidenciaPage() {
               </svg>
             </div>
             <h1 className="text-3xl font-semibold mb-2" style={{ color: PALETA.headerTable }}>
-              ¡Incidencia creada exitosamente!
+            ¡Incidencia creada con éxito!
             </h1>
-            <p className="text-gray-600 mb-6">
-              Tu incidencia ha sido registrada correctamente en el sistema.
-            </p>
           </div>
 
           <div className="bg-gray-50 rounded-lg p-6 mb-8">
@@ -349,7 +346,7 @@ export default function NuevaIncidenciaPage() {
               #{incidenciaCreada.num_solicitud}
             </div>
             <p className="text-sm text-gray-500 mt-2">
-              Guarda este número para futuras consultas sobre tu incidencia.
+              Guarde este número para futuras consultas sobre la incidencia.
             </p>
           </div>
 
@@ -388,13 +385,34 @@ export default function NuevaIncidenciaPage() {
   }
 
   return (
-    <div className="min-h-screen w-full py-4" style={{ backgroundColor: PALETA.bg }}>
+    <div className="min-h-screen w-full py-4 relative" style={{ backgroundColor: PALETA.bg }}>
+      {/* Overlay de carga mientras se guarda */}
+      {enviando && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div
+            className="rounded-lg p-8 shadow-lg text-center"
+            style={{ backgroundColor: PALETA.card }}
+          >
+            <div className="mb-4">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 mx-auto" style={{ borderColor: PALETA.filtros }}></div>
+            </div>
+            <p className="text-lg font-medium" style={{ color: PALETA.textoOscuro }}>
+              Guardando incidencia...
+            </p>
+            <p className="text-sm text-gray-500 mt-2">
+              Por favor, espera un momento
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Botón volver atrás - arriba a la izquierda */}
       <div className="px-8 mb-4">
         <button
           type="button"
           onClick={() => router.push("/")}
           className="flex items-center gap-1 text-sm text-white hover:underline transition-all"
+          disabled={enviando}
         >
           <span className="text-lg">←</span>
           Volver
@@ -434,6 +452,7 @@ export default function NuevaIncidenciaPage() {
                 value={nombre}
                 onChange={(e) => setNombre(e.target.value)}
                 readOnly={nombreAsignado}
+                disabled={enviando}
               />
             </div>
             <div>
@@ -461,6 +480,8 @@ export default function NuevaIncidenciaPage() {
                 options={opcionesCentros.filter(o => o.value !== "")}
                 className="w-full"
                 focusColor="#C9D7A7"
+                placeholderColor="#6b7280"
+                disabled={enviando}
               />
             )}
           </div>
@@ -478,6 +499,8 @@ export default function NuevaIncidenciaPage() {
                 options={opcionesCatalogacion.filter(o => o.value !== "")}
                 className="w-full"
                 focusColor="#C9D7A7"
+                placeholderColor="#6b7280"
+                disabled={enviando}
               />
             </div>
 
@@ -492,6 +515,8 @@ export default function NuevaIncidenciaPage() {
                 options={opcionesPrioridad.filter(o => o.value !== "")}
                 className="w-full"
                 focusColor="#C9D7A7"
+                placeholderColor="#6b7280"
+                disabled={enviando}
               />
             </div>
           </div>
@@ -507,13 +532,14 @@ export default function NuevaIncidenciaPage() {
                   accept="image/*"
                   onChange={(e) => setImagen(e.target.files?.[0] ?? null)}
                   className="hidden"
+                  disabled={enviando}
                 />
                 <label
                   htmlFor="file-input-imagen"
-                  className="inline-block px-3 py-2 rounded text-sm font-medium cursor-pointer transition-all"
-                  style={{ backgroundColor: '#C9D7A7', color: '#4b4b4b' }}
-                  onMouseEnter={(e) => e.currentTarget.style.filter = 'brightness(0.95)'}
-                  onMouseLeave={(e) => e.currentTarget.style.filter = 'brightness(1)'}
+                  className={`inline-block px-3 py-2 rounded text-sm font-medium transition-all ${enviando ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                  style={{ backgroundColor: '#C9D7A7', color: '#4b4b4b', pointerEvents: enviando ? 'none' : 'auto' }}
+                  onMouseEnter={(e) => !enviando && (e.currentTarget.style.filter = 'brightness(0.95)')}
+                  onMouseLeave={(e) => !enviando && (e.currentTarget.style.filter = 'brightness(1)')}
                 >
                   Seleccionar imagen
                 </label>
@@ -534,8 +560,9 @@ export default function NuevaIncidenciaPage() {
                 <button
                   type="button"
                   onClick={() => setImagen(null)}
-                  className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-gray-200 text-gray-600 hover:bg-gray-300 transition-colors text-xs"
+                  className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-gray-200 text-gray-600 hover:bg-gray-300 transition-colors text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                   title="Quitar imagen"
+                  disabled={enviando}
                 >
                   ✕
                 </button>
@@ -553,6 +580,7 @@ export default function NuevaIncidenciaPage() {
               value={descripcion}
               onChange={(e) => setDescripcion(e.target.value)}
               placeholder="Describa brevemente la incidencia"
+              disabled={enviando}
             />
           </div>
 

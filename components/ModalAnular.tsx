@@ -87,9 +87,9 @@ export default function ModalAnular({
               value={motivo}
               onChange={(e) => setMotivo(e.target.value)}
               placeholder="Describa el motivo de la anulación"
-              className="w-full p-2 border rounded text-sm focus:outline-none"
+              className="w-full p-2 border rounded text-sm focus:outline-none placeholder:text-sm placeholder:text-gray-500"
               rows={3}
-              onFocus={(e) => e.target.style.boxShadow = `0 0 0 2px ${PALETA.verdeClaro}80`}
+              onFocus={(e) => e.target.style.boxShadow = `0 0 0 2px #C9D7A7`}
               onBlur={(e) => e.target.style.boxShadow = ''}
               disabled={enviando}
             />
@@ -98,7 +98,7 @@ export default function ModalAnular({
         <div className="flex justify-end gap-3">
           <button
             onClick={handleClose}
-            className="px-4 py-2 text-sm rounded border hover:bg-gray-50 transition-colors"
+            className="px-3 py-1.5 text-sm rounded border hover:bg-gray-50 transition-colors"
             style={{ color: PALETA.textoOscuro, borderColor: '#d1d5db' }}
             disabled={enviando}
           >
@@ -106,7 +106,7 @@ export default function ModalAnular({
           </button>
           <button
             onClick={handleConfirm}
-            className="px-4 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity"
+            className="px-3 py-1.5 text-sm text-white rounded hover:opacity-90 transition-opacity"
             style={{ backgroundColor: PALETA.bg }}
             disabled={enviando}
           >

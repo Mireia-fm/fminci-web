@@ -269,7 +269,7 @@ export default function ModalValoracion({
           <p className="text-lg font-medium" style={{ color: PALETA.textoOscuro }}>
             {esEdicion ? 'Guardando sus cambios...' : 'Guardando su valoración...'}
           </p>
-          <p className="text-sm text-gray-500">Por favor, no cierres esta ventana</p>
+          <p className="text-sm text-gray-500">Por favor, no cierre esta ventana</p>
         </div>
       </div>
     )}

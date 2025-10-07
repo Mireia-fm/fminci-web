@@ -164,10 +164,10 @@ export function usePresupuestoGestion(
       await registrarCambioEstado({
         incidenciaId,
         tipoEstado: 'proveedor',
-        estadoAnterior: "pendiente_revision",
-        estadoNuevo: "aprobado",
+        estadoAnterior: "Ofertada",
+        estadoNuevo: "Oferta aprobada",
         autorId: perfil.persona_id,
-        motivo: `Presupuesto aprobado desde chat-proveedor. Importe: ${presupuestoActual.importe_total_sin_iva}€ (sin IVA)`,
+        motivo: `Presupuesto aprobado por Control. Importe: ${presupuestoActual.importe_total_sin_iva}€ (sin IVA)`,
         metadatos: {
           presupuesto_id: presupuestoActual.id,
           importe: presupuestoActual.importe_total_sin_iva || 0,
@@ -185,7 +185,7 @@ export function usePresupuestoGestion(
           autor_email: perfil.email,
           autor_rol: 'Control',
           cuerpo: `Presupuesto aprobado por Control. Importe: ${presupuestoActual.importe_total_sin_iva}€ (sin IVA). Puedes proceder con la ejecución.`,
-          es_sistema: true
+          es_sistema: false
         });
 
       setMostrarModalGestionPresupuesto(false);
@@ -246,8 +246,8 @@ export function usePresupuestoGestion(
           autor_id: perfil.persona_id,
           autor_email: perfil.email,
           autor_rol: 'Control',
-          cuerpo: `El presupuesto requiere revisión. Motivo: ${motivoRevision}`,
-          es_sistema: true
+          cuerpo: `El presupuesto requiere revisión. Motivo: ${motivoRevision.replace(/\*/g, '')}`,
+          es_sistema: false
         });
 
       // 4. Crear notificación para el proveedor

@@ -16,6 +16,7 @@ type SearchableSelectProps = {
   style?: React.CSSProperties;
   focusColor?: string;
   disabled?: boolean;
+  placeholderColor?: string;
 };
 
 export default function SearchableSelect({
@@ -26,7 +27,8 @@ export default function SearchableSelect({
   className = "",
   style = {},
   focusColor = "#3B82F6",
-  disabled = false
+  disabled = false,
+  placeholderColor = "#9ca3af"
 }: SearchableSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -137,8 +139,9 @@ export default function SearchableSelect({
             disabled ? 'opacity-50 cursor-not-allowed' : ''
           }`}
           style={{
-            ...(style || {})
-          } as React.CSSProperties}
+            ...(style || {}),
+            '--placeholder-color': placeholderColor
+          } as React.CSSProperties & { '--placeholder-color': string }}
           onFocus={(e) => {
             if (!disabled) {
               e.target.style.borderColor = focusColor.replace('40', '');
@@ -152,6 +155,11 @@ export default function SearchableSelect({
           autoComplete="off"
           disabled={disabled}
         />
+        <style jsx>{`
+          input::placeholder {
+            color: ${placeholderColor};
+          }
+        `}</style>
         <div
           className="absolute right-2 top-1/2 transform -translate-y-1/2 pointer-events-none"
           style={{
@@ -173,9 +181,8 @@ export default function SearchableSelect({
               {placeholder && (
                 <div
                   onClick={() => handleSelect("")}
-                  className={`px-3 py-2 text-sm cursor-pointer hover:bg-gray-100 ${
-                    value === "" ? "bg-blue-50 text-blue-700" : ""
-                  }`}
+                  className={`px-3 py-2 text-sm cursor-pointer hover:bg-gray-100`}
+                  style={value === "" ? { backgroundColor: "#C9D7A740", color: "#4b4b4b" } : {}}
                 >
                   {placeholder}
                 </div>
@@ -186,9 +193,8 @@ export default function SearchableSelect({
                   onClick={() => handleSelect(option.value)}
                   className={`px-3 py-2 text-sm cursor-pointer hover:bg-gray-100 ${
                     index === highlightedIndex ? "bg-gray-100" : ""
-                  } ${
-                    option.value === value ? "bg-blue-50 text-blue-700" : ""
                   }`}
+                  style={option.value === value ? { backgroundColor: "#C9D7A740", color: "#4b4b4b" } : {}}
                   onMouseEnter={() => setHighlightedIndex(index)}
                 >
                   {option.label}

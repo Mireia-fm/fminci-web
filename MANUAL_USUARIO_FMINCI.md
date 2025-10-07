@@ -536,6 +536,39 @@ Si Control rechaza la resolución o valoración, verá botones habilitados segú
 3. Filtrar por fecha
 4. Ver detalles de cada visita
 
+#### 4. Cancelar una Visita Programada
+
+Los proveedores pueden cancelar visitas que ya han calendarizado directamente desde el calendario:
+
+**Proceso de cancelación:**
+
+1. Acceder a **Calendario** desde el menú principal
+2. Localizar la visita que desea cancelar en el calendario mensual
+3. Pasar el ratón sobre la cita - aparecerá un botón **✕** en la esquina superior derecha
+4. Hacer clic en el botón **✕**
+5. Se abrirá un modal de confirmación mostrando:
+   - Número de incidencia
+   - Fecha y horario de la visita
+   - Descripción de la incidencia
+6. Confirmar haciendo clic en **"Sí, cancelar visita"**
+
+**Resultado de la cancelación:**
+
+- La visita desaparece del calendario (estado cambia a "cancelada")
+- Se crea automáticamente un **comentario de sistema** en el chat de la incidencia con ámbito "ambos" (visible para Control y Proveedor)
+- El comentario incluye:
+  - Fecha de la visita cancelada
+  - Horario cancelado
+- Control recibe notificación visual del cambio en el chat
+
+**Importante:**
+- Solo se pueden cancelar visitas con estado "programada"
+- Las visitas ya completadas no pueden cancelarse
+- La cancelación queda registrada en el historial de la incidencia
+- Para reprogramar, es necesario calendarizar una nueva visita desde el chat de la incidencia
+
+**Nota:** Actualmente, las visitas solo se pueden crear desde el chat de la incidencia (no desde el calendario). El calendario es únicamente para visualización y cancelación de visitas ya programadas.
+
 ---
 
 ## Funcionalidades Principales

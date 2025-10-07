@@ -911,7 +911,7 @@ Importe total con IVA: ${formulario.importe_con_iva.toFixed(2)}€${
             <p className="text-lg font-medium" style={{ color: PALETA.textoOscuro }}>
               {modoEdicion ? 'Guardando sus cambios...' : 'Guardando su resolución...'}
             </p>
-            <p className="text-sm text-gray-500">Por favor, no cierres esta ventana</p>
+            <p className="text-sm text-gray-500">Por favor, no cierre esta ventana</p>
           </div>
         </div>
       )}

@@ -22,7 +22,8 @@ export default function ModalCerrarIncidencia({
   const handleCerrar = async () => {
     setEnviando(true);
     try {
-      await onCerrar(motivoCierre);
+      const motivoFinal = motivoCierre.trim() || 'Aprobación de la resolución técnica y valoración económica.';
+      await onCerrar(motivoFinal);
       onClose();
     } catch (error) {
       console.error("Error cerrando incidencia:", error);
@@ -81,7 +82,7 @@ export default function ModalCerrarIncidencia({
               style={{ borderColor: `${PALETA.verdeClaro} ${PALETA.verdeClaro} transparent ${PALETA.verdeClaro}` }}
             ></div>
             <p className="text-lg font-medium">Cerrando su incidencia...</p>
-            <p className="text-sm text-gray-600">Por favor, no cierres esta ventana</p>
+            <p className="text-sm text-gray-600">Por favor, no cierre esta ventana</p>
           </div>
         </div>
       )}

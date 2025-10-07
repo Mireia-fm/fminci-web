@@ -13,14 +13,12 @@ export default function Sidebar() {
         { href: "/", label: "Dashboard" },
         { href: "/incidencias", label: "Mis Incidencias" },
         { href: "/calendario", label: "Calendario" },
-        { href: "/proveedor", label: "Panel de Proveedor" },
       ]
     : perfil?.rol === "Control"
     ? [
         { href: "/", label: "Dashboard" },
         { href: "/incidencias", label: "Incidencias" },
         { href: "/control/presupuestos", label: "Presupuestos" },
-        { href: "/control", label: "Panel de Control" },
       ]
     : [
         { href: "/", label: "Dashboard" },

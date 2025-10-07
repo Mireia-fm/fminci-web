@@ -113,7 +113,7 @@ export default function ModalRechazarResolucion({
               style={{ borderColor: `${PALETA.verdeClaro} ${PALETA.verdeClaro} transparent ${PALETA.verdeClaro}` }}
             ></div>
             <p className="text-lg font-medium">Mandando a revisar...</p>
-            <p className="text-sm text-gray-600">Por favor, no cierres esta ventana</p>
+            <p className="text-sm text-gray-600">Por favor, no cierre esta ventana</p>
           </div>
         </div>
       )}

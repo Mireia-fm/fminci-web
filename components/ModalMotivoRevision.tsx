@@ -3,7 +3,10 @@
 import { useState } from "react";
 
 const PALETA = {
-  verdeClaro: "#5D6D52",
+  verdeClaro: "#C9D7A7",
+  bg: "#5D6D52",
+  headerTable: "#D9B6A9",
+  textoOscuro: "#4b4b4b",
 };
 
 interface ModalMotivoRevisionProps {
@@ -35,7 +38,7 @@ export default function ModalMotivoRevision({
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
       <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-        <h3 className="text-lg font-semibold mb-4" style={{ color: PALETA.verdeClaro }}>
+        <h3 className="text-lg font-semibold mb-4" style={{ color: PALETA.textoOscuro }}>
           Motivo de Revisión
         </h3>
 
@@ -43,7 +46,7 @@ export default function ModalMotivoRevision({
           value={motivoRevision}
           onChange={(e) => setMotivoRevision(e.target.value)}
           placeholder="Explique por qué se rechaza el presupuesto"
-          className="w-full p-3 border border-gray-300 rounded-md mb-4 focus:outline-none transition-all resize-none"
+          className="w-full p-3 border border-gray-300 rounded-md mb-4 focus:outline-none transition-all resize-none text-sm placeholder:text-sm placeholder:text-gray-500"
           rows={4}
           onFocus={(e) => {
             e.target.style.boxShadow = `0 0 0 2px ${PALETA.verdeClaro}`;
@@ -59,15 +62,15 @@ export default function ModalMotivoRevision({
           <button
             onClick={onClose}
             disabled={enviando}
-            className="px-6 py-2.5 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors disabled:opacity-50"
+            className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition-colors disabled:opacity-50"
           >
             Cancelar
           </button>
           <button
             onClick={handleEnviar}
             disabled={!motivoRevision.trim() || enviando}
-            className="px-6 py-2.5 text-white rounded-md hover:opacity-90 transition-opacity disabled:opacity-50"
-            style={{ backgroundColor: PALETA.verdeClaro }}
+            className="px-3 py-1.5 text-sm text-white rounded-md hover:opacity-90 transition-opacity disabled:opacity-50"
+            style={{ backgroundColor: PALETA.bg }}
           >
             {enviando ? 'Guardando sus cambios...' : 'Enviar a Revisar'}
           </button>
@@ -83,7 +86,7 @@ export default function ModalMotivoRevision({
               style={{ borderColor: `${PALETA.verdeClaro} ${PALETA.verdeClaro} transparent ${PALETA.verdeClaro}` }}
             ></div>
             <p className="text-lg font-medium">Enviando a revisar...</p>
-            <p className="text-sm text-gray-600">Por favor, no cierres esta ventana</p>
+            <p className="text-sm text-gray-600">Por favor, no cierre esta ventana</p>
           </div>
         </div>
       )}

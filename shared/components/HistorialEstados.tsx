@@ -42,7 +42,7 @@ export default function HistorialEstados({ cambios, titulo }: HistorialEstadosPr
 
           <div className="space-y-2">
             {cambiosOrdenados.map((cambio) => (
-              <div key={cambio.id} className="relative pl-8 flex items-center gap-3 py-1">
+              <div key={cambio.id} className="relative pl-8 py-1">
                 {/* Círculo del timeline */}
                 <div
                   className="absolute left-0 w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0"
@@ -57,44 +57,48 @@ export default function HistorialEstados({ cambios, titulo }: HistorialEstadosPr
                   />
                 </div>
 
-                {/* Estados */}
-                <div className="flex items-center gap-2 min-w-[200px]">
-                  {cambio.estado_anterior && (
-                    <>
-                      <span
-                        className="px-2 py-0.5 text-xs rounded font-medium"
-                        style={{ backgroundColor: '#e5e7eb', color: PALETA.textoOscuro }}
-                      >
-                        {cambio.estado_anterior}
-                      </span>
-                      <span className="text-xs" style={{ color: PALETA.textoOscuro }}>→</span>
-                    </>
-                  )}
-                  <span
-                    className="px-2 py-0.5 text-xs rounded font-medium text-white"
-                    style={{ backgroundColor: PALETA.bg }}
-                  >
-                    {cambio.estado_nuevo}
-                  </span>
-                </div>
-
-                {/* Fecha */}
-                <div className="text-sm min-w-[130px]" style={{ color: '#6b7280' }}>
-                  {new Date(cambio.cambiado_en).toLocaleString('es-ES', {
-                    day: '2-digit',
-                    month: '2-digit',
-                    year: '2-digit',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  })}
-                </div>
-
-                {/* Motivo */}
-                {cambio.motivo && (
-                  <div className="text-sm flex-1" style={{ color: PALETA.textoOscuro }}>
-                    <span className="font-medium">Motivo:</span> {cambio.motivo}
+                <div className="grid grid-cols-[280px_150px_1fr] gap-4 items-start">
+                  {/* Estados */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {cambio.estado_anterior && (
+                      <>
+                        <span
+                          className="px-2 py-0.5 text-xs rounded font-medium whitespace-nowrap"
+                          style={{ backgroundColor: '#e5e7eb', color: PALETA.textoOscuro }}
+                        >
+                          {cambio.estado_anterior}
+                        </span>
+                        <span className="text-xs" style={{ color: PALETA.textoOscuro }}>→</span>
+                      </>
+                    )}
+                    <span
+                      className="px-2 py-0.5 text-xs rounded font-medium text-white whitespace-nowrap"
+                      style={{ backgroundColor: PALETA.bg }}
+                    >
+                      {cambio.estado_nuevo}
+                    </span>
                   </div>
-                )}
+
+                  {/* Fecha */}
+                  <div className="text-sm whitespace-nowrap" style={{ color: '#6b7280' }}>
+                    {new Date(cambio.cambiado_en).toLocaleString('es-ES', {
+                      day: '2-digit',
+                      month: '2-digit',
+                      year: '2-digit',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </div>
+
+                  {/* Motivo */}
+                  {cambio.motivo ? (
+                    <div className="text-sm" style={{ color: PALETA.textoOscuro }}>
+                      <span className="font-medium">Motivo:</span> {cambio.motivo}
+                    </div>
+                  ) : (
+                    <div></div>
+                  )}
+                </div>
               </div>
             ))}
           </div>

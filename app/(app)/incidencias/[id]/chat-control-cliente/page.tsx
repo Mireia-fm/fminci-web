@@ -38,6 +38,7 @@ type Incidencia = {
   imagen_url?: string;
   catalogacion?: string | null;
   prioridad?: string | null;
+  fecha_creacion?: string;
   instituciones?: {
     nombre: string;
   }[] | null;
@@ -171,6 +172,7 @@ export default function ChatControlCliente() {
           imagen_url,
           catalogacion,
           prioridad,
+          fecha_creacion,
           instituciones(nombre),
           proveedor_casos(estado_proveedor, prioridad, activo)
         `)
@@ -208,9 +210,9 @@ export default function ChatControlCliente() {
         const tieneProveedor = await checkProveedorActivo(incidenciaId);
         setTieneProveedorAsignado(tieneProveedor);
 
-        // Verificar proveedores anulados
+        // Verificar proveedores anulados (estado_proveedor='Anulada', mantienen activo=true para historial)
         const tieneAnulado = incidenciaData.proveedor_casos?.some(
-          pc => !pc.activo && pc.estado_proveedor === 'Anulada'
+          pc => pc.estado_proveedor === 'Anulada'
         );
         setTieneProveedorAnulado(!!tieneAnulado);
 
@@ -222,7 +224,25 @@ export default function ChatControlCliente() {
           .eq("tipo_estado", "cliente")
           .order("cambiado_en", { ascending: false });
 
-        setHistorialCliente(historialData || []);
+        let historialCompleto = historialData || [];
+
+        // Si hay historial pero el primer cambio no tiene estado_anterior (es decir, el primer cambio fue desde "Abierta")
+        // y no hay ningún registro que muestre explícitamente "Abierta", agregamos ese estado inicial
+        if (historialCompleto.length > 0) {
+          const primerCambio = historialCompleto[historialCompleto.length - 1];
+          if (!primerCambio.estado_anterior || primerCambio.estado_anterior === 'Abierta') {
+            // Añadir un registro sintético para mostrar el estado inicial "Abierta"
+            historialCompleto.push({
+              id: 'estado-inicial-' + incidenciaId,
+              estado_anterior: null,
+              estado_nuevo: 'Abierta',
+              cambiado_en: incidenciaData.fecha_creacion || incidenciaData.fecha || new Date().toISOString(),
+              motivo: 'Creación de la incidencia'
+            });
+          }
+        }
+
+        setHistorialCliente(historialCompleto);
       }
 
       // Cargar comentarios con adjuntos
@@ -373,13 +393,13 @@ export default function ChatControlCliente() {
         .from("proveedor_casos")
         .update({
           estado_proveedor: "Anulada",
-          activo: false,
           desasignado_en: new Date().toISOString(),
           desasignado_por: perfil.persona_id,
           motivo_desasignacion: motivoCompleto
         })
         .eq("incidencia_id", incidenciaId)
-        .eq("activo", true);
+        .eq("activo", true)
+        .neq("estado_proveedor", "Anulada");
 
       const proveedor = await obtenerProveedorActivo(incidenciaId);
       if (proveedor) {
@@ -626,7 +646,12 @@ export default function ChatControlCliente() {
                         ? '#fef3c7'
                         : comentario.autor_email === perfil?.email
                           ? '#dcfce7'
-                          : getColorEmisor(comentario.autor_rol || 'cliente')
+                          : (comentario.autor_rol?.toLowerCase() === 'cliente' || comentario.autor_rol?.toLowerCase() === 'gestor')
+                            ? 'white'
+                            : getColorEmisor(comentario.autor_rol || 'cliente'),
+                      border: (!comentario.es_sistema && comentario.autor_email !== perfil?.email && (comentario.autor_rol?.toLowerCase() === 'cliente' || comentario.autor_rol?.toLowerCase() === 'gestor'))
+                        ? `2px solid #C9D7A7`
+                        : 'none'
                     }}
                   >
                     {!comentario.es_sistema && (

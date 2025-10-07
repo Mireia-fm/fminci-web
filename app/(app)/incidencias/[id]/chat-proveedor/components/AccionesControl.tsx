@@ -14,10 +14,10 @@ interface Props {
   incidencia: Incidencia;
   onAnular: () => void;
   onCerrar: () => void;
-  onValorar: () => void;
   onGestionarPresupuesto: () => void;
   onCambiarAChatCliente: () => void;
   onResolverManual: () => void;
+  onReasignarProveedor: () => void;
 }
 
 /**
@@ -28,10 +28,10 @@ export default function AccionesControl({
   incidencia,
   onAnular,
   onCerrar,
-  onValorar,
   onGestionarPresupuesto,
   onCambiarAChatCliente,
-  onResolverManual
+  onResolverManual,
+  onReasignarProveedor
 }: Props) {
   const estado = incidencia.estado_proveedor;
   const incidenciaCerrada = incidencia.estado_cliente === "Cerrada" && estado === "Cerrada";
@@ -74,8 +74,8 @@ export default function AccionesControl({
             {estado === "Anulada" && (
               <button
                 type="button"
-                onClick={onCambiarAChatCliente}
-                className="px-4 py-2 text-white rounded hover:opacity-90 transition-opacity"
+                onClick={onReasignarProveedor}
+                className="px-4 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity"
                 style={{ backgroundColor: PALETA.verdeClaro }}
               >
                 Reasignar Proveedor
@@ -87,7 +87,7 @@ export default function AccionesControl({
               <button
                 type="button"
                 onClick={onCerrar}
-                className="px-4 py-2 text-white rounded hover:opacity-90 transition-opacity"
+                className="px-4 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity"
                 style={{ backgroundColor: PALETA.verdeClaro }}
               >
                 Cerrar Incidencia
@@ -99,22 +99,10 @@ export default function AccionesControl({
               <button
                 type="button"
                 onClick={onGestionarPresupuesto}
-                className="px-4 py-2 text-white rounded hover:opacity-90 transition-opacity"
+                className="px-4 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity"
                 style={{ backgroundColor: PALETA.verdeClaro }}
               >
                 Gestionar Presupuesto
-              </button>
-            )}
-
-            {/* Botón Valorar Incidencia - solo si está Resuelta */}
-            {estado === "Resuelta" && (
-              <button
-                type="button"
-                onClick={onValorar}
-                className="px-4 py-2 text-white rounded hover:opacity-90 transition-opacity"
-                style={{ backgroundColor: "#059669" }}
-              >
-                Valorar Incidencia
               </button>
             )}
 

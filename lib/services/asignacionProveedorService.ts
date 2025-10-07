@@ -71,63 +71,46 @@ export async function asignarProveedorCompleto(
     }
   }
 
-  // Verificar si ya existe un caso activo
+  // Verificar si ya existe un caso activo (excluyendo casos con estado_proveedor='Anulada')
   const { data: casoExistente } = await supabase
     .from("proveedor_casos")
     .select("id, estado_proveedor")
     .eq("incidencia_id", incidenciaId)
     .eq("activo", true)
+    .neq("estado_proveedor", "Anulada")
     .maybeSingle();
 
   let esReasignacion = false;
   let nuevoProveedorCasoId: string | null = null;
 
   if (casoExistente) {
-    // Si el caso existe y está anulado, crear uno nuevo (sin tocar el anterior)
-    if (casoExistente.estado_proveedor === 'Anulada') {
-      esReasignacion = true;
+    // Actualizar caso existente (no anulado)
+    await supabase
+      .from("proveedor_casos")
+      .update({
+        proveedor_id: proveedorIdFinal,
+        descripcion_proveedor: formulario.descripcion_proveedor,
+        prioridad: formulario.prioridad,
+        estado_proveedor: formulario.estado_proveedor,
+        asignado_por: asignadoPorId,
+        asignado_en: new Date().toISOString(),
+        actualizado_en: new Date().toISOString()
+      })
+      .eq("id", casoExistente.id);
 
-      // Crear nuevo caso para el nuevo proveedor con estado "Abierta"
-      const { data: nuevoCaso, error: insertError } = await supabase
-        .from("proveedor_casos")
-        .insert({
-          incidencia_id: incidenciaId,
-          proveedor_id: proveedorIdFinal,
-          descripcion_proveedor: formulario.descripcion_proveedor,
-          prioridad: formulario.prioridad,
-          estado_proveedor: 'Abierta', // Nuevo caso siempre empieza como "Abierta"
-          asignado_por: asignadoPorId,
-          asignado_en: new Date().toISOString(),
-          activo: true
-        })
-        .select('id')
-        .single();
-
-      if (insertError) {
-        console.error("Error creando nuevo proveedor_caso:", insertError);
-        throw new Error(`Error al reasignar proveedor: ${insertError.message}`);
-      }
-
-      nuevoProveedorCasoId = nuevoCaso?.id || null;
-    } else {
-      // Actualizar caso existente (no anulado)
-      await supabase
-        .from("proveedor_casos")
-        .update({
-          proveedor_id: proveedorIdFinal,
-          descripcion_proveedor: formulario.descripcion_proveedor,
-          prioridad: formulario.prioridad,
-          estado_proveedor: formulario.estado_proveedor,
-          asignado_por: asignadoPorId,
-          asignado_en: new Date().toISOString(),
-          actualizado_en: new Date().toISOString()
-        })
-        .eq("id", casoExistente.id);
-
-      nuevoProveedorCasoId = casoExistente.id;
-    }
+    nuevoProveedorCasoId = casoExistente.id;
   } else {
-    // Crear nuevo caso (primera asignación) - siempre empieza como "Abierta"
+    // Verificar si hay casos anulados para determinar si es reasignación
+    const { data: casosAnulados } = await supabase
+      .from("proveedor_casos")
+      .select("id")
+      .eq("incidencia_id", incidenciaId)
+      .eq("estado_proveedor", "Anulada")
+      .limit(1);
+
+    esReasignacion = !!(casosAnulados && casosAnulados.length > 0);
+
+    // Crear nuevo caso (primera asignación o reasignación tras anulación)
     const { data: nuevoCaso, error: insertError } = await supabase
       .from("proveedor_casos")
       .insert({
@@ -135,7 +118,7 @@ export async function asignarProveedorCompleto(
         proveedor_id: proveedorIdFinal,
         descripcion_proveedor: formulario.descripcion_proveedor,
         prioridad: formulario.prioridad,
-        estado_proveedor: 'Abierta', // Primera asignación siempre empieza como "Abierta"
+        estado_proveedor: 'Abierta', // Nueva asignación siempre empieza como "Abierta"
         asignado_por: asignadoPorId,
         asignado_en: new Date().toISOString(),
         activo: true
@@ -145,7 +128,7 @@ export async function asignarProveedorCompleto(
 
     if (insertError) {
       console.error("Error creando proveedor_caso:", insertError);
-      throw new Error(`Error al asignar proveedor: ${insertError.message}`);
+      throw new Error(`Error al ${esReasignacion ? 'reasignar' : 'asignar'} proveedor: ${insertError.message}`);
     }
 
     nuevoProveedorCasoId = nuevoCaso?.id || null;

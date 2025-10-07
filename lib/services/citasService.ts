@@ -69,11 +69,19 @@ export async function calendarizarVisita(
     const fechaHoraVisita = `${fechaVisita}T${horaVisita}`;
 
     if (casoActual?.proveedor_id) {
+      // Obtener nombre del proveedor para guardarlo en la cita
+      const { data: proveedorData } = await supabase
+        .from("instituciones")
+        .select("nombre")
+        .eq("id", casoActual.proveedor_id)
+        .single();
+
       const { error: citaError } = await supabase
         .from("citas_proveedores")
         .insert({
           incidencia_id: incidenciaId,
           proveedor_id: casoActual.proveedor_id,
+          proveedor_nombre: proveedorData?.nombre || null,
           fecha_visita: fechaHoraVisita,
           horario: horarioVisita,
           estado: 'programada',

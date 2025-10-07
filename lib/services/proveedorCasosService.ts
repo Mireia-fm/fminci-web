@@ -43,6 +43,8 @@ export interface ActualizarProveedorCaso {
 
 /**
  * Obtiene el proveedor activo de una incidencia
+ * Nota: Un proveedor con estado_proveedor='Anulada' NO se considera activo,
+ * aunque mantenga activo=true para preservar el historial
  */
 export async function obtenerProveedorActivo(
   incidenciaId: string
@@ -56,6 +58,7 @@ export async function obtenerProveedorActivo(
       `)
       .eq('incidencia_id', incidenciaId)
       .eq('activo', true)
+      .neq('estado_proveedor', 'Anulada')
       .maybeSingle();
 
     if (error) {

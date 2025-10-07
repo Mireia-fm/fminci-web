@@ -24,11 +24,23 @@ type Incidencia = {
     nombre: string;
   }[] | null;
   proveedor_casos?: {
+    id?: string;
     estado_proveedor: string;
     prioridad?: string;
     activo?: boolean;
     proveedor_id?: string;
   }[] | null;
+};
+
+// Tipo para filas expandidas (una fila por proveedor_caso)
+type FilaIncidencia = Incidencia & {
+  proveedor_caso_seleccionado?: {
+    id?: string;
+    estado_proveedor: string;
+    prioridad?: string;
+    activo?: boolean;
+    proveedor_id?: string;
+  };
 };
 
 type Proveedor = {
@@ -132,7 +144,7 @@ export default function IncidenciasListado() {
             institucion_id,
             email,
             instituciones(nombre),
-            proveedor_casos(estado_proveedor, prioridad, activo)
+            proveedor_casos(id, estado_proveedor, prioridad, activo)
           `)
           .eq("num_solicitud", numeroSolicitud);
 
@@ -493,11 +505,36 @@ export default function IncidenciasListado() {
     console.log("  Incidencias que pasaron el filtro:", incidenciasFiltradas.map(i => i.num_solicitud));
   }
 
+  // Expandir incidencias con múltiples proveedor_casos en filas separadas
+  const expandirIncidenciasConProveedores = (incidencias: Incidencia[]): FilaIncidencia[] => {
+    const filas: FilaIncidencia[] = [];
+
+    incidencias.forEach(incidencia => {
+      if (incidencia.proveedor_casos && incidencia.proveedor_casos.length > 0) {
+        // Si tiene proveedores, crear una fila por cada proveedor_caso
+        incidencia.proveedor_casos.forEach(pc => {
+          filas.push({
+            ...incidencia,
+            proveedor_caso_seleccionado: pc
+          });
+        });
+      } else {
+        // Si no tiene proveedores, crear una sola fila normal
+        filas.push({ ...incidencia });
+      }
+    });
+
+    return filas;
+  };
+
   // Calcular paginación
   const totalPaginas = Math.ceil(incidenciasFiltradas.length / incidenciasPorPagina);
   const indiceInicio = (paginaActual - 1) * incidenciasPorPagina;
   const indiceFin = indiceInicio + incidenciasPorPagina;
   const incidenciasPaginadas = incidenciasFiltradas.slice(indiceInicio, indiceFin);
+
+  // Expandir las incidencias paginadas para mostrar múltiples proveedor_casos
+  const filasExpandidas = expandirIncidenciasConProveedores(incidenciasPaginadas);
 
   // Log de paginación cuando se filtra por Anulada
   if (perfil?.rol === "Proveedor" && (filtroEstadoProveedor === "Anulada" || filtroEstado === "Anulada")) {
@@ -543,7 +580,7 @@ export default function IncidenciasListado() {
     }
   };
 
-  const manejarClickIncidencia = async (incidenciaId: string) => {
+  const manejarClickIncidencia = async (incidenciaId: string, proveedorCasoId?: string) => {
     if (perfil?.rol === "Control") {
       // Si es Control, verificar si tiene proveedor asignado
       const incidencia = incidencias.find(inc => inc.id === incidenciaId);
@@ -558,10 +595,16 @@ export default function IncidenciasListado() {
         // Con proveedor asignado: mostrar modal de selección
         setTieneProveedorAsignado(true);
         setIncidenciaSeleccionada(incidenciaId);
+        // Guardar el proveedorCasoId si existe (para usar en la navegación)
+        if (proveedorCasoId) {
+          sessionStorage.setItem('proveedorCasoIdTemp', proveedorCasoId);
+        } else {
+          sessionStorage.removeItem('proveedorCasoIdTemp');
+        }
         setMostrarModal(true);
       }
     } else {
-      // Para otros tipos, redirigir directamente
+      // Para otros roles, redirigir directamente
       redirigirAChat(incidenciaId, perfil?.rol || null);
     }
   };
@@ -578,7 +621,14 @@ export default function IncidenciasListado() {
   const elegirChatControl = (tipoChat: string) => {
     if (incidenciaSeleccionada) {
       if (tipoChat === "proveedor") {
-        router.push(`/incidencias/${incidenciaSeleccionada}/chat-proveedor`);
+        // Si hay un proveedorCasoId guardado, usarlo en la URL
+        const proveedorCasoIdTemp = sessionStorage.getItem('proveedorCasoIdTemp');
+        if (proveedorCasoIdTemp) {
+          router.push(`/incidencias/${incidenciaSeleccionada}/chat-proveedor?proveedor_caso_id=${proveedorCasoIdTemp}`);
+          sessionStorage.removeItem('proveedorCasoIdTemp');
+        } else {
+          router.push(`/incidencias/${incidenciaSeleccionada}/chat-proveedor`);
+        }
       } else {
         router.push(`/incidencias/${incidenciaSeleccionada}/chat-control-cliente`);
       }
@@ -636,7 +686,10 @@ export default function IncidenciasListado() {
                 placeholder="Buscar"
                 value={filtroNumero}
                 onChange={(e) => setFiltroNumero(e.target.value)}
-                className="px-3 py-1.5 rounded border text-sm h-8 bg-white w-full"
+                className="px-3 py-1.5 rounded border text-sm h-8 bg-white w-full outline-none focus:ring-2"
+                style={{ focusRingColor: PALETA.bg } as React.CSSProperties}
+                onFocus={(e) => e.target.style.boxShadow = `0 0 0 2px ${PALETA.bg}`}
+                onBlur={(e) => e.target.style.boxShadow = ''}
               />
             </div>
 
@@ -648,11 +701,13 @@ export default function IncidenciasListado() {
                 type="date"
                 value={filtroFecha}
                 onChange={(e) => setFiltroFecha(e.target.value)}
-                className="px-3 py-1.5 rounded border text-sm h-8 bg-white w-full"
+                className="px-3 py-1.5 rounded border text-sm h-8 bg-white w-full outline-none focus:ring-2"
                 style={{
                   colorScheme: 'light',
                   color: filtroFecha ? '#000000' : '#6b7280'
                 }}
+                onFocus={(e) => e.target.style.boxShadow = `0 0 0 2px ${PALETA.bg}`}
+                onBlur={(e) => e.target.style.boxShadow = ''}
               />
             </div>
 
@@ -665,6 +720,7 @@ export default function IncidenciasListado() {
                 onChange={setFiltroEstado}
                 placeholder="Seleccionar"
                 className="w-full"
+                focusColor={PALETA.bg}
                 options={
                   perfil?.rol === "Proveedor" ? [
                     { value: "Abierta", label: "Abierta" },
@@ -699,6 +755,7 @@ export default function IncidenciasListado() {
                   onChange={setFiltroEstadoProveedor}
                   placeholder="Seleccionar"
                   className="w-full"
+                  focusColor={PALETA.bg}
                   options={[
                     { value: "Abierta", label: "Abierta" },
                     { value: "En resolución", label: "En resolución" },
@@ -733,6 +790,7 @@ export default function IncidenciasListado() {
                   onChange={setFiltroCentro}
                   placeholder="Seleccionar"
                   className="w-full"
+                  focusColor={PALETA.bg}
                   options={
                     /* Para Cliente con múltiples centros, usar centrosAsignados. Para otros, usar centrosUnicos */
                     mostrarFiltroCentro
@@ -762,6 +820,7 @@ export default function IncidenciasListado() {
                 onChange={setFiltroCatalogacion}
                 placeholder="Seleccionar"
                 className="w-full"
+                focusColor={PALETA.bg}
                 options={catalogacionesUnicas.map(catalogacion => ({
                   value: catalogacion,
                   label: catalogacion
@@ -779,6 +838,7 @@ export default function IncidenciasListado() {
                 onChange={setFiltroPrioridadCliente}
                 placeholder="Seleccionar"
                 className="w-full"
+                focusColor={PALETA.bg}
                 options={
                   perfil?.rol === "Cliente" || perfil?.rol === "Gestor" ? [
                     { value: "Urgente", label: "Urgente" },
@@ -803,6 +863,7 @@ export default function IncidenciasListado() {
                   onChange={setFiltroPrioridadProveedor}
                   placeholder="Seleccionar"
                   className="w-full"
+                  focusColor={PALETA.bg}
                   options={[
                     { value: "Crítico", label: "Crítico" },
                     { value: "No crítico", label: "No crítico" }
@@ -827,6 +888,7 @@ export default function IncidenciasListado() {
                     onChange={setFiltroProveedor}
                     placeholder="Seleccionar"
                     className="w-full"
+                    focusColor={PALETA.bg}
                     options={proveedores.map(proveedor => ({
                       value: proveedor.id,
                       label: proveedor.nombre
@@ -888,47 +950,43 @@ export default function IncidenciasListado() {
                 </span>
               </div>
             ) : (
-              incidenciasPaginadas.map((incidencia) => (
+              filasExpandidas.map((fila, index) => (
                 <div
-                  key={incidencia.id}
-                  onClick={() => manejarClickIncidencia(incidencia.id)}
+                  key={`${fila.id}-${fila.proveedor_caso_seleccionado?.id || 'sin-proveedor'}-${index}`}
+                  onClick={() => manejarClickIncidencia(fila.id, fila.proveedor_caso_seleccionado?.id)}
                   className="grid gap-4 p-4 border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors"
                   style={{ gridTemplateColumns: perfil?.rol === "Control" ? "0.9fr 0.8fr 1fr 1fr 1.2fr 2fr" : "0.9fr 0.8fr 1fr 1.2fr 2fr" }}
                 >
-                  <div className="text-sm">{incidencia.num_solicitud}</div>
-                  <div className="text-sm">{incidencia.fecha}</div>
+                  <div className="text-sm flex items-center gap-2">
+                    {fila.num_solicitud}
+                    {fila.proveedor_caso_seleccionado && fila.proveedor_casos && fila.proveedor_casos.length > 1 && (
+                      <span className="text-xs px-1.5 py-0.5 rounded" style={{
+                        backgroundColor: fila.proveedor_caso_seleccionado.estado_proveedor === 'Anulada' ? '#fee2e2' : '#dbeafe',
+                        color: fila.proveedor_caso_seleccionado.estado_proveedor === 'Anulada' ? '#991b1b' : '#1e40af'
+                      }}>
+                        {fila.proveedor_caso_seleccionado.estado_proveedor === 'Anulada' ? 'Anulado' : 'Activo'}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-sm">{fila.fecha}</div>
                   <div className="text-sm">
-                    {perfil?.rol === "Proveedor" ? (() => {
-                      // Si estamos filtrando por Anulada, mostrar cualquier caso con estado="Anulada"
-                      const estadoFiltrado = filtroEstadoProveedor || filtroEstado;
-                      if (estadoFiltrado === "Anulada") {
-                        return incidencia.proveedor_casos?.find(pc => pc.estado_proveedor === "Anulada")?.estado_proveedor || "-";
-                      }
-                      // Para otros estados, mostrar el caso activo
-                      return incidencia.proveedor_casos?.find(pc => pc.activo)?.estado_proveedor || incidencia.estado_cliente;
-                    })() : incidencia.estado_cliente}
+                    {perfil?.rol === "Proveedor" ? (
+                      fila.proveedor_caso_seleccionado?.estado_proveedor || fila.estado_cliente
+                    ) : fila.estado_cliente}
                   </div>
                   {perfil?.rol === "Control" && (
                     <div className="text-sm">
-                      {(() => {
-                        // Si estamos filtrando por Anulada, mostrar cualquier caso con estado="Anulada"
-                        const estadoFiltrado = filtroEstadoProveedor || filtroEstado;
-                        if (estadoFiltrado === "Anulada") {
-                          return incidencia.proveedor_casos?.find(pc => pc.estado_proveedor === "Anulada")?.estado_proveedor || "-";
-                        }
-                        // Para otros estados, mostrar el caso activo
-                        return incidencia.proveedor_casos?.find(pc => pc.activo)?.estado_proveedor || "-";
-                      })()}
+                      {fila.proveedor_caso_seleccionado?.estado_proveedor || "-"}
                     </div>
                   )}
                   <div className="text-sm">
                     {perfil?.rol === "Cliente"
-                      ? (incidencia.catalogacion || "-")
-                      : (incidencia.instituciones?.[0]?.nombre || incidencia.centro || "-")
+                      ? (fila.catalogacion || "-")
+                      : (fila.instituciones?.[0]?.nombre || fila.centro || "-")
                     }
                   </div>
-                  <div className="text-sm truncate" title={incidencia.descripcion}>
-                    {incidencia.descripcion}
+                  <div className="text-sm truncate" title={fila.descripcion}>
+                    {fila.descripcion}
                   </div>
                 </div>
               ))
@@ -1015,10 +1073,10 @@ export default function IncidenciasListado() {
         </div>
       </div>
 
-      {/* Modal para usuarios Control */}
+      {/* Modal para seleccionar chat */}
       {mostrarModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div 
+          <div
             className="bg-white rounded-lg p-6 max-w-md w-full mx-4"
             style={{ backgroundColor: PALETA.card }}
           >
@@ -1028,7 +1086,7 @@ export default function IncidenciasListado() {
             <p className="text-sm text-gray-600 mb-6">
               ¿Qué chat deseas abrir para esta incidencia?
             </p>
-            
+
             <div className="flex flex-col gap-3">
               <button
                 onClick={() => elegirChatControl("control-cliente")}
@@ -1045,7 +1103,7 @@ export default function IncidenciasListado() {
                 >
                   Chat Proveedor
                 </button>
-              ) : (
+              ) : perfil?.rol === "Control" && (
                 <button
                   onClick={asignarAProveedor}
                   className="w-full py-3 px-4 rounded text-white text-sm font-medium hover:opacity-90 transition-opacity"
@@ -1055,7 +1113,7 @@ export default function IncidenciasListado() {
                 </button>
               )}
             </div>
-            
+
             <div className="flex justify-end mt-4">
               <button
                 onClick={() => {

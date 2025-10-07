@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { registrarCambioEstado } from "@/lib/historialEstados";
 import ModalResolucionManual, { type FormularioResolucionManual } from "@/components/ModalResolucionManual";
@@ -30,6 +30,9 @@ import ModalResolver from "@/components/proveedor/ModalResolver";
 import ModalRechazarResolucion from "@/components/ModalRechazarResolucion";
 import ModalMotivoRevision from "@/components/ModalMotivoRevision";
 import ModalCerrarIncidencia from "@/components/ModalCerrarIncidencia";
+import ModalAnularAsignacionProveedor from "@/components/ModalAnularAsignacionProveedor";
+import ModalAsignarProveedor from "@/components/ModalAsignarProveedor";
+import { asignarProveedorCompleto, type FormularioAsignacionProveedor } from "@/lib/services/asignacionProveedorService";
 
 type Adjunto = {
   id: string;
@@ -54,6 +57,7 @@ type Incidencia = {
   imagen_url?: string;
   catalogacion?: string;
   institucion_id?: string;
+  proveedor_nombre?: string;
   instituciones?: {
     nombre: string;
     direccion?: string;
@@ -89,7 +93,9 @@ type CambioEstado = {
 export default function ChatProveedor() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const incidenciaId = params.id as string;
+  const proveedorCasoIdUrl = searchParams.get('proveedor_caso_id');
 
   // AuthContext
   const { perfil, loading: authLoading } = useAuth();
@@ -166,6 +172,7 @@ export default function ChatProveedor() {
   const [mostrarModalGestionPresupuesto, setMostrarModalGestionPresupuesto] = useState(false);
   const [mostrarModalResolucionManual, setMostrarModalResolucionManual] = useState(false);
   const [mostrarModalMotivoRevision, setMostrarModalMotivoRevision] = useState(false);
+  const [mostrarModalReasignarProveedor, setMostrarModalReasignarProveedor] = useState(false);
 
   // Estados para modales de Control
   const [motivoAnulacion, setMotivoAnulacion] = useState('');
@@ -202,6 +209,14 @@ export default function ChatProveedor() {
 
   // Ref para scroll automático
   const comentariosContainerRef = useRef<HTMLDivElement>(null);
+
+  // DEBUG: Log cuando cambian los comentarios
+  useEffect(() => {
+    console.log('🔄 Estado comentarios actualizado:', comentarios.length, 'comentarios');
+    if (comentarios.length > 0) {
+      console.log('📋 Comentarios en estado:', comentarios.map(c => ({ id: c.id, cuerpo: c.cuerpo?.substring(0, 50) })));
+    }
+  }, [comentarios]);
 
   // Función para hacer scroll al último mensaje
   const scrollToBottom = () => {
@@ -280,25 +295,79 @@ export default function ChatProveedor() {
         .eq("id", incidenciaId)
         .single();
 
+      console.log('🔵 incidenciaData existe?', !!incidenciaData);
+
       if (incidenciaData) {
+        console.log('🟢 DENTRO del bloque if (incidenciaData)');
         // Obtener datos del proveedor_casos
         let estadoProveedor = null;
         let prioridadProveedor = null;
         let descripcionProveedor = null;
         let tipoRevision = null;
+        let proveedorNombre = null;
+        let proveedorCaso: any = null; // Declarar en scope más amplio para usarlo después
 
         if (perfil.rol === 'Control' || perfil.rol === 'Proveedor') {
-          const { data: proveedorCaso } = await supabase
-            .from("proveedor_casos")
-            .select("id, asignado_en, estado_proveedor, prioridad, descripcion_proveedor, activo, tipo_revision")
-            .eq("incidencia_id", incidenciaId)
-            .eq("activo", true)
-            .neq("estado_proveedor", "Anulada") // Filtrar anuladas
-            .order("asignado_en", { ascending: false })
-            .limit(1)
-            .maybeSingle();
+          // Cargar el último proveedor_caso (incluyendo anulados)
+          // Si hay proveedorCasoIdUrl, cargar ese caso específico; si no, cargar el activo
+          let errorProveedorCaso;
+
+          if (proveedorCasoIdUrl) {
+            // Cargar el proveedor_caso específico de la URL
+            const { data, error } = await supabase
+              .from("proveedor_casos")
+              .select(`
+                id,
+                asignado_en,
+                estado_proveedor,
+                prioridad,
+                descripcion_proveedor,
+                activo,
+                tipo_revision,
+                proveedor_id
+              `)
+              .eq("id", proveedorCasoIdUrl)
+              .eq("incidencia_id", incidenciaId)
+              .maybeSingle();
+
+            proveedorCaso = data;
+            errorProveedorCaso = error;
+          } else {
+            // Comportamiento normal: cargar el caso activo (incluye anulados para mostrar el estado)
+            const { data, error } = await supabase
+              .from("proveedor_casos")
+              .select(`
+                id,
+                asignado_en,
+                estado_proveedor,
+                prioridad,
+                descripcion_proveedor,
+                activo,
+                tipo_revision,
+                proveedor_id
+              `)
+              .eq("incidencia_id", incidenciaId)
+              .eq("activo", true)
+              .order("asignado_en", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+
+            proveedorCaso = data;
+            errorProveedorCaso = error;
+          }
+
+          if (errorProveedorCaso) {
+            console.error('Error en consulta proveedor caso:', errorProveedorCaso);
+          }
 
           if (proveedorCaso) {
+            console.log('✅ Proveedor caso cargado:', {
+              id: proveedorCaso.id,
+              estado: proveedorCaso.estado_proveedor,
+              proveedor_id: proveedorCaso.proveedor_id,
+              desde_url: !!proveedorCasoIdUrl
+            });
+
             setProveedorCasoId(proveedorCaso.id);
             if (proveedorCaso.asignado_en) {
               setFechaAsignacionProveedor(proveedorCaso.asignado_en);
@@ -307,6 +376,19 @@ export default function ChatProveedor() {
             prioridadProveedor = proveedorCaso.prioridad;
             descripcionProveedor = proveedorCaso.descripcion_proveedor;
             tipoRevision = proveedorCaso.tipo_revision;
+
+            // Obtener nombre del proveedor con consulta separada
+            if (proveedorCaso.proveedor_id) {
+              const { data: proveedorData } = await supabase
+                .from("instituciones")
+                .select("nombre")
+                .eq("id", proveedorCaso.proveedor_id)
+                .single();
+
+              if (proveedorData) {
+                proveedorNombre = proveedorData.nombre;
+              }
+            }
           }
         }
 
@@ -340,6 +422,7 @@ export default function ChatProveedor() {
           prioridad_proveedor: prioridadProveedor,
           descripcion_proveedor: descripcionProveedor,
           tipo_revision: tipoRevision,
+          proveedor_nombre: (proveedorNombre as string) || undefined,
           adjuntos_principales: adjuntosPrincipales
         });
 
@@ -349,6 +432,66 @@ export default function ChatProveedor() {
         } else if (incidenciaData.centro) {
           await cargarDireccionCentro(undefined, incidenciaData.centro);
         }
+
+        // Cargar comentarios con adjuntos
+        console.log('🔍 DEBUG COMENTARIOS - Inicio carga');
+        console.log('  - Rol:', perfil.rol);
+        console.log('  - ProveedorCaso existe?', !!proveedorCaso);
+        console.log('  - ProveedorCaso ID:', proveedorCaso?.id);
+
+        let comentariosData: Comentario[] = [];
+        if (perfil.rol === 'Control' || perfil.rol === 'Proveedor') {
+          // Cargar comentarios del ámbito proveedor
+          if (proveedorCaso) {
+            console.log('📌 Cargando comentarios para proveedor_caso_id:', proveedorCaso.id);
+
+            // Con proveedorCaso: filtrar por ese ID específico
+            const { data: comentarios, error: errorComentarios } = await supabase
+              .from("comentarios")
+              .select(`
+                *,
+                adjuntos(id, tipo, nombre_archivo, storage_key, categoria)
+              `)
+              .eq("incidencia_id", incidenciaId)
+              .eq("proveedor_caso_id", proveedorCaso.id)
+              .in("ambito", ["proveedor", "ambos"])
+              .not("cuerpo", "is", null)
+              .order("creado_en", { ascending: true });
+
+            if (errorComentarios) {
+              console.error("❌ Error cargando comentarios:", errorComentarios);
+            } else {
+              console.log(`✅ Comentarios cargados:`, comentarios?.length || 0);
+              if (comentarios && comentarios.length > 0) {
+                console.log('📄 Primer comentario:', comentarios[0]);
+              }
+            }
+
+            comentariosData = comentarios || [];
+          } else {
+            console.log('⚠️ No hay proveedorCaso - cargando todos los comentarios del ámbito proveedor');
+
+            // Si no hay proveedorCaso, cargar todos los comentarios del ámbito proveedor
+            const { data: comentarios } = await supabase
+              .from("comentarios")
+              .select(`
+                *,
+                adjuntos(id, tipo, nombre_archivo, storage_key, categoria)
+              `)
+              .eq("incidencia_id", incidenciaId)
+              .in("ambito", ["proveedor", "ambos"])
+              .not("cuerpo", "is", null)
+              .order("creado_en", { ascending: true });
+
+            console.log(`✅ Comentarios cargados (sin filtro proveedor):`, comentarios?.length || 0);
+            comentariosData = comentarios || [];
+          }
+        } else {
+          console.log('⚠️ Rol no es Control ni Proveedor, no se cargan comentarios');
+        }
+
+        console.log('🎯 Llamando setComentarios con:', comentariosData.length, 'comentarios');
+        setComentarios(comentariosData);
       }
 
       // Verificar oferta aprobada
@@ -461,39 +604,6 @@ export default function ChatProveedor() {
           documento_url: documentoUrl
         });
       }
-
-      // Cargar comentarios con adjuntos
-      // Solo cargar comentarios si tenemos proveedor_caso_id
-      let comentariosData: Comentario[] = [];
-      if (perfil.rol === 'Control' || perfil.rol === 'Proveedor') {
-        // Obtener el proveedor_caso_id activo
-        const { data: proveedorCasoActivo } = await supabase
-          .from("proveedor_casos")
-          .select("id")
-          .eq("incidencia_id", incidenciaId)
-          .eq("activo", true)
-          .neq("estado_proveedor", "Anulada")
-          .maybeSingle();
-
-        if (proveedorCasoActivo) {
-          // Filtrar comentarios por proveedor_caso_id
-          const { data: comentarios } = await supabase
-            .from("comentarios")
-            .select(`
-              *,
-              adjuntos(id, tipo, nombre_archivo, storage_key, categoria)
-            `)
-            .eq("incidencia_id", incidenciaId)
-            .eq("proveedor_caso_id", proveedorCasoActivo.id)
-            .in("ambito", ["proveedor", "ambos"])
-            .not("cuerpo", "is", null)
-            .order("creado_en", { ascending: true });
-
-          comentariosData = comentarios || [];
-        }
-      }
-
-      setComentarios(comentariosData);
 
       // Verificar si alguna vez se aprobó una oferta y si hay resolución manual
       const { data: historialData } = await supabase
@@ -789,12 +899,11 @@ export default function ChatProveedor() {
         .eq("proveedor_id", proveedorInfo.proveedor_id)
         .eq("estado", "programada");
 
-      // Marcar proveedor_caso como anulado
+      // Marcar proveedor_caso como anulado (mantener activo=true)
       await supabase
         .from("proveedor_casos")
         .update({
           estado_proveedor: "Anulada",
-          activo: false,
           motivo_anulacion: motivoAnulacion,
           anulado_en: fechaAnulacion.toISOString(),
           anulado_por: perfil.persona_id,
@@ -847,6 +956,30 @@ export default function ChatProveedor() {
     } catch (error) {
       console.error("Error anulando incidencia:", error);
       alert("Error al anular la incidencia");
+    } finally {
+      setEnviando(false);
+    }
+  };
+
+  const handleReasignarProveedor = async (formularioProveedor: FormularioAsignacionProveedor) => {
+    if (!formularioProveedor.proveedor_id || !incidencia || !perfil) return;
+
+    try {
+      setEnviando(true);
+      await asignarProveedorCompleto(
+        incidenciaId,
+        incidencia.num_solicitud,
+        incidencia.estado_cliente,
+        formularioProveedor,
+        perfil.persona_id,
+        perfil.email
+      );
+      setMostrarModalReasignarProveedor(false);
+      cargarDatos();
+    } catch (error) {
+      console.error("Error completo reasignando proveedor:", error);
+      const mensajeError = error instanceof Error ? error.message : 'Error desconocido';
+      alert(`Error al reasignar el proveedor: ${mensajeError}`);
     } finally {
       setEnviando(false);
     }
@@ -1303,6 +1436,9 @@ ${textoRechazo.instruccion}`,
             <div className="text-white text-center">
               <h2 className="text-lg font-semibold mb-1 tracking-wider">CHAT PROVEEDOR</h2>
               <p className="text-sm opacity-80">#{incidencia.num_solicitud}</p>
+              {incidencia.proveedor_nombre && (
+                <p className="text-sm opacity-90 mt-1">{incidencia.proveedor_nombre}</p>
+              )}
             </div>
           ) : (
             <h2 className="text-white text-center text-lg font-semibold mb-4 tracking-wider">SEGUIMIENTO</h2>
@@ -1867,7 +2003,7 @@ ${textoRechazo.instruccion}`,
                         {estado === "Anulada" && (
                           <button
                             type="button"
-                            onClick={() => router.push(`/incidencias/${incidenciaId}/chat-control-cliente`)}
+                            onClick={() => setMostrarModalReasignarProveedor(true)}
                             className="px-4 py-2 text-white rounded hover:opacity-90 transition-opacity"
                             style={{ backgroundColor: PALETA.verdeClaro }}
                           >
@@ -1879,21 +2015,10 @@ ${textoRechazo.instruccion}`,
                           <button
                             type="button"
                             onClick={abrirModalGestionPresupuesto}
-                            className="px-4 py-2 text-white rounded hover:opacity-90 transition-opacity"
+                            className="px-4 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity"
                             style={{ backgroundColor: PALETA.verdeClaro }}
                           >
                             Gestionar Presupuesto
-                          </button>
-                        )}
-
-                        {estado === "Resuelta" && (
-                          <button
-                            type="button"
-                            onClick={() => setMostrarModalValorarIncidencia(true)}
-                            className="px-4 py-2 text-white rounded hover:opacity-90 transition-opacity"
-                            style={{ backgroundColor: "#059669" }}
-                          >
-                            Valorar Incidencia
                           </button>
                         )}
 
@@ -2021,7 +2146,7 @@ ${textoRechazo.instruccion}`,
                     case "Valorada":
                       botonesDisponibles.valorar = true;
                       botonesDisponibles.volverResolver = true;
-                      mensaje = 'Incidencia valorada - Puede editar la resolución o valoración';
+                      mensaje = 'Esperando a la aprobación por parte de Control - Puede editar la resolución o valoración';
                       break;
 
                     case "Revisar resolución":
@@ -2031,6 +2156,9 @@ ${textoRechazo.instruccion}`,
                       break;
 
                     case "Cerrada":
+                      // Para cerrada, mostraremos el resumen más abajo
+                      break;
+
                     case "Anulada":
                       mensaje = 'Incidencia finalizada - No hay acciones disponibles';
                       break;
@@ -2045,6 +2173,97 @@ ${textoRechazo.instruccion}`,
 
                   return (
                     <>
+                      {/* Resumen para Proveedor cuando está Cerrada */}
+                      {estado === "Cerrada" && resumenResolucion && resumenValoracion && (
+                        <div className="space-y-4 mb-6">
+                          {/* Mensaje de incidencia cerrada */}
+                          <div className="bg-green-50 rounded-lg p-4" style={{ border: `2px solid ${PALETA.verdeClaro}` }}>
+                            <p className="text-sm font-semibold" style={{ color: PALETA.verdeClaro }}>
+                              ✓ Incidencia cerrada y aprobada
+                            </p>
+                          </div>
+
+                          {/* Resumen de Resolución Técnica Aprobada */}
+                          <div className="bg-gray-50 rounded-lg p-4">
+                            <h3 className="font-semibold text-base mb-3 uppercase" style={{ color: PALETA.textoOscuro }}>
+                              Resolución Técnica Aprobada
+                            </h3>
+                            <div className="space-y-2 text-sm">
+                              <div>
+                                <span className="font-medium">Solución aplicada:</span>
+                                <p className="text-gray-700 mt-1">{resumenResolucion.solucion_aplicada}</p>
+                              </div>
+                              <div>
+                                <span className="font-medium">Fecha de realización:</span>
+                                <span className="ml-2 text-gray-700">
+                                  {new Date(resumenResolucion.fecha_realizacion).toLocaleDateString('es-ES')}
+                                </span>
+                              </div>
+                              <div className="flex flex-col gap-2 text-xs">
+                                {resumenResolucion.tiene_imagenes && resumenResolucion.imagenes_urls && resumenResolucion.imagenes_urls.length > 0 && (
+                                  <div className="flex flex-wrap gap-2">
+                                    {resumenResolucion.imagenes_urls.map((url, index) => (
+                                      <a
+                                        key={index}
+                                        href={url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-blue-600 hover:text-blue-800 underline cursor-pointer"
+                                      >
+                                        📷 Imagen {index + 1}
+                                      </a>
+                                    ))}
+                                  </div>
+                                )}
+                                {resumenResolucion.tiene_documento && resumenResolucion.documento_url && (
+                                  <a
+                                    href={resumenResolucion.documento_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-blue-600 hover:text-blue-800 underline cursor-pointer"
+                                  >
+                                    📄 Parte de trabajo adjunto
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Resumen de Valoración Económica Aprobada */}
+                          <div className="bg-gray-50 rounded-lg p-4">
+                            <h3 className="font-semibold text-base mb-3 uppercase" style={{ color: PALETA.textoOscuro }}>
+                              Valoración Económica Aprobada
+                            </h3>
+                            <div className="space-y-2 text-sm">
+                              <div className="flex justify-between">
+                                <span className="font-medium">Importe sin IVA:</span>
+                                <span className="text-gray-700">{resumenValoracion.importe_sin_iva.toFixed(2)}€</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="font-medium">IVA ({resumenValoracion.porcentaje_iva}%):</span>
+                                <span className="text-gray-700">
+                                  {(resumenValoracion.importe_con_iva - resumenValoracion.importe_sin_iva).toFixed(2)}€
+                                </span>
+                              </div>
+                              <div className="flex justify-between pt-2 border-t">
+                                <span className="font-bold">Total con IVA:</span>
+                                <span className="font-bold text-black">{resumenValoracion.importe_con_iva.toFixed(2)}€</span>
+                              </div>
+                              {resumenValoracion.tiene_documento && resumenValoracion.documento_url && (
+                                <a
+                                  href={resumenValoracion.documento_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs text-blue-600 hover:text-blue-800 underline cursor-pointer"
+                                >
+                                  📄 Documento justificativo adjunto
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
                       {mensaje && (
                         <div className="text-center py-4">
                           <p className="text-sm text-gray-600 mb-2">{mensaje}</p>
@@ -2189,7 +2408,10 @@ ${textoRechazo.instruccion}`,
                         ? '#fef3c7'
                         : comentario.autor_email === perfil?.email
                           ? '#dcfce7'
-                          : getColorEmisor(comentario.autor_rol || 'proveedor')
+                          : (comentario.autor_rol?.toLowerCase() === 'proveedor' ? 'white' : getColorEmisor(comentario.autor_rol || 'proveedor')),
+                      border: (!comentario.es_sistema && comentario.autor_email !== perfil?.email && comentario.autor_rol?.toLowerCase() === 'proveedor')
+                        ? `2px solid ${PALETA.bg}`
+                        : 'none'
                     }}
                   >
                     {!comentario.es_sistema && (
@@ -2504,38 +2726,23 @@ ${textoRechazo.instruccion}`,
       />
 
       {/* Modales de Control */}
-      {mostrarModalAnular && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-lg font-semibold mb-4">Anular Asignación de Proveedor</h3>
-            <textarea
-              value={motivoAnulacion}
-              onChange={(e) => setMotivoAnulacion(e.target.value)}
-              placeholder="Motivo de la anulación"
-              className="w-full p-3 border rounded mb-4"
-              rows={4}
-            />
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => {
-                  setMostrarModalAnular(false);
-                  setMotivoAnulacion('');
-                }}
-                className="px-4 py-2 border rounded hover:bg-gray-50"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={anularIncidencia}
-                disabled={!motivoAnulacion.trim() || enviando}
-                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
-              >
-                {enviando ? 'Anulando...' : 'Anular'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ModalAnularAsignacionProveedor
+        isOpen={mostrarModalAnular}
+        onClose={() => setMostrarModalAnular(false)}
+        onConfirm={anularIncidencia}
+        motivo={motivoAnulacion}
+        setMotivo={setMotivoAnulacion}
+        enviando={enviando}
+      />
+
+      <ModalAsignarProveedor
+        isOpen={mostrarModalReasignarProveedor}
+        onClose={() => setMostrarModalReasignarProveedor(false)}
+        incidenciaId={incidenciaId}
+        onSubmit={handleReasignarProveedor}
+        enviando={enviando}
+        esReasignacion={true}
+      />
 
       {mostrarModalCerrar && (
         <ModalCerrarIncidencia
@@ -2598,21 +2805,22 @@ ${textoRechazo.instruccion}`,
                 <div className="flex gap-3 justify-end pt-4">
                   <button
                     onClick={() => setMostrarModalGestionPresupuesto(false)}
-                    className="px-4 py-2 border rounded hover:bg-gray-50"
+                    className="px-3 py-1.5 text-sm border rounded hover:bg-gray-50"
                   >
                     Cerrar
                   </button>
                   <button
                     onClick={() => setMostrarModalMotivoRevision(true)}
-                    className="px-4 py-2 bg-orange-500 text-white rounded hover:bg-orange-600"
+                    className="px-3 py-1.5 text-sm text-white rounded hover:opacity-90"
+                    style={{ backgroundColor: PALETA.b2 }}
                   >
                     Rechazar
                   </button>
                   <button
                     onClick={aprobarPresupuesto}
                     disabled={enviando}
-                    className="px-4 py-2 text-white rounded hover:opacity-90 disabled:opacity-50"
-                    style={{ backgroundColor: PALETA.verdeClaro }}
+                    className="px-3 py-1.5 text-sm text-white rounded hover:opacity-90 disabled:opacity-50"
+                    style={{ backgroundColor: PALETA.bg }}
                   >
                     {enviando ? 'Aprobando...' : 'Aprobar'}
                   </button>
