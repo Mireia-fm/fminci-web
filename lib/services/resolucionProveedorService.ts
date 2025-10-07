@@ -131,16 +131,19 @@ export async function resolverIncidencia(
     const accion = resolucionExistente ? 'EDITADA' : 'CREADA';
 
     // 4. Guardar o actualizar en la tabla resoluciones_tecnicas
+    let resolucionTecnicaData;
     if (resolucionExistente) {
       // Actualizar resolución existente
-      const { error: updateError } = await supabase
+      const { data, error: updateError } = await supabase
         .from("resoluciones_tecnicas")
         .update({
           solucion_aplicada: solucionAplicada,
           fecha_realizacion: fechaRealizacion,
           actualizado_en: new Date().toISOString()
         })
-        .eq("id", resolucionExistente.id);
+        .eq("id", resolucionExistente.id)
+        .select()
+        .single();
 
       if (updateError) {
         console.error("Error actualizando resolución técnica:", updateError);
@@ -149,9 +152,10 @@ export async function resolverIncidencia(
           error: 'Error al actualizar la resolución técnica'
         };
       }
+      resolucionTecnicaData = data;
     } else {
       // Insertar nueva resolución
-      const { error: insertError } = await supabase
+      const { data, error: insertError } = await supabase
         .from("resoluciones_tecnicas")
         .insert({
           incidencia_id: incidenciaId,
@@ -159,7 +163,9 @@ export async function resolverIncidencia(
           solucion_aplicada: solucionAplicada,
           fecha_realizacion: fechaRealizacion,
           creado_por: autorId
-        });
+        })
+        .select()
+        .single();
 
       if (insertError) {
         console.error("Error guardando resolución técnica:", insertError);
@@ -168,6 +174,7 @@ export async function resolverIncidencia(
           error: 'Error al guardar la resolución técnica'
         };
       }
+      resolucionTecnicaData = data;
     }
 
     // 5. Obtener estados anteriores
@@ -313,7 +320,15 @@ Fecha de realización: ${new Date(fechaRealizacion).toLocaleDateString('es-ES')}
     }
 
     // 9. Agregar adjuntos si existen
-    const adjuntos = [];
+    const adjuntos: Array<{
+      incidencia_id: string;
+      comentario_id: string;
+      resolucion_tecnica_id: string | null;
+      tipo: string;
+      categoria: string;
+      nombre_archivo: string;
+      storage_key: string;
+    }> = [];
 
     // Agregar todas las imágenes como adjuntos
     if (imagenesUrls.length > 0 && comentarioCreado && imagenesResolucion) {
@@ -322,6 +337,7 @@ Fecha de realización: ${new Date(fechaRealizacion).toLocaleDateString('es-ES')}
           adjuntos.push({
             incidencia_id: incidenciaId,
             comentario_id: comentarioCreado.id,
+            resolucion_tecnica_id: resolucionTecnicaData?.id || null,
             tipo: 'imagen',
             categoria: 'evidencia_resolucion',
             nombre_archivo: imagen.name,
@@ -331,25 +347,49 @@ Fecha de realización: ${new Date(fechaRealizacion).toLocaleDateString('es-ES')}
       });
     }
 
-    if (documentoUrl && comentarioCreado) {
-      adjuntos.push({
-        incidencia_id: incidenciaId,
-        comentario_id: comentarioCreado.id,
-        tipo: 'documento',
-        categoria: 'documento_resolucion',
-        nombre_archivo: documentoResolucion?.name,
-        storage_key: documentoUrl
-      });
+    let documentoAdjuntoId: string | null = null;
+    if (documentoUrl && comentarioCreado && documentoResolucion) {
+      const { data: adjuntoDoc, error: adjuntoDocError } = await supabase
+        .from("adjuntos")
+        .insert({
+          incidencia_id: incidenciaId,
+          comentario_id: comentarioCreado.id,
+          resolucion_tecnica_id: resolucionTecnicaData?.id || null,
+          tipo: 'documento',
+          categoria: 'documento_resolucion',
+          nombre_archivo: documentoResolucion.name,
+          storage_key: documentoUrl
+        })
+        .select()
+        .single();
+
+      if (adjuntoDocError) {
+        console.error("Error guardando adjunto documento:", adjuntoDocError);
+      } else if (adjuntoDoc) {
+        documentoAdjuntoId = adjuntoDoc.id;
+      }
     }
 
     if (adjuntos.length > 0) {
-      const { error: adjuntosError } = await supabase
+      const { data: adjuntosCreados, error: adjuntosError } = await supabase
         .from("adjuntos")
-        .insert(adjuntos);
+        .insert(adjuntos)
+        .select();
 
       if (adjuntosError) {
         console.error("Error guardando adjuntos:", adjuntosError);
+      } else if (adjuntosCreados && adjuntosCreados.length > 0 && !documentoAdjuntoId) {
+        // Si solo hay imágenes y no documento, guardar la primera imagen como referencia
+        documentoAdjuntoId = adjuntosCreados[0].id;
       }
+    }
+
+    // 10. Actualizar resolución técnica con el documento_adjunto_id si hay algún adjunto
+    if (documentoAdjuntoId && resolucionTecnicaData) {
+      await supabase
+        .from("resoluciones_tecnicas")
+        .update({ documento_adjunto_id: documentoAdjuntoId })
+        .eq("id", resolucionTecnicaData.id);
     }
 
     return { success: true };
