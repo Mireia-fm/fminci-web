@@ -20,6 +20,7 @@ type Cita = {
 
 type CitaSupabase = {
   id: string;
+  incidencia_id: string;
   fecha_visita: string;
   horario: string;
   estado: string;
@@ -72,15 +73,13 @@ export default function CalendarioPage() {
             .from("citas_proveedores")
             .select(`
               id,
+              incidencia_id,
               fecha_visita,
               horario,
               estado,
               centro_nombre,
               num_solicitud,
-              descripcion,
-              incidencias!inner(
-                id
-              )
+              descripcion
             `)
             .eq("proveedor_id", institucionId)
             .eq("estado", "programada")
@@ -100,6 +99,7 @@ export default function CalendarioPage() {
               .from("citas_proveedores")
               .select(`
                 id,
+                incidencia_id,
                 fecha_visita,
                 horario,
                 estado,
@@ -150,7 +150,7 @@ export default function CalendarioPage() {
             console.log("🔍 Procesando cita:", {
               id: cita.id,
               tipoInstitucion,
-              incidencia_id: incidencia?.id,
+              incidencia_id: cita.incidencia_id,
               proveedor_id: cita.proveedor_id,
               centro_nombre_directo: cita.centro_nombre,
               num_solicitud_directo: cita.num_solicitud,
@@ -161,7 +161,7 @@ export default function CalendarioPage() {
 
             return {
             id: cita.id,
-            incidencia_id: incidencia?.id || '',
+            incidencia_id: cita.incidencia_id,
             fecha: fechaLocal,
             hora: cita.horario === 'mañana' ? 'Horario de mañana' : 'Horario de tarde',
             proveedor_nombre: nombreInstitucion || (tipoInstitucion === 'Proveedor' ? 'Centro desconocido' : 'Proveedor desconocido'),
