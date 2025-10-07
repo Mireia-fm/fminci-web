@@ -478,7 +478,7 @@ export async function valoracionEconomica(
       // Si corrige económica pero el tipo_revision era 'ambas', ya corrigió técnica antes
       // por lo que ahora se limpia completamente
       // Si era solo 'economica', se limpia también
-      let nuevoTipoRevision = null;
+      const nuevoTipoRevision = null;
       // En el caso de valoración económica, si llegamos aquí y era 'ambas',
       // significa que ya corrigió la técnica, así que se limpia
 

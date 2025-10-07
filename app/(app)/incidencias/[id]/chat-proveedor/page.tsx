@@ -90,6 +90,17 @@ type CambioEstado = {
   motivo: string | null;
 };
 
+type ProveedorCaso = {
+  id: string;
+  asignado_en?: string;
+  estado_proveedor: string;
+  prioridad: string;
+  descripcion_proveedor?: string | null;
+  activo: boolean;
+  tipo_revision?: string | null;
+  proveedor_id: string;
+};
+
 export default function ChatProveedor() {
   const params = useParams();
   const router = useRouter();
@@ -305,7 +316,7 @@ export default function ChatProveedor() {
         let descripcionProveedor = null;
         let tipoRevision = null;
         let proveedorNombre = null;
-        let proveedorCaso: any = null; // Declarar en scope más amplio para usarlo después
+        let proveedorCaso: ProveedorCaso | null = null; // Declarar en scope más amplio para usarlo después
 
         if (perfil.rol === 'Control' || perfil.rol === 'Proveedor') {
           // Cargar el último proveedor_caso (incluyendo anulados)

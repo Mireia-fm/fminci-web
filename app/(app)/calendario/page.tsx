@@ -17,6 +17,22 @@ type Cita = {
   estado: string;
 };
 
+type CitaSupabase = {
+  id: string;
+  fecha_visita: string;
+  horario: string;
+  estado: string;
+  proveedor_id?: string;
+  proveedor_nombre?: string;
+  incidencias?: {
+    id: string;
+    num_solicitud: string;
+    descripcion: string;
+    centro?: string;
+    institucion_id?: string;
+  }[];
+};
+
 export default function CalendarioPage() {
   const router = useRouter();
   const { perfil, loading: loadingAuth } = useAuth();
@@ -43,7 +59,7 @@ export default function CalendarioPage() {
       const tipoInstitucion = perfil.instituciones?.[0]?.tipo;
 
       if (institucionId) {
-        let citasData: any[] = [];
+        let citasData: CitaSupabase[] = [];
 
         if (tipoInstitucion === 'Proveedor') {
           setEsProveedor(true);
@@ -108,34 +124,37 @@ export default function CalendarioPage() {
         if (citasData) {
           console.log("📅 Datos de citas cargadas:", JSON.stringify(citasData, null, 2));
 
-          const citasFormateadas: Cita[] = citasData.map((cita: any) => {
+          const citasFormateadas: Cita[] = citasData.map((cita) => {
             const fechaVisita = new Date(cita.fecha_visita);
             const fechaLocal = `${fechaVisita.getFullYear()}-${(fechaVisita.getMonth() + 1).toString().padStart(2, '0')}-${fechaVisita.getDate().toString().padStart(2, '0')}`;
+
+            // Acceder al primer elemento del array incidencias
+            const incidencia = cita.incidencias?.[0];
 
             // Para proveedores: el centro está en incidencias.centro (campo de texto)
             // Para centros: el proveedor está en proveedor_nombre (agregado en la query)
             const nombreInstitucion = tipoInstitucion === 'Proveedor'
-              ? cita.incidencias?.centro
+              ? incidencia?.centro
               : cita.proveedor_nombre;
 
             console.log("🔍 Procesando cita:", {
               id: cita.id,
               tipoInstitucion,
-              incidencia_id: cita.incidencias?.id,
+              incidencia_id: incidencia?.id,
               proveedor_id: cita.proveedor_id,
-              centro_desde_incidencias: cita.incidencias?.centro,
+              centro_desde_incidencias: incidencia?.centro,
               proveedor_nombre_enriquecido: cita.proveedor_nombre,
               nombreFinal: nombreInstitucion
             });
 
             return {
             id: cita.id,
-            incidencia_id: cita.incidencias?.id || '',
+            incidencia_id: incidencia?.id || '',
             fecha: fechaLocal,
             hora: cita.horario === 'mañana' ? 'Horario de mañana' : 'Horario de tarde',
             proveedor_nombre: nombreInstitucion || (tipoInstitucion === 'Proveedor' ? 'Centro desconocido' : 'Proveedor desconocido'),
-            incidencia_num: cita.incidencias?.num_solicitud || '',
-            descripcion: cita.incidencias?.descripcion || '',
+            incidencia_num: incidencia?.num_solicitud || '',
+            descripcion: incidencia?.descripcion || '',
             estado: cita.estado
           };
           });

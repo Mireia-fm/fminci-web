@@ -224,7 +224,7 @@ export default function ChatControlCliente() {
           .eq("tipo_estado", "cliente")
           .order("cambiado_en", { ascending: false });
 
-        let historialCompleto = historialData || [];
+        const historialCompleto = historialData || [];
 
         // Si hay historial pero el primer cambio no tiene estado_anterior (es decir, el primer cambio fue desde "Abierta")
         // y no hay ningún registro que muestre explícitamente "Abierta", agregamos ese estado inicial
