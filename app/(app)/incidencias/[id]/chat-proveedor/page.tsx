@@ -429,11 +429,11 @@ export default function ChatProveedor() {
 
         setIncidencia({
           ...incidenciaData,
-          estado_proveedor: estadoProveedor,
-          prioridad_proveedor: prioridadProveedor,
-          descripcion_proveedor: descripcionProveedor,
-          tipo_revision: tipoRevision,
-          proveedor_nombre: (proveedorNombre as string) || undefined,
+          estado_proveedor: estadoProveedor ?? undefined,
+          prioridad_proveedor: prioridadProveedor ?? undefined,
+          descripcion_proveedor: descripcionProveedor ?? undefined,
+          tipo_revision: tipoRevision ?? undefined,
+          proveedor_nombre: proveedorNombre ?? undefined,
           adjuntos_principales: adjuntosPrincipales
         });
 
