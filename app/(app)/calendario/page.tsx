@@ -371,7 +371,7 @@ export default function CalendarioPage() {
                       </div>
                       {esProveedor ? (
                         <p className="text-sm mb-1" style={{ color: PALETA.textoOscuro }}>
-                          <span className="font-medium">Centro:</span> {cita.proveedor_nombre}
+                          <span className="font-medium">Centro:</span> {cita.centro_nombre || 'Centro desconocido'}
                         </p>
                       ) : (
                         <>
@@ -472,7 +472,7 @@ export default function CalendarioPage() {
 
                   {citasDelDia.map(cita => {
                     const tooltipText = esProveedor
-                      ? `${cita.hora} - ${cita.proveedor_nombre}: ${cita.descripcion}`
+                      ? `${cita.hora} - ${cita.centro_nombre || 'Centro desconocido'}: ${cita.descripcion}`
                       : `${cita.hora} - ${cita.proveedor_nombre}${cita.centro_nombre ? ` - ${cita.centro_nombre}` : ''}: ${cita.descripcion}`;
 
                     return (
@@ -487,9 +487,15 @@ export default function CalendarioPage() {
                         onClick={() => irAlChatIncidencia(cita.incidencia_id)}
                       >
                         <div className="font-semibold">{cita.hora}</div>
-                        <div className="truncate">{cita.proveedor_nombre}</div>
-                        {!esProveedor && cita.centro_nombre && (
-                          <div className="truncate text-[10px] opacity-90">{cita.centro_nombre}</div>
+                        {esProveedor ? (
+                          <div className="truncate">{cita.centro_nombre || 'Centro desconocido'}</div>
+                        ) : (
+                          <>
+                            <div className="truncate">{cita.proveedor_nombre}</div>
+                            {cita.centro_nombre && (
+                              <div className="truncate text-[10px] opacity-90">{cita.centro_nombre}</div>
+                            )}
+                          </>
                         )}
                         <div className="truncate">{cita.incidencia_num}</div>
                       </div>
@@ -544,7 +550,7 @@ export default function CalendarioPage() {
                   {citaSeleccionada.incidencia_num}
                 </p>
                 <p className="text-xs mb-1" style={{ color: PALETA.textoOscuro }}>
-                  <span className="font-medium">Centro:</span> {citaSeleccionada.proveedor_nombre}
+                  <span className="font-medium">Centro:</span> {citaSeleccionada.centro_nombre || 'Centro desconocido'}
                 </p>
                 <p className="text-xs mb-1" style={{ color: PALETA.textoOscuro }}>
                   <span className="font-medium">Fecha y horario:</span> {citaSeleccionada.fecha} - {citaSeleccionada.hora}
