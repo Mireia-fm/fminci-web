@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic';
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [ready, setReady] = useState(false);
-  const [sidebarVisible, setSidebarVisible] = useState(true);
+  const [sidebarVisible, setSidebarVisible] = useState(false); // Cerrado por defecto en móvil
 
   // Guardia de sesión en cliente
   useEffect(() => {
@@ -31,6 +31,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     setSidebarVisible(!sidebarVisible);
   };
 
+  const closeSidebar = () => {
+    setSidebarVisible(false);
+  };
+
   if (!ready) return null; // evita parpadeo sin sesión
 
   return (
@@ -38,9 +42,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <AuthProvider>
         <div className="min-h-screen" style={{ backgroundColor: "var(--fm-bg)" }}>
           <Topbar onToggleSidebar={toggleSidebar} />
-          <div className="flex">
-            {sidebarVisible && <Sidebar />}
-            <main className={`flex-1 bg-transparent p-4 md:p-8 transition-all duration-300 ${!sidebarVisible ? 'ml-0' : ''}`}>
+          <div className="flex relative">
+            <Sidebar isOpen={sidebarVisible} onClose={closeSidebar} />
+            <main className="flex-1 bg-transparent p-4 md:p-8 w-full md:w-auto">
               {children}
             </main>
           </div>

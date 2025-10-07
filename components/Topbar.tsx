@@ -13,12 +13,13 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
       style={{ backgroundColor: "var(--fm-bg)", color: "var(--fm-text)" }}>
 
       <div className="flex items-center gap-3">
-        {/* Botón hamburguesa */}
+        {/* Botón hamburguesa - visible solo en móvil */}
         {onToggleSidebar && (
           <button
             onClick={onToggleSidebar}
-            className="p-2 rounded-md hover:bg-white/10 transition-colors"
-            title="Mostrar/Ocultar sidebar"
+            className="p-2 rounded-md hover:bg-white/10 transition-colors md:hidden"
+            title="Mostrar/Ocultar menú"
+            aria-label="Toggle menu"
           >
             <svg
               width="20"
