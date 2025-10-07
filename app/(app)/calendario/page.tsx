@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/contexts/AuthContext";
 import { PALETA } from "@/lib/theme";
+import { crearComentario } from "@/lib/services/comentariosService";
 
 type Cita = {
   id: string;
@@ -24,9 +25,11 @@ type CitaSupabase = {
   estado: string;
   proveedor_id?: string;
   proveedor_nombre?: string;
+  centro_nombre?: string;
+  num_solicitud?: string;
   incidencias?: {
     id: string;
-    num_solicitud: string;
+    num_solicitud?: string;
     descripcion: string;
     centro?: string;
     institucion_id?: string;
@@ -71,11 +74,11 @@ export default function CalendarioPage() {
               fecha_visita,
               horario,
               estado,
+              centro_nombre,
+              num_solicitud,
               incidencias!inner(
                 id,
-                num_solicitud,
-                descripcion,
-                centro
+                descripcion
               )
             `)
             .eq("proveedor_id", institucionId)
@@ -131,18 +134,22 @@ export default function CalendarioPage() {
             // Acceder al primer elemento del array incidencias
             const incidencia = cita.incidencias?.[0];
 
-            // Para proveedores: el centro está en incidencias.centro (campo de texto)
-            // Para centros: el proveedor está en proveedor_nombre (agregado en la query)
+            // Para proveedores: usar centro_nombre directo de la cita (ya guardado en la tabla)
+            // Para centros: usar proveedor_nombre (agregado en la query)
             const nombreInstitucion = tipoInstitucion === 'Proveedor'
-              ? incidencia?.centro
+              ? cita.centro_nombre
               : cita.proveedor_nombre;
+
+            // Para el número de solicitud: usar el campo directo de la cita o fallback al de la incidencia
+            const numSolicitud = cita.num_solicitud || incidencia?.num_solicitud || '';
 
             console.log("🔍 Procesando cita:", {
               id: cita.id,
               tipoInstitucion,
               incidencia_id: incidencia?.id,
               proveedor_id: cita.proveedor_id,
-              centro_desde_incidencias: incidencia?.centro,
+              centro_nombre_directo: cita.centro_nombre,
+              num_solicitud_directo: cita.num_solicitud,
               proveedor_nombre_enriquecido: cita.proveedor_nombre,
               nombreFinal: nombreInstitucion
             });
@@ -153,7 +160,7 @@ export default function CalendarioPage() {
             fecha: fechaLocal,
             hora: cita.horario === 'mañana' ? 'Horario de mañana' : 'Horario de tarde',
             proveedor_nombre: nombreInstitucion || (tipoInstitucion === 'Proveedor' ? 'Centro desconocido' : 'Proveedor desconocido'),
-            incidencia_num: incidencia?.num_solicitud || '',
+            incidencia_num: numSolicitud,
             descripcion: incidencia?.descripcion || '',
             estado: cita.estado
           };
@@ -284,25 +291,22 @@ export default function CalendarioPage() {
 
       // Crear comentario de sistema avisando de la cancelación
       console.log("Creando comentario de cancelación para incidencia:", citaSeleccionada.incidencia_id);
-      const { data: comentarioData, error: errorComentario } = await supabase
-        .from("comentarios")
-        .insert({
-          incidencia_id: citaSeleccionada.incidencia_id,
-          proveedor_caso_id: proveedorCasoId,
-          ambito: 'ambos',
-          autor_id: perfil.persona_id,
-          autor_email: perfil.email,
-          autor_rol: perfil.rol,
-          cuerpo: mensajeCancelacion,
-          es_sistema: true
-        })
-        .select();
+      const comentarioCreado = await crearComentario({
+        incidencia_id: citaSeleccionada.incidencia_id,
+        proveedor_caso_id: proveedorCasoId || undefined,
+        ambito: 'ambos',
+        autor_id: perfil.persona_id,
+        autor_email: perfil.email,
+        autor_rol: perfil.rol,
+        cuerpo: mensajeCancelacion,
+        es_sistema: true
+      });
 
-      if (errorComentario) {
-        console.error("Error creando comentario de cancelación:", errorComentario);
+      if (!comentarioCreado) {
+        console.error("Error creando comentario de cancelación");
         // No lanzamos error porque la cita ya está cancelada
       } else {
-        console.log("Comentario de cancelación creado exitosamente:", comentarioData);
+        console.log("Comentario de cancelación creado exitosamente:", comentarioCreado);
       }
 
       setMostrarModalCancelar(false);
