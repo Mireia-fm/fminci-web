@@ -13,6 +13,7 @@ type Cita = {
   fecha: string;
   hora: string;
   proveedor_nombre: string;
+  centro_nombre?: string;
   incidencia_num: string;
   descripcion: string;
   estado: string;
@@ -105,10 +106,11 @@ export default function CalendarioPage() {
                 estado,
                 proveedor_id,
                 proveedor_nombre,
+                centro_nombre,
+                num_solicitud,
+                descripcion,
                 incidencias!inner(
                   id,
-                  num_solicitud,
-                  descripcion,
                   institucion_id
                 )
               `)
@@ -135,12 +137,6 @@ export default function CalendarioPage() {
             // Acceder al primer elemento del array incidencias
             const incidencia = cita.incidencias?.[0];
 
-            // Para proveedores: usar centro_nombre directo de la cita (ya guardado en la tabla)
-            // Para centros: usar proveedor_nombre (agregado en la query)
-            const nombreInstitucion = tipoInstitucion === 'Proveedor'
-              ? cita.centro_nombre
-              : cita.proveedor_nombre;
-
             // Para el número de solicitud: usar el campo directo de la cita o fallback al de la incidencia
             const numSolicitud = cita.num_solicitud || incidencia?.num_solicitud || '';
 
@@ -152,11 +148,10 @@ export default function CalendarioPage() {
               tipoInstitucion,
               incidencia_id: cita.incidencia_id,
               proveedor_id: cita.proveedor_id,
-              centro_nombre_directo: cita.centro_nombre,
+              centro_nombre: cita.centro_nombre,
+              proveedor_nombre: cita.proveedor_nombre,
               num_solicitud_directo: cita.num_solicitud,
-              descripcion_directa: cita.descripcion,
-              proveedor_nombre_enriquecido: cita.proveedor_nombre,
-              nombreFinal: nombreInstitucion
+              descripcion_directa: cita.descripcion
             });
 
             return {
@@ -164,7 +159,8 @@ export default function CalendarioPage() {
             incidencia_id: cita.incidencia_id,
             fecha: fechaLocal,
             hora: cita.horario === 'mañana' ? 'Horario de mañana' : 'Horario de tarde',
-            proveedor_nombre: nombreInstitucion || (tipoInstitucion === 'Proveedor' ? 'Centro desconocido' : 'Proveedor desconocido'),
+            proveedor_nombre: cita.proveedor_nombre || 'Proveedor desconocido',
+            centro_nombre: cita.centro_nombre || undefined,
             incidencia_num: numSolicitud,
             descripcion: descripcionCita,
             estado: cita.estado
@@ -373,12 +369,22 @@ export default function CalendarioPage() {
                           {cita.incidencia_num}
                         </span>
                       </div>
-                      <p className="text-sm mb-1" style={{ color: PALETA.textoOscuro }}>
-                        <span className="font-medium">
-                          {esProveedor ? 'Centro:' : 'Proveedor:'}
-                        </span>{' '}
-                        {cita.proveedor_nombre}
-                      </p>
+                      {esProveedor ? (
+                        <p className="text-sm mb-1" style={{ color: PALETA.textoOscuro }}>
+                          <span className="font-medium">Centro:</span> {cita.proveedor_nombre}
+                        </p>
+                      ) : (
+                        <>
+                          <p className="text-sm mb-1" style={{ color: PALETA.textoOscuro }}>
+                            <span className="font-medium">Proveedor:</span> {cita.proveedor_nombre}
+                          </p>
+                          {cita.centro_nombre && (
+                            <p className="text-sm mb-1" style={{ color: PALETA.textoOscuro }}>
+                              <span className="font-medium">Centro:</span> {cita.centro_nombre}
+                            </p>
+                          )}
+                        </>
+                      )}
                       <p className="text-sm text-gray-600">
                         {cita.descripcion}
                       </p>
@@ -464,12 +470,17 @@ export default function CalendarioPage() {
                     {dia}
                   </div>
 
-                  {citasDelDia.map(cita => (
+                  {citasDelDia.map(cita => {
+                    const tooltipText = esProveedor
+                      ? `${cita.hora} - ${cita.proveedor_nombre}: ${cita.descripcion}`
+                      : `${cita.hora} - ${cita.proveedor_nombre}${cita.centro_nombre ? ` - ${cita.centro_nombre}` : ''}: ${cita.descripcion}`;
+
+                    return (
                     <div
                       key={cita.id}
                       className="text-xs p-1 mb-1 rounded text-white relative group"
                       style={{ backgroundColor: '#D4C5A9' }}
-                      title={`${cita.hora} - ${cita.proveedor_nombre}: ${cita.descripcion}`}
+                      title={tooltipText}
                     >
                       <div
                         className="cursor-pointer hover:opacity-80 transition-opacity"
@@ -477,6 +488,9 @@ export default function CalendarioPage() {
                       >
                         <div className="font-semibold">{cita.hora}</div>
                         <div className="truncate">{cita.proveedor_nombre}</div>
+                        {!esProveedor && cita.centro_nombre && (
+                          <div className="truncate text-[10px] opacity-90">{cita.centro_nombre}</div>
+                        )}
                         <div className="truncate">{cita.incidencia_num}</div>
                       </div>
                       {esProveedor && (
@@ -492,7 +506,8 @@ export default function CalendarioPage() {
                         </button>
                       )}
                     </div>
-                  ))}
+                  );
+                  })}
                 </div>
               );
             })}
