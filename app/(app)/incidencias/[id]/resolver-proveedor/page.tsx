@@ -386,7 +386,7 @@ Importe total con IVA: ${formulario.importe_con_iva.toFixed(2)}€${
       }
 
       // Subir documento justificativo
-      if (comentarioValoracion && formulario.documento_justificativo) {
+      if (comentarioValoracion && formulario.documento_justificativo && valoracionEconomica) {
         const safeName = limpiarNombreArchivo(formulario.documento_justificativo.name);
         const path = `incidencias/${incidencia?.num_solicitud}/valoracion/justificante_${Date.now()}_${safeName}`;
 
@@ -396,16 +396,27 @@ Importe total con IVA: ${formulario.importe_con_iva.toFixed(2)}€${
 
         if (storageError) throw storageError;
 
-        await supabase.from("adjuntos").insert({
+        // Crear adjunto y obtener su ID
+        const { data: adjuntoCreado, error: adjuntoError } = await supabase.from("adjuntos").insert({
           incidencia_id: incidenciaId,
           comentario_id: comentarioValoracion.id,
-          valoracion_economica_id: valoracionEconomica!.id,
+          valoracion_economica_id: valoracionEconomica.id,
           tipo: "documento",
           categoria: "justificante_economico",
           storage_key: storageData.path,
           nombre_archivo: formulario.documento_justificativo.name,
           visible_proveedor: true
-        });
+        }).select().single();
+
+        if (adjuntoError) throw adjuntoError;
+
+        // Actualizar valoración económica con el ID del adjunto
+        if (adjuntoCreado) {
+          await supabase
+            .from("valoraciones_economicas")
+            .update({ documento_adjunto_id: adjuntoCreado.id })
+            .eq("id", valoracionEconomica.id);
+        }
       }
 
       // 7. ACTUALIZAR ESTADOS A "CERRADA" (SOLO EN MODO CREACIÓN)
