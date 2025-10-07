@@ -27,10 +27,11 @@ type CitaSupabase = {
   proveedor_nombre?: string;
   centro_nombre?: string;
   num_solicitud?: string;
+  descripcion?: string;
   incidencias?: {
     id: string;
     num_solicitud?: string;
-    descripcion: string;
+    descripcion?: string;
     centro?: string;
     institucion_id?: string;
   }[];
@@ -76,9 +77,9 @@ export default function CalendarioPage() {
               estado,
               centro_nombre,
               num_solicitud,
+              descripcion,
               incidencias!inner(
-                id,
-                descripcion
+                id
               )
             `)
             .eq("proveedor_id", institucionId)
@@ -143,6 +144,9 @@ export default function CalendarioPage() {
             // Para el número de solicitud: usar el campo directo de la cita o fallback al de la incidencia
             const numSolicitud = cita.num_solicitud || incidencia?.num_solicitud || '';
 
+            // Para la descripción: usar el campo directo de la cita o fallback al de la incidencia
+            const descripcionCita = cita.descripcion || incidencia?.descripcion || '';
+
             console.log("🔍 Procesando cita:", {
               id: cita.id,
               tipoInstitucion,
@@ -150,6 +154,7 @@ export default function CalendarioPage() {
               proveedor_id: cita.proveedor_id,
               centro_nombre_directo: cita.centro_nombre,
               num_solicitud_directo: cita.num_solicitud,
+              descripcion_directa: cita.descripcion,
               proveedor_nombre_enriquecido: cita.proveedor_nombre,
               nombreFinal: nombreInstitucion
             });
@@ -161,7 +166,7 @@ export default function CalendarioPage() {
             hora: cita.horario === 'mañana' ? 'Horario de mañana' : 'Horario de tarde',
             proveedor_nombre: nombreInstitucion || (tipoInstitucion === 'Proveedor' ? 'Centro desconocido' : 'Proveedor desconocido'),
             incidencia_num: numSolicitud,
-            descripcion: incidencia?.descripcion || '',
+            descripcion: descripcionCita,
             estado: cita.estado
           };
           });

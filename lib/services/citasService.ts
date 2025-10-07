@@ -90,6 +90,7 @@ export async function calendarizarVisita(
           proveedor_nombre: proveedorData?.nombre || null,
           centro_nombre: incidenciaData?.centro || null,
           num_solicitud: incidenciaData?.num_solicitud || null,
+          descripcion: incidenciaData?.descripcion || null,
           fecha_visita: fechaHoraVisita,
           horario: horarioVisita,
           estado: 'programada',
