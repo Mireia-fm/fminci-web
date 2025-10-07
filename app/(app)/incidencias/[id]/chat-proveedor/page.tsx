@@ -579,8 +579,7 @@ export default function ChatProveedor() {
           importe_sin_iva,
           porcentaje_iva,
           importe_con_iva,
-          documento_adjunto_id,
-          adjuntos:documento_adjunto_id(storage_key)
+          documento_adjunto_id
         `)
         .eq("incidencia_id", incidenciaId)
         .order("creado_en", { ascending: false })
@@ -598,20 +597,30 @@ export default function ChatProveedor() {
 
         // Obtener URL del documento adjunto si existe
         let documentoUrl = undefined;
-        const adjuntoData = valoracionData.adjuntos as unknown as { storage_key: string } | null | undefined;
+        let storageKey = undefined;
 
-        if (adjuntoData?.storage_key) {
-          const { data: urlData } = await supabase.storage
-            .from("incidencias")
-            .createSignedUrl(adjuntoData.storage_key, 3600); // URL válida por 1 hora
-          documentoUrl = urlData?.signedUrl;
+        if (valoracionData.documento_adjunto_id) {
+          // Cargar el adjunto por separado
+          const { data: adjuntoData } = await supabase
+            .from("adjuntos")
+            .select("storage_key")
+            .eq("id", valoracionData.documento_adjunto_id)
+            .maybeSingle();
+
+          if (adjuntoData?.storage_key) {
+            storageKey = adjuntoData.storage_key;
+            const { data: urlData } = await supabase.storage
+              .from("incidencias")
+              .createSignedUrl(adjuntoData.storage_key, 3600); // URL válida por 1 hora
+            documentoUrl = urlData?.signedUrl;
+          }
         }
 
         setResumenValoracion({
           importe_sin_iva: valoracionData.importe_sin_iva,
           porcentaje_iva: valoracionData.porcentaje_iva,
           importe_con_iva: valoracionData.importe_con_iva,
-          tiene_documento: !!adjuntoData?.storage_key,
+          tiene_documento: !!storageKey,
           documento_url: documentoUrl
         });
       }
