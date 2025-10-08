@@ -17,7 +17,6 @@ import { resolverIncidencia as resolverIncidenciaService, valoracionEconomica as
 // Hooks compartidos
 import { useSignedUrls, useComentarioUrls } from "@/shared/hooks/useSignedUrls";
 import { useChatFileUpload } from "@/shared/hooks/useFileUpload";
-import { usePresupuestoGestion } from "./hooks/usePresupuestoGestion";
 
 // Componentes compartidos
 import HistorialEstados from "@/shared/components/HistorialEstados";
@@ -33,7 +32,6 @@ import ModalMotivoRevision from "@/components/ModalMotivoRevision";
 import ModalCerrarIncidencia from "@/components/ModalCerrarIncidencia";
 import ModalAnularAsignacionProveedor from "@/components/ModalAnularAsignacionProveedor";
 import ModalAsignarProveedor from "@/components/ModalAsignarProveedor";
-import ModalGestionPresupuesto from "./components/ModalGestionPresupuesto";
 import { asignarProveedorCompleto, type FormularioAsignacionProveedor } from "@/lib/services/asignacionProveedorService";
 
 type Adjunto = {
@@ -205,13 +203,6 @@ export default function ChatProveedor() {
     uploadFiles,
     limpiar: limpiarArchivos
   } = useChatFileUpload(incidencia?.num_solicitud || '');
-
-  // Hook de gestión de presupuestos
-  const presupuestoGestion = usePresupuestoGestion(
-    incidenciaId,
-    perfil,
-    cargarDatos
-  );
 
   // Ref para scroll automático
   const comentariosContainerRef = useRef<HTMLDivElement>(null);
