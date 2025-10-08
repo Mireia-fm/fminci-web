@@ -56,7 +56,7 @@ export default function LoginPage() {
       if (error) {
         setErr(error.message);
       } else {
-        setOk("Te hemos enviado un email para restablecer tu contraseña.");
+        setOk("Revise su email para restablecer la contraseña.");
       }
     } catch (error) {
       console.error('Reset password error:', error);
@@ -194,7 +194,11 @@ export default function LoginPage() {
                 </div>
               )}
               {ok && (
-                <div className="text-sm text-green-700 bg-green-50 p-3 rounded border-l-4 border-green-400">
+                <div className="text-sm p-3 rounded border-l-4" style={{
+                  color: PALETA.bg,
+                  backgroundColor: '#E8F5E9',
+                  borderLeftColor: PALETA.bg
+                }}>
                   {ok}
                 </div>
               )}
@@ -211,16 +215,16 @@ export default function LoginPage() {
                 {loading ? "Accediendo..." : "Acceder"}
               </button>
 
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={handleReset}
                 className="block mx-auto text-sm underline mt-4 hover:opacity-80"
-                style={{ 
+                style={{
                   color: PALETA.bg,
                   fontFamily: 'Montserrat, Poppins, sans-serif'
                 }}
               >
-                ¿Olvidaste la contraseña?
+                Restablecimiento de contraseña
               </button>
             </form>
           </div>
