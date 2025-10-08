@@ -69,9 +69,9 @@ export default function UpdatePassword() {
   };
 
   return (
-    <main className="min-h-screen flex items-center justify-center" style={{ backgroundColor: PALETA.bg }}>
+    <main className="min-h-screen flex items-center justify-center p-4 md:p-0" style={{ backgroundColor: PALETA.bg }}>
       <div className="flex w-full max-w-4xl relative">
-        {/* Banda lateral con logo y marca */}
+        {/* Banda lateral con logo y marca - solo desktop */}
         <aside
           className="hidden md:flex flex-col justify-center items-center"
           style={{ backgroundColor: PALETA.bg, width: '120px' }}
@@ -93,8 +93,8 @@ export default function UpdatePassword() {
           </div>
         </aside>
 
-        {/* Logo */}
-        <div className="absolute bottom-0" style={{ left: '20px', zIndex: 10 }}>
+        {/* Logo pegado al cuadro blanco por fuera, esquina inferior izquierda - solo desktop */}
+        <div className="hidden md:block absolute bottom-0" style={{ left: '20px', zIndex: 10 }}>
           <div className="relative">
             <Image
               src="/images/fminci-logo.png"
@@ -109,15 +109,28 @@ export default function UpdatePassword() {
         </div>
 
         {/* Tarjeta de actualización de contraseña */}
-        <section className="flex-1 bg-white p-12 shadow-xl relative">
+        <section className="flex-1 bg-white p-6 md:p-12 shadow-xl relative rounded-lg md:rounded-none">
+          {/* Logo centrado para móvil */}
+          <div className="md:hidden flex justify-center mb-6">
+            <Image
+              src="/images/fminci-logo.png"
+              alt="FMinci Logo"
+              width={80}
+              height={80}
+              className="shadow-lg rounded-lg"
+              style={{ objectFit: 'cover' }}
+              priority={true}
+            />
+          </div>
+
           <div className="max-w-md mx-auto">
-            <h1 className="text-3xl font-bold text-center mb-2" style={{
+            <h1 className="text-2xl md:text-3xl font-bold text-center mb-2" style={{
               color: PALETA.bg,
               fontFamily: 'Montserrat, Poppins, sans-serif'
             }}>
               Nueva Contraseña
             </h1>
-            <p className="text-center mb-8" style={{
+            <p className="text-sm md:text-base text-center mb-6 md:mb-8" style={{
               color: PALETA.bg,
               fontFamily: 'Montserrat, Poppins, sans-serif'
             }}>
@@ -235,9 +248,9 @@ export default function UpdatePassword() {
         </section>
       </div>
 
-      {/* Footer */}
-      <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2">
-        <p className="text-sm" style={{
+      {/* Footer - posicionado absolutamente en desktop, normalmente en móvil */}
+      <div className="fixed md:absolute bottom-4 left-1/2 transform -translate-x-1/2 w-full px-4 md:px-0">
+        <p className="text-xs md:text-sm text-center" style={{
           color: PALETA.texto,
           fontFamily: 'Montserrat, Poppins, sans-serif'
         }}>
