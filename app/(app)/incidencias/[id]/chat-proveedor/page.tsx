@@ -180,11 +180,26 @@ export default function ChatProveedor() {
   const [mostrarModalAnular, setMostrarModalAnular] = useState(false);
   const [mostrarModalCerrar, setMostrarModalCerrar] = useState(false);
   const [mostrarModalRechazarResolucion, setMostrarModalRechazarResolucion] = useState(false);
+  const [mostrarModalGestionPresupuesto, setMostrarModalGestionPresupuesto] = useState(false);
   const [mostrarModalResolucionManual, setMostrarModalResolucionManual] = useState(false);
+  const [mostrarModalMotivoRevision, setMostrarModalMotivoRevision] = useState(false);
   const [mostrarModalReasignarProveedor, setMostrarModalReasignarProveedor] = useState(false);
 
   // Estados para modales de Control
   const [motivoAnulacion, setMotivoAnulacion] = useState('');
+  const [presupuestoActual, setPresupuestoActual] = useState<{
+    id: string;
+    importe_total: number;
+    importe_total_sin_iva?: number;
+    presupuesto_detallado_url?: string;
+    estado: string;
+    fecha_estimada_inicio?: string;
+    duracion_estimada?: string;
+    descripcion_breve?: string;
+    documento_adjunto_id?: string | null;
+  } | null>(null);
+  const [cargandoPresupuesto, setCargandoPresupuesto] = useState(false);
+  const [documentoPresupuestoUrl, setDocumentoPresupuestoUrl] = useState<string | null>(null);
 
   // Historial de estados del proveedor
   const [historialProveedor, setHistorialProveedor] = useState<CambioEstado[]>([]);
