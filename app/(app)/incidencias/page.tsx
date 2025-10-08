@@ -29,6 +29,7 @@ type Incidencia = {
     prioridad?: string;
     activo?: boolean;
     proveedor_id?: string;
+    descripcion_proveedor?: string;
   }[] | null;
 };
 
@@ -40,6 +41,7 @@ type FilaIncidencia = Incidencia & {
     prioridad?: string;
     activo?: boolean;
     proveedor_id?: string;
+    descripcion_proveedor?: string;
   };
 };
 
@@ -144,7 +146,7 @@ export default function IncidenciasListado() {
             institucion_id,
             email,
             instituciones(nombre),
-            proveedor_casos(id, estado_proveedor, prioridad, activo)
+            proveedor_casos(id, estado_proveedor, prioridad, activo, descripcion_proveedor)
           `)
           .eq("num_solicitud", numeroSolicitud);
 
@@ -728,11 +730,11 @@ export default function IncidenciasListado() {
                     { value: "Ofertada", label: "Ofertada" },
                     { value: "Oferta aprobada", label: "Oferta aprobada" },
                     { value: "Oferta a revisar", label: "Oferta a revisar" },
+                    { value: "Revisar resolución", label: "Revisar resolución" },
                     { value: "Resuelta", label: "Resuelta" },
-                    { value: "Cerrada", label: "Cerrada" },
-                    { value: "Anulada", label: "Anulada" },
                     { value: "Valorada", label: "Valorada" },
-                    { value: "Pendiente valoración", label: "Pendiente valoración" }
+                    { value: "Cerrada", label: "Cerrada" },
+                    { value: "Anulada", label: "Anulada" }
                   ] : [
                     { value: "Abierta", label: "Abierta" },
                     { value: "En espera", label: "En espera" },
@@ -762,11 +764,11 @@ export default function IncidenciasListado() {
                     { value: "Ofertada", label: "Ofertada" },
                     { value: "Oferta aprobada", label: "Oferta aprobada" },
                     { value: "Oferta a revisar", label: "Oferta a revisar" },
+                    { value: "Revisar resolución", label: "Revisar resolución" },
                     { value: "Resuelta", label: "Resuelta" },
-                    { value: "Cerrada", label: "Cerrada" },
-                    { value: "Anulada", label: "Anulada" },
                     { value: "Valorada", label: "Valorada" },
-                    { value: "Pendiente valoración", label: "Pendiente valoración" }
+                    { value: "Cerrada", label: "Cerrada" },
+                    { value: "Anulada", label: "Anulada" }
                   ]}
                 />
               </div>
@@ -985,8 +987,15 @@ export default function IncidenciasListado() {
                       : (fila.instituciones?.[0]?.nombre || fila.centro || "-")
                     }
                   </div>
-                  <div className="text-sm truncate" title={fila.descripcion}>
-                    {fila.descripcion}
+                  <div className="text-sm truncate" title={
+                    perfil?.rol === "Proveedor"
+                      ? (fila.proveedor_caso_seleccionado?.descripcion_proveedor || fila.descripcion)
+                      : fila.descripcion
+                  }>
+                    {perfil?.rol === "Proveedor"
+                      ? (fila.proveedor_caso_seleccionado?.descripcion_proveedor || fila.descripcion)
+                      : fila.descripcion
+                    }
                   </div>
                 </div>
               ))

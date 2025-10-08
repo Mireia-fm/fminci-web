@@ -21,6 +21,7 @@ export type Incidencia = {
     prioridad?: string;
     activo?: boolean;
     proveedor_id?: string;
+    descripcion_proveedor?: string;
   }[] | null;
 };
 
@@ -36,7 +37,7 @@ const SELECT_INCIDENCIAS_BASE = `
   institucion_id,
   email,
   instituciones(nombre),
-  proveedor_casos(id, estado_proveedor, prioridad, activo, proveedor_id)
+  proveedor_casos(id, estado_proveedor, prioridad, activo, proveedor_id, descripcion_proveedor)
 `;
 
 /**
@@ -78,7 +79,8 @@ export async function obtenerIncidenciasProveedor(proveedorId: string): Promise<
         estado_proveedor,
         prioridad,
         activo,
-        proveedor_id
+        proveedor_id,
+        descripcion_proveedor
       )
     `)
     .eq("proveedor_casos.proveedor_id", proveedorId)
