@@ -30,6 +30,9 @@ type CitaSupabase = {
   centro_nombre?: string;
   num_solicitud?: string;
   descripcion?: string;
+  proveedor_casos?: {
+    descripcion_proveedor?: string;
+  }[];
   incidencias?: {
     id: string;
     num_solicitud?: string;
@@ -80,7 +83,8 @@ export default function CalendarioPage() {
               estado,
               centro_nombre,
               num_solicitud,
-              descripcion
+              descripcion,
+              proveedor_casos!inner(descripcion_proveedor)
             `)
             .eq("proveedor_id", institucionId)
             .eq("estado", "programada")
@@ -140,8 +144,13 @@ export default function CalendarioPage() {
             // Para el número de solicitud: usar el campo directo de la cita o fallback al de la incidencia
             const numSolicitud = cita.num_solicitud || incidencia?.num_solicitud || '';
 
-            // Para la descripción: usar el campo directo de la cita o fallback al de la incidencia
-            const descripcionCita = cita.descripcion || incidencia?.descripcion || '';
+            // Para la descripción:
+            // - Si es proveedor: usar descripcion_proveedor de proveedor_casos
+            // - Si es cliente/gestor: usar descripcion de incidencias
+            const proveedorCaso = cita.proveedor_casos?.[0];
+            const descripcionCita = tipoInstitucion === 'Proveedor'
+              ? (proveedorCaso?.descripcion_proveedor || cita.descripcion || '')
+              : (incidencia?.descripcion || cita.descripcion || '');
 
             console.log("🔍 Procesando cita:", {
               id: cita.id,
