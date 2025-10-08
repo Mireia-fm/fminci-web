@@ -245,8 +245,8 @@ export default function DashboardProveedor() {
                 }}
                 onClick={() => navegarAIncidencias(c.key)}
               >
-                <div className="text-4xl font-semibold text-white">{c.n}</div>
-                <div className="mt-2 text-white/90 text-sm text-center px-2">{c.key}</div>
+                <div className="text-2xl md:text-4xl font-semibold text-white">{c.n}</div>
+                <div className="mt-2 text-white/90 text-xs md:text-sm text-center px-2">{c.key}</div>
               </div>
             ))}
           </div>
@@ -263,8 +263,8 @@ export default function DashboardProveedor() {
                 }}
                 onClick={() => navegarAIncidencias(c.key)}
               >
-                <div className="text-4xl font-semibold text-white">{c.n}</div>
-                <div className="mt-2 text-white/90 text-sm text-center px-2">{c.key}</div>
+                <div className="text-2xl md:text-4xl font-semibold text-white">{c.n}</div>
+                <div className="mt-2 text-white/90 text-xs md:text-sm text-center px-2">{c.key}</div>
               </div>
             ))}
           </div>
