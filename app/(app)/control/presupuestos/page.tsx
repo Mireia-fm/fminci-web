@@ -26,6 +26,7 @@ type Presupuesto = {
   incidencias: {
     num_solicitud: string;
     descripcion: string;
+    institucion_id: string;
   };
 };
 
@@ -47,6 +48,7 @@ export default function PresupuestosPage() {
   const [filtroNumeroSolicitud, setFiltroNumeroSolicitud] = useState("");
   const [proveedores, setProveedores] = useState<{id: string, nombre: string}[]>([]);
   const [centros, setCentros] = useState<{id: string, nombre: string}[]>([]);
+  const [numerosIncidencias, setNumerosIncidencias] = useState<string[]>([]);
 
   useEffect(() => {
     cargarDatos();
@@ -55,6 +57,7 @@ export default function PresupuestosPage() {
   useEffect(() => {
     cargarProveedores();
     cargarCentros();
+    cargarNumerosIncidencias();
   }, []);
 
   // Cargar URLs firmadas de documentos
@@ -93,7 +96,7 @@ export default function PresupuestosPage() {
           .select(`
             *,
             instituciones(nombre),
-            incidencias(num_solicitud, descripcion)
+            incidencias!inner(num_solicitud, descripcion, institucion_id)
           `);
 
         // Aplicar filtro de estado si está seleccionado
@@ -108,12 +111,12 @@ export default function PresupuestosPage() {
 
         // Aplicar filtro de centro si está seleccionado
         if (filtroCentro) {
-          query = query.eq("institucion_id", filtroCentro);
+          query = query.eq("incidencias.institucion_id", filtroCentro);
         }
 
         // Aplicar filtro de número de solicitud si está seleccionado
         if (filtroNumeroSolicitud) {
-          query = query.eq("numero_incidencia", filtroNumeroSolicitud);
+          query = query.eq("incidencias.num_solicitud", filtroNumeroSolicitud);
         }
 
         const { data: presupuestosData, error } = await query.order("creado_en", { ascending: false });
@@ -405,6 +408,24 @@ El proveedor debe enviar una nueva propuesta.`,
     }
   };
 
+  const cargarNumerosIncidencias = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("presupuestos")
+        .select("incidencias!inner(num_solicitud)");
+
+      if (!error && data) {
+        // Extraer números únicos y ordenar
+        const numerosUnicos = Array.from(
+          new Set(data.map(p => p.incidencias.num_solicitud))
+        ).sort();
+        setNumerosIncidencias(numerosUnicos);
+      }
+    } catch (error) {
+      console.error("Error cargando números de incidencias:", error);
+    }
+  };
+
   const getEstadoColor = (estado: string) => {
     switch (estado) {
       case 'pendiente_revision':
@@ -518,21 +539,18 @@ El proveedor debe enviar una nueva propuesta.`,
                 <label className="block text-xs font-medium mb-1" style={{ color: PALETA.textoOscuro }}>
                   Número de solicitud
                 </label>
-                <input
-                  type="text"
+                <SearchableSelect
                   value={filtroNumeroSolicitud}
-                  onChange={(e) => setFiltroNumeroSolicitud(e.target.value)}
-                  placeholder="Buscar"
-                  className="w-52 px-3 py-1.5 rounded border text-sm h-8 bg-white outline-none focus:ring-2"
-                  style={{
-                    '--tw-ring-color': PALETA.verdeClaro
-                  } as React.CSSProperties}
-                  onFocus={(e) => {
-                    e.target.style.boxShadow = `0 0 0 2px ${PALETA.verdeClaro}40`;
-                  }}
-                  onBlur={(e) => {
-                    e.target.style.boxShadow = '';
-                  }}
+                  onChange={setFiltroNumeroSolicitud}
+                  placeholder="Seleccionar"
+                  className="w-52"
+                  options={[
+                    { value: "", label: "Todos" },
+                    ...numerosIncidencias.map(num => ({
+                      value: num,
+                      label: num
+                    }))
+                  ]}
                 />
               </div>
             </div>
