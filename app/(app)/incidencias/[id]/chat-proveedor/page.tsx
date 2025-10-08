@@ -17,6 +17,7 @@ import { resolverIncidencia as resolverIncidenciaService, valoracionEconomica as
 // Hooks compartidos
 import { useSignedUrls, useComentarioUrls } from "@/shared/hooks/useSignedUrls";
 import { useChatFileUpload } from "@/shared/hooks/useFileUpload";
+import { usePresupuestoGestion } from "./hooks/usePresupuestoGestion";
 
 // Componentes compartidos
 import HistorialEstados from "@/shared/components/HistorialEstados";
@@ -32,6 +33,7 @@ import ModalMotivoRevision from "@/components/ModalMotivoRevision";
 import ModalCerrarIncidencia from "@/components/ModalCerrarIncidencia";
 import ModalAnularAsignacionProveedor from "@/components/ModalAnularAsignacionProveedor";
 import ModalAsignarProveedor from "@/components/ModalAsignarProveedor";
+import ModalGestionPresupuesto from "./components/ModalGestionPresupuesto";
 import { asignarProveedorCompleto, type FormularioAsignacionProveedor } from "@/lib/services/asignacionProveedorService";
 
 type Adjunto = {
@@ -180,26 +182,11 @@ export default function ChatProveedor() {
   const [mostrarModalAnular, setMostrarModalAnular] = useState(false);
   const [mostrarModalCerrar, setMostrarModalCerrar] = useState(false);
   const [mostrarModalRechazarResolucion, setMostrarModalRechazarResolucion] = useState(false);
-  const [mostrarModalGestionPresupuesto, setMostrarModalGestionPresupuesto] = useState(false);
   const [mostrarModalResolucionManual, setMostrarModalResolucionManual] = useState(false);
-  const [mostrarModalMotivoRevision, setMostrarModalMotivoRevision] = useState(false);
   const [mostrarModalReasignarProveedor, setMostrarModalReasignarProveedor] = useState(false);
 
   // Estados para modales de Control
   const [motivoAnulacion, setMotivoAnulacion] = useState('');
-  const [presupuestoActual, setPresupuestoActual] = useState<{
-    id: string;
-    importe_total: number;
-    importe_total_sin_iva?: number;
-    presupuesto_detallado_url?: string;
-    estado: string;
-    fecha_estimada_inicio?: string;
-    duracion_estimada?: string;
-    descripcion_breve?: string;
-    documento_adjunto_id?: string | null;
-  } | null>(null);
-  const [cargandoPresupuesto, setCargandoPresupuesto] = useState(false);
-  const [documentoPresupuestoUrl, setDocumentoPresupuestoUrl] = useState<string | null>(null);
 
   // Historial de estados del proveedor
   const [historialProveedor, setHistorialProveedor] = useState<CambioEstado[]>([]);
@@ -218,6 +205,13 @@ export default function ChatProveedor() {
     uploadFiles,
     limpiar: limpiarArchivos
   } = useChatFileUpload(incidencia?.num_solicitud || '');
+
+  // Hook de gestión de presupuestos
+  const presupuestoGestion = usePresupuestoGestion(
+    incidenciaId,
+    perfil,
+    cargarDatos
+  );
 
   // Ref para scroll automático
   const comentariosContainerRef = useRef<HTMLDivElement>(null);
@@ -1395,7 +1389,10 @@ ${textoRechazo.instruccion}`,
 
       await supabase
         .from("presupuestos")
-        .update({ estado: "revisar" })
+        .update({
+          estado: "rechazado",
+          comentarios_revision: motivoRevision
+        })
         .eq("id", presupuestoActual.id);
 
       await registrarCambioEstado({
@@ -1975,11 +1972,11 @@ ${textoRechazo.instruccion}`,
                           {/* Mensaje informativo para incidencias migradas */}
                           <div className="bg-yellow-50 rounded-lg p-4" style={{ border: `2px solid #fbbf24` }}>
                             <p className="text-sm font-medium text-gray-800">
-                              Esta incidencia fue migrada desde el sistema anterior y está marcada como &quot;Valorada&quot;.
+                              Esta incidencia fue migrada desde el sistema anterior y está resuelta y valorada por el proveedor.
                             </p>
                             <p className="text-xs text-gray-600 mt-2">
-                              No dispone de formularios de resolución técnica o valoración económica registrados en el nuevo sistema.
-                              Puede aprobar y cerrar la incidencia o rechazarla para que el proveedor complete los datos.
+                              No dispone de formularios de resolución técnica o valoración económica registrados en el nuevo sistema, debe revisar los comentarios donde se encuentra el detalle.
+                              Puede aprobar y cerrar la incidencia o rechazarla para que el proveedor haga cambios en la resolución técnica, la valoración económica o ambas.
                             </p>
                           </div>
 
@@ -2177,8 +2174,14 @@ ${textoRechazo.instruccion}`,
 
                     case "Resuelta":
                       botonesDisponibles.valorar = true;
-                      botonesDisponibles.volverResolver = true;
-                      mensaje = 'Incidencia resuelta - Puede proceder con la valoración económica';
+                      // Si viene de una revisión de "ambas", NO permitir volver a resolver
+                      // hasta que complete la valoración
+                      if (incidencia.tipo_revision !== 'ambas') {
+                        botonesDisponibles.volverResolver = true;
+                      }
+                      mensaje = incidencia.tipo_revision === 'ambas'
+                        ? 'Resolución técnica corregida - Ahora debe proceder con la valoración económica'
+                        : 'Incidencia resuelta - Puede proceder con la valoración económica';
                       break;
 
                     case "Pendiente valoración":
@@ -2193,9 +2196,23 @@ ${textoRechazo.instruccion}`,
                       break;
 
                     case "Revisar resolución":
-                      botonesDisponibles.valorar = true;
-                      botonesDisponibles.volverResolver = true;
-                      mensaje = 'Control ha solicitado revisar la resolución - Revise el motivo en el chat y corrija';
+                      // Según el tipo de revisión, mostrar los botones apropiados
+                      if (incidencia.tipo_revision === 'tecnica') {
+                        botonesDisponibles.volverResolver = true;
+                        mensaje = 'Control ha solicitado revisar la resolución técnica - Revise el motivo en el chat y corrija';
+                      } else if (incidencia.tipo_revision === 'economica') {
+                        botonesDisponibles.valorar = true;
+                        mensaje = 'Control ha solicitado revisar la valoración económica - Revise el motivo en el chat y corrija';
+                      } else if (incidencia.tipo_revision === 'ambas') {
+                        // Solo mostrar botón de resolver primero
+                        botonesDisponibles.volverResolver = true;
+                        mensaje = 'Control ha solicitado revisar la resolución técnica y la valoración económica - Primero debe corregir la resolución técnica';
+                      } else {
+                        // Fallback por si no hay tipo_revision definido
+                        botonesDisponibles.valorar = true;
+                        botonesDisponibles.volverResolver = true;
+                        mensaje = 'Control ha solicitado revisar la resolución - Revise el motivo en el chat y corrija';
+                      }
                       break;
 
                     case "Cerrada":

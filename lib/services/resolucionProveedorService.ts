@@ -210,12 +210,12 @@ export async function resolverIncidencia(
       let nuevoTipoRevision = null;
 
       if (esCorreccionRevision) {
-        // Si era 'ambas', mantiene 'Revisar resolución' y cambia tipo_revision a 'economica' (falta económica)
-        // Si era solo 'tecnica', pasa a 'Valorada' (corrección completa)
+        // Si era 'ambas', pasa a 'Resuelta' manteniendo tipo_revision='ambas' (falta valoración económica)
+        // Si era solo 'tecnica', pasa a 'Valorada' (corrección completa, Control puede cerrar)
         // Si era 'economica' (no debería pasar por aquí en resolverIncidencia), pasa a 'Valorada'
         if (tipoRevisionActual === 'ambas') {
-          nuevoEstadoProveedor = 'Revisar resolución';
-          nuevoTipoRevision = 'economica'; // Falta corregir económica
+          nuevoEstadoProveedor = 'Resuelta';
+          nuevoTipoRevision = 'ambas'; // Mantener para forzar que complete valoración
         } else {
           // Solo técnica -> directo a Valorada para que Control pueda cerrar
           nuevoEstadoProveedor = 'Valorada';
@@ -252,7 +252,7 @@ export async function resolverIncidencia(
       // Determinar nuevo estado para el registro (debe coincidir con la lógica anterior)
       let nuevoEstadoProveedorRegistro = "Resuelta";
       if (esCorreccionRevision && tipoRevisionActual === 'ambas') {
-        nuevoEstadoProveedorRegistro = 'Revisar resolución';
+        nuevoEstadoProveedorRegistro = 'Resuelta'; // Cambiado: pasa a Resuelta, no se queda en Revisar resolución
       } else if (esCorreccionRevision) {
         nuevoEstadoProveedorRegistro = 'Valorada';
       }
@@ -261,7 +261,7 @@ export async function resolverIncidencia(
       let motivoCliente = 'Incidencia resuelta por proveedor';
 
       if (esCorreccionRevision && tipoRevisionActual === 'ambas') {
-        motivoProveedor = 'Resolución técnica corregida - pendiente corrección valoración económica';
+        motivoProveedor = 'Resolución técnica corregida - pendiente valoración económica';
         motivoCliente = 'Resolución técnica corregida por el proveedor';
         metadatosResolucion.accion = 'corregir_resolucion_tecnica_parcial';
       } else if (esCorreccionRevision) {
