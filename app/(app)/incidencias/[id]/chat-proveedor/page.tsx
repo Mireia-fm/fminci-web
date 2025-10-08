@@ -1350,8 +1350,8 @@ ${textoRechazo.instruccion}`,
       await registrarCambioEstado({
         incidenciaId,
         tipoEstado: 'proveedor',
-        estadoAnterior: "pendiente_revision",
-        estadoNuevo: "aprobado",
+        estadoAnterior: "Ofertada",
+        estadoNuevo: "Oferta aprobada",
         autorId: perfil.persona_id,
         motivo: `Presupuesto aprobado. Importe: ${presupuestoActual.importe_total_sin_iva}€ (sin IVA)`,
         metadatos: {
