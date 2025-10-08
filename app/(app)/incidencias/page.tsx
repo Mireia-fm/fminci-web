@@ -658,10 +658,10 @@ export default function IncidenciasListado() {
     <div className="min-h-screen w-full" style={{ backgroundColor: PALETA.bg }}>
 
       {/* Contenido principal */}
-      <div className="px-6 pb-6">
+      <div className="px-6 pb-6 main-content-mobile">
         {/* Título */}
         {perfil?.rol !== "Control" && (
-          <h1 className="text-lg tracking-[0.3em] mb-8" style={{ color: PALETA.texto }}>
+          <h1 className="text-lg tracking-[0.3em] mb-8 page-title-mobile" style={{ color: PALETA.texto }}>
             MIS INCIDENCIAS:
           </h1>
         )}
@@ -669,14 +669,14 @@ export default function IncidenciasListado() {
         {/* Filtros - encima de la tabla */}
         <div className="mb-12 relative">
           <div
-            className="p-4"
+            className="p-4 responsive-padding"
             style={{
               backgroundColor: PALETA.headerTable,
               borderRadius: "4px 4px 0 4px"
             }}
           >
             {/* Primera fila de filtros: número solicitud, fecha, estado cliente, estado proveedor */}
-            <div className="grid gap-4 mb-4" style={{ gridTemplateColumns: `repeat(${perfil?.rol === "Control" ? 4 : 3}, minmax(0, 1fr))` }}>
+            <div className="grid gap-4 mb-4 filtros-grid" style={{ gridTemplateColumns: `repeat(${perfil?.rol === "Control" ? 4 : 3}, minmax(0, 1fr))` }}>
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: PALETA.textoOscuro }}>
                 Número solicitud
@@ -918,7 +918,7 @@ export default function IncidenciasListado() {
         </div>
 
         {/* Tabla de incidencias */}
-        <div className="mb-6" style={{ backgroundColor: PALETA.card, borderRadius: "8px" }}>
+        <div className="mb-6 incidencias-tabla-wrapper" style={{ backgroundColor: PALETA.card, borderRadius: "8px" }}>
           {/* Header de la tabla */}
           <div
             className="grid gap-4 p-4 rounded-t-lg"
@@ -996,12 +996,12 @@ export default function IncidenciasListado() {
 
         {/* Paginación */}
         {incidenciasFiltradas.length > incidenciasPorPagina && (
-          <div className="flex items-center justify-between mb-6 px-4 py-3 rounded-lg" style={{ backgroundColor: PALETA.card }}>
-            <div className="text-sm text-gray-600">
+          <div className="flex items-center justify-between mb-6 px-4 py-3 rounded-lg pagination-mobile" style={{ backgroundColor: PALETA.card }}>
+            <div className="text-sm text-gray-600 pagination-info">
               Mostrando {indiceInicio + 1}-{Math.min(indiceFin, incidenciasFiltradas.length)} de {incidenciasFiltradas.length} incidencias
             </div>
-            
-            <div className="flex items-center gap-2">
+
+            <div className="flex items-center gap-2 pagination-mobile">
               <button
                 onClick={paginaAnterior}
                 disabled={paginaActual === 1}

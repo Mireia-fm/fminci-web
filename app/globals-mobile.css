@@ -1,0 +1,239 @@
+/* ===================================
+   MEJORAS RESPONSIVE PARA MÓVIL
+   =================================== */
+
+/* Tabla de incidencias - scroll horizontal en móvil */
+@media (max-width: 768px) {
+  /* Contenedor de tabla con scroll */
+  .incidencias-tabla-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .incidencias-tabla-wrapper > div:first-child,
+  .incidencias-tabla-wrapper > div:last-child {
+    min-width: 650px;
+  }
+
+  /* Padding reducido en móvil */
+  .responsive-padding {
+    padding: 0.75rem !important;
+  }
+
+  /* Filtros en columnas para móvil */
+  .filtros-grid {
+    grid-template-columns: 1fr !important;
+    gap: 0.75rem !important;
+  }
+
+  .filtros-grid-2col {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+/* Modales responsive */
+@media (max-width: 640px) {
+  .modal-responsive {
+    max-width: 95vw !important;
+    margin: 0.5rem !important;
+    max-height: 95vh !important;
+    padding: 1rem !important;
+  }
+
+  .modal-responsive h2,
+  .modal-responsive h3 {
+    font-size: 1.125rem !important;
+  }
+
+  .modal-responsive .modal-body {
+    padding: 1rem !important;
+  }
+}
+
+/* ChatContainer responsive */
+@media (max-width: 768px) {
+  .chat-container-mobile {
+    max-height: calc(100vh - 200px) !important;
+    min-height: 300px !important;
+  }
+
+  .chat-messages-mobile {
+    max-height: calc(100vh - 300px) !important;
+    padding: 1rem !important;
+  }
+
+  .chat-input-mobile {
+    padding: 0.75rem !important;
+  }
+}
+
+/* Dashboard - cards responsive */
+@media (max-width: 640px) {
+  .dashboard-cards-mobile {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 0.75rem !important;
+  }
+
+  .dashboard-card-mobile {
+    padding: 1rem !important;
+  }
+
+  .dashboard-card-circle {
+    width: 60px !important;
+    height: 60px !important;
+    font-size: 1.25rem !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .dashboard-cards-mobile {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Paginación responsive */
+@media (max-width: 640px) {
+  .pagination-mobile {
+    flex-wrap: wrap;
+    gap: 0.25rem !important;
+  }
+
+  .pagination-mobile button {
+    padding: 0.5rem 0.75rem !important;
+    font-size: 0.875rem !important;
+  }
+
+  .pagination-info {
+    font-size: 0.75rem !important;
+    width: 100%;
+    text-align: center;
+    margin-bottom: 0.5rem;
+  }
+}
+
+/* Topbar y layout ajustes */
+@media (max-width: 768px) {
+  .main-content-mobile {
+    padding: 1rem !important;
+  }
+
+  .page-title-mobile {
+    font-size: 1rem !important;
+    margin-bottom: 1.5rem !important;
+  }
+}
+
+/* Formularios y inputs en móvil */
+@media (max-width: 640px) {
+  .form-grid-mobile {
+    grid-template-columns: 1fr !important;
+    gap: 1rem !important;
+  }
+
+  .form-label-mobile {
+    font-size: 0.875rem !important;
+  }
+
+  .form-input-mobile {
+    font-size: 1rem !important; /* Evita zoom en iOS */
+  }
+}
+
+/* Imágenes y galerías responsive */
+@media (max-width: 640px) {
+  .images-grid-mobile {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 0.5rem !important;
+  }
+
+  .image-preview-mobile {
+    width: 100% !important;
+    height: auto !important;
+    max-height: 150px !important;
+    object-fit: cover;
+  }
+}
+
+/* Botones responsive */
+@media (max-width: 640px) {
+  .button-mobile {
+    padding: 0.625rem 1rem !important;
+    font-size: 0.875rem !important;
+  }
+
+  .button-group-mobile {
+    flex-direction: column !important;
+    gap: 0.5rem !important;
+    width: 100%;
+  }
+
+  .button-group-mobile button {
+    width: 100% !important;
+  }
+}
+
+/* Tabla alternativa para móvil - cards */
+@media (max-width: 640px) {
+  .table-to-cards .table-header {
+    display: none;
+  }
+
+  .table-to-cards .table-row {
+    display: flex;
+    flex-direction: column;
+    padding: 1rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.5rem;
+    margin-bottom: 0.75rem;
+    background: white;
+  }
+
+  .table-to-cards .table-cell {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #f3f4f6;
+  }
+
+  .table-to-cards .table-cell:last-child {
+    border-bottom: none;
+  }
+
+  .table-to-cards .table-cell::before {
+    content: attr(data-label);
+    font-weight: 600;
+    margin-right: 1rem;
+    color: #4b5563;
+  }
+}
+
+/* Utilidades generales */
+@media (max-width: 768px) {
+  .hide-mobile {
+    display: none !important;
+  }
+
+  .show-mobile {
+    display: block !important;
+  }
+}
+
+@media (min-width: 769px) {
+  .hide-desktop {
+    display: none !important;
+  }
+}
+
+/* Scroll suave en contenedores */
+.smooth-scroll {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Touch targets mínimos (44px recomendado) */
+@media (max-width: 640px) {
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}

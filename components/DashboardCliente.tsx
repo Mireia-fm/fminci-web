@@ -140,18 +140,18 @@ export default function DashboardCliente() {
         )}
       </div>
 
-      <section className="px-6 pb-12">
+      <section className="px-6 pb-12 main-content-mobile">
         <div className="space-y-4">
           {vistaActiva === 'cliente' ? (
             /* Layout cliente: 4 + 2 */
             <div className="relative max-w-4xl mx-auto">
               {/* Primera fila - estados originales */}
-              <div className="flex justify-center gap-6 mb-4">
+              <div className="flex justify-center gap-6 mb-4 dashboard-cards-mobile flex-wrap">
                 {cards.slice(0, 4).map(c => (
                   <div
                     key={c.key}
                     onClick={() => handleCircleClick(c.key)}
-                    className="flex flex-col items-center justify-center rounded-full cursor-pointer hover:scale-105 transition-transform"
+                    className="flex flex-col items-center justify-center rounded-full cursor-pointer hover:scale-105 transition-transform dashboard-card-circle"
                     style={{
                       width: 190, height: 190, backgroundColor: c.color,
                       boxShadow: "0 8px 20px rgba(0,0,0,0.08)",
@@ -165,12 +165,12 @@ export default function DashboardCliente() {
 
               {/* Segunda fila - estados nuevos centrados exactamente */}
               <div className="flex justify-center">
-                <div className="flex" style={{ gap: '262px' }}>
+                <div className="flex dashboard-cards-mobile flex-wrap justify-center" style={{ gap: '262px' }}>
                   {cards.slice(4, 6).map(c => (
                     <div
                       key={c.key}
                       onClick={() => handleCircleClick(c.key)}
-                      className="flex flex-col items-center justify-center rounded-full cursor-pointer hover:scale-105 transition-transform"
+                      className="flex flex-col items-center justify-center rounded-full cursor-pointer hover:scale-105 transition-transform dashboard-card-circle"
                       style={{
                         width: 190, height: 190, backgroundColor: c.color,
                         boxShadow: "0 8px 20px rgba(0,0,0,0.08)",

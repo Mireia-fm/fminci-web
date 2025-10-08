@@ -1,5 +1,6 @@
 // app/layout.tsx
 import "./globals.css";
+import "./globals-mobile.css";
 import "@/lib/env"; // Validar env variables al cargar
 
 export const metadata = {

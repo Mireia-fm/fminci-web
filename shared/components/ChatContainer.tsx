@@ -62,12 +62,12 @@ export default function ChatContainer({
 
   return (
     <div
-      className="rounded-lg shadow-lg overflow-hidden"
+      className="rounded-lg shadow-lg overflow-hidden chat-container-mobile"
       style={{ backgroundColor: PALETA.card }}
     >
       {/* Header */}
       <div
-        className="px-6 py-4 border-b"
+        className="px-6 py-4 border-b responsive-padding"
         style={{
           backgroundColor: PALETA.headerTable,
           color: PALETA.textoOscuro
@@ -85,7 +85,7 @@ export default function ChatContainer({
 
       {/* Mensajes */}
       <div
-        className="p-6 overflow-y-auto"
+        className="p-6 overflow-y-auto chat-messages-mobile"
         style={{
           maxHeight: '500px',
           minHeight: '300px',
