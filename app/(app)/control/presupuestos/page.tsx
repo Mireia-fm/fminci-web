@@ -416,8 +416,13 @@ El proveedor debe enviar una nueva propuesta.`,
 
       if (!error && data) {
         // Extraer números únicos y ordenar
+        // Supabase devuelve incidencias como objeto único con !inner
         const numerosUnicos = Array.from(
-          new Set(data.map((p: any) => p.incidencias.num_solicitud))
+          new Set(
+            data
+              .map(p => (p as unknown as { incidencias: { num_solicitud: string } }).incidencias.num_solicitud)
+              .filter(Boolean)
+          )
         ).sort();
         setNumerosIncidencias(numerosUnicos);
       }
