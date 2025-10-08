@@ -664,15 +664,39 @@ Importe total con IVA: ${importeConIvaNum.toFixed(2)}€${
           .update({ documento_adjunto_id: adjuntoCreado.id })
           .eq("id", valoracionCreada.id);
       }
-    } else if (!documentoJustificativo && importeCoincide && presupuestoActual?.documento_adjunto_id) {
+    } else if (!documentoJustificativo && importeCoincide) {
       // Caso 2: No se subió documento pero el importe coincide con la oferta aprobada
-      // Usar el documento de la oferta
-      console.log('📎 Usando documento de la oferta aprobada:', presupuestoActual.documento_adjunto_id);
+      // Buscar el documento adjunto del presupuesto aprobado
+      const { data: presupuesto } = await supabase
+        .from("presupuestos")
+        .select("id")
+        .eq("incidencia_id", incidenciaId)
+        .eq("estado", "aprobado")
+        .single();
 
-      await supabase
-        .from("valoraciones_economicas")
-        .update({ documento_adjunto_id: presupuestoActual.documento_adjunto_id })
-        .eq("id", valoracionCreada.id);
+      if (presupuesto) {
+        // Buscar el adjunto asociado al presupuesto
+        const { data: adjuntoPresupuesto } = await supabase
+          .from("adjuntos")
+          .select("id")
+          .eq("presupuesto_id", presupuesto.id)
+          .eq("categoria", "documento_presupuesto")
+          .single();
+
+        if (adjuntoPresupuesto) {
+          console.log('📎 Usando documento de la oferta aprobada:', adjuntoPresupuesto.id);
+          await supabase
+            .from("valoraciones_economicas")
+            .update({ documento_adjunto_id: adjuntoPresupuesto.id })
+            .eq("id", valoracionCreada.id);
+        } else {
+          console.log('⚠️ Oferta aprobada sin documento adjunto, pero el importe coincide - permitiendo valoración');
+          // Si el presupuesto aprobado no tiene documento, permitimos la valoración de todas formas
+          // ya que el importe coincide
+        }
+      } else {
+        console.log('⚠️ No se encontró presupuesto aprobado, pero el importe coincide - permitiendo valoración');
+      }
     } else if (!documentoJustificativo && !importeCoincide) {
       // Caso 3: No se subió documento y el importe NO coincide con la oferta
       // El documento es obligatorio
