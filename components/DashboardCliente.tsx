@@ -157,8 +157,8 @@ export default function DashboardCliente() {
                       boxShadow: "0 8px 20px rgba(0,0,0,0.08)",
                     }}
                   >
-                    <div className="text-5xl font-semibold text-white">{c.n}</div>
-                    <div className="mt-2 text-white/90">{c.key}</div>
+                    <div className="text-3xl md:text-5xl font-semibold text-white">{c.n}</div>
+                    <div className="mt-2 text-white/90 text-xs md:text-base text-center px-2">{c.key}</div>
                   </div>
                 ))}
               </div>
@@ -176,8 +176,8 @@ export default function DashboardCliente() {
                         boxShadow: "0 8px 20px rgba(0,0,0,0.08)",
                       }}
                     >
-                      <div className="text-5xl font-semibold text-white">{c.n}</div>
-                      <div className="mt-2 text-white/90">{c.key}</div>
+                      <div className="text-3xl md:text-5xl font-semibold text-white">{c.n}</div>
+                      <div className="mt-2 text-white/90 text-xs md:text-base text-center px-2">{c.key}</div>
                     </div>
                   ))}
                 </div>
@@ -198,8 +198,8 @@ export default function DashboardCliente() {
                       boxShadow: "0 8px 20px rgba(0,0,0,0.08)",
                     }}
                   >
-                    <div className="text-4xl font-semibold text-white">{c.n}</div>
-                    <div className="mt-2 text-white/90 text-sm text-center px-2">{c.key}</div>
+                    <div className="text-2xl md:text-4xl font-semibold text-white">{c.n}</div>
+                    <div className="mt-2 text-white/90 text-xs md:text-sm text-center px-2">{c.key}</div>
                   </div>
                 ))}
               </div>
@@ -216,8 +216,8 @@ export default function DashboardCliente() {
                       boxShadow: "0 8px 20px rgba(0,0,0,0.08)",
                     }}
                   >
-                    <div className="text-4xl font-semibold text-white">{c.n}</div>
-                    <div className="mt-2 text-white/90 text-sm text-center px-2">{c.key}</div>
+                    <div className="text-2xl md:text-4xl font-semibold text-white">{c.n}</div>
+                    <div className="mt-2 text-white/90 text-xs md:text-sm text-center px-2">{c.key}</div>
                   </div>
                 ))}
               </div>
