@@ -20,8 +20,11 @@ export default function UpdatePassword() {
     const hashParams = new URLSearchParams(window.location.hash.substring(1));
     const accessToken = hashParams.get('access_token');
     const type = hashParams.get('type');
+    const errorDescription = hashParams.get('error_description');
 
-    if (accessToken && type === 'recovery') {
+    if (errorDescription) {
+      setErr('El enlace ha expirado o ya fue utilizado. Si recibió varios emails, use el más reciente.');
+    } else if (accessToken && type === 'recovery') {
       setValidToken(true);
     } else {
       setErr('Enlace inválido o expirado. Por favor, solicita un nuevo enlace de recuperación.');
