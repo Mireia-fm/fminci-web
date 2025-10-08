@@ -65,8 +65,8 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: PALETA.bg }}>
-      <div className="flex w-full max-w-4xl relative">
+    <main className="min-h-screen flex flex-col p-4 pb-0" style={{ backgroundColor: PALETA.bg }}>
+      <div className="flex w-full max-w-4xl relative mx-auto flex-1 items-center">
         {/* Banda lateral con logo y marca - solo desktop */}
         <aside
           className="hidden md:flex flex-col justify-center items-center"
@@ -228,7 +228,7 @@ export default function LoginPage() {
       </div>
 
       {/* Footer */}
-      <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 px-4 w-full max-w-4xl">
+      <div className="py-4 px-4 w-full max-w-4xl mx-auto">
         <p className="text-xs md:text-sm text-center" style={{
           color: PALETA.texto,
           fontFamily: 'Montserrat, Poppins, sans-serif'
