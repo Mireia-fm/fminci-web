@@ -417,7 +417,7 @@ El proveedor debe enviar una nueva propuesta.`,
       if (!error && data) {
         // Extraer números únicos y ordenar
         const numerosUnicos = Array.from(
-          new Set(data.map(p => p.incidencias.num_solicitud))
+          new Set(data.map((p: any) => p.incidencias.num_solicitud))
         ).sort();
         setNumerosIncidencias(numerosUnicos);
       }
