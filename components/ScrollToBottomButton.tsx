@@ -9,7 +9,7 @@ export default function ScrollToBottomButton({ onClick, show }: ScrollToBottomBu
   return (
     <button
       onClick={onClick}
-      className="absolute top-4 right-4 z-20 bg-white border-2 border-gray-300 rounded-full p-2 shadow-lg hover:shadow-xl transition-shadow hover:bg-gray-50"
+      className="absolute top-16 right-4 z-20 bg-white border-2 border-gray-300 rounded-full p-2 shadow-lg hover:shadow-xl transition-shadow hover:bg-gray-50"
       title="Ir al último mensaje"
     >
       <svg

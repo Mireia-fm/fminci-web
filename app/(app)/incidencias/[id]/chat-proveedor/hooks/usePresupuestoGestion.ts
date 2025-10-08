@@ -216,10 +216,13 @@ export function usePresupuestoGestion(
         .eq("activo", true)
         .neq("estado_proveedor", "Anulada");
 
-      // 2. Actualizar estado del presupuesto
+      // 2. Actualizar estado del presupuesto y guardar motivo de revisión
       await supabase
         .from("presupuestos")
-        .update({ estado: "rechazado" })
+        .update({
+          estado: "rechazado",
+          comentarios_revision: motivoRevision
+        })
         .eq("id", presupuestoActual.id);
 
       // 2.1. Registrar cambio de estado en el historial
