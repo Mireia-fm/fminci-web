@@ -43,15 +43,18 @@ export default function PresupuestosPage() {
   const [motivoRevision, setMotivoRevision] = useState('');
   const [presupuestoParaRechazar, setPresupuestoParaRechazar] = useState<Presupuesto | null>(null);
   const [filtroProveedor, setFiltroProveedor] = useState("");
+  const [filtroCentro, setFiltroCentro] = useState("");
   const [filtroNumeroSolicitud, setFiltroNumeroSolicitud] = useState("");
   const [proveedores, setProveedores] = useState<{id: string, nombre: string}[]>([]);
+  const [centros, setCentros] = useState<{id: string, nombre: string}[]>([]);
 
   useEffect(() => {
     cargarDatos();
-  }, [filtroEstado, filtroProveedor, filtroNumeroSolicitud]);
+  }, [filtroEstado, filtroProveedor, filtroCentro, filtroNumeroSolicitud]);
 
   useEffect(() => {
     cargarProveedores();
+    cargarCentros();
   }, []);
 
   // Cargar URLs firmadas de documentos
@@ -103,9 +106,14 @@ export default function PresupuestosPage() {
           query = query.eq("proveedor_id", filtroProveedor);
         }
 
+        // Aplicar filtro de centro si está seleccionado
+        if (filtroCentro) {
+          query = query.eq("institucion_id", filtroCentro);
+        }
+
         // Aplicar filtro de número de solicitud si está seleccionado
         if (filtroNumeroSolicitud) {
-          query = query.filter("incidencias.num_solicitud", "ilike", `%${filtroNumeroSolicitud}%`);
+          query = query.eq("numero_incidencia", filtroNumeroSolicitud);
         }
 
         const { data: presupuestosData, error } = await query.order("creado_en", { ascending: false });
@@ -380,6 +388,23 @@ El proveedor debe enviar una nueva propuesta.`,
     }
   };
 
+  const cargarCentros = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("instituciones")
+        .select("id, nombre")
+        .eq("tipo", "Centro")
+        .eq("activo", true)
+        .order("nombre");
+
+      if (!error && data) {
+        setCentros(data);
+      }
+    } catch (error) {
+      console.error("Error cargando centros:", error);
+    }
+  };
+
   const getEstadoColor = (estado: string) => {
     switch (estado) {
       case 'pendiente_revision':
@@ -460,10 +485,32 @@ El proveedor debe enviar una nueva propuesta.`,
                   onChange={setFiltroProveedor}
                   placeholder="Seleccionar"
                   className="w-52"
-                  options={proveedores.map(proveedor => ({
-                    value: proveedor.id,
-                    label: proveedor.nombre
-                  }))}
+                  options={[
+                    { value: "", label: "Todos" },
+                    ...proveedores.map(proveedor => ({
+                      value: proveedor.id,
+                      label: proveedor.nombre
+                    }))
+                  ]}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: PALETA.textoOscuro }}>
+                  Centro
+                </label>
+                <SearchableSelect
+                  value={filtroCentro}
+                  onChange={setFiltroCentro}
+                  placeholder="Seleccionar"
+                  className="w-52"
+                  options={[
+                    { value: "", label: "Todos" },
+                    ...centros.map(centro => ({
+                      value: centro.id,
+                      label: centro.nombre
+                    }))
+                  ]}
                 />
               </div>
 
@@ -497,6 +544,7 @@ El proveedor debe enviar una nueva propuesta.`,
               onClick={() => {
                 setFiltroEstado("");
                 setFiltroProveedor("");
+                setFiltroCentro("");
                 setFiltroNumeroSolicitud("");
               }}
               className="px-3 py-1 text-xs font-medium hover:opacity-80 transition-opacity flex items-center gap-1"
