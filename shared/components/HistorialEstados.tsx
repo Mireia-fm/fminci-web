@@ -20,19 +20,19 @@ export default function HistorialEstados({ cambios, titulo }: HistorialEstadosPr
   const cambiosOrdenados = [...cambios].reverse();
 
   return (
-    <div className="px-6 mb-12">
+    <div className="px-6 mb-12 main-content-mobile">
       <div className="rounded-lg shadow-lg" style={{ backgroundColor: PALETA.card }}>
       <div
-        className="px-6 py-3 border-b rounded-t-lg"
+        className="px-6 py-3 border-b rounded-t-lg responsive-padding"
         style={{
           backgroundColor: PALETA.headerTable,
           color: PALETA.textoOscuro
         }}
       >
-        <h2 className="text-lg font-semibold">{titulo}</h2>
+        <h2 className="text-base md:text-lg font-semibold">{titulo}</h2>
       </div>
 
-      <div className="px-6 py-4">
+      <div className="px-6 py-4 responsive-padding">
         <div className="relative">
           {/* Línea vertical del timeline */}
           <div
@@ -57,7 +57,7 @@ export default function HistorialEstados({ cambios, titulo }: HistorialEstadosPr
                   />
                 </div>
 
-                <div className="grid grid-cols-[280px_150px_1fr] gap-4 items-start">
+                <div className="grid grid-cols-1 md:grid-cols-[280px_150px_1fr] gap-2 md:gap-4 items-start">
                   {/* Estados */}
                   <div className="flex items-center gap-2 flex-wrap">
                     {cambio.estado_anterior && (
@@ -80,7 +80,7 @@ export default function HistorialEstados({ cambios, titulo }: HistorialEstadosPr
                   </div>
 
                   {/* Fecha */}
-                  <div className="text-sm whitespace-nowrap" style={{ color: '#6b7280' }}>
+                  <div className="text-xs md:text-sm whitespace-nowrap" style={{ color: '#6b7280' }}>
                     {new Date(cambio.cambiado_en).toLocaleString('es-ES', {
                       day: '2-digit',
                       month: '2-digit',
@@ -90,13 +90,13 @@ export default function HistorialEstados({ cambios, titulo }: HistorialEstadosPr
                     })}
                   </div>
 
-                  {/* Motivo */}
+                  {/* Motivo - solo desktop */}
                   {cambio.motivo ? (
-                    <div className="text-sm" style={{ color: PALETA.textoOscuro }}>
+                    <div className="hidden md:block text-sm" style={{ color: PALETA.textoOscuro }}>
                       <span className="font-medium">Motivo:</span> {cambio.motivo}
                     </div>
                   ) : (
-                    <div></div>
+                    <div className="hidden md:block"></div>
                   )}
                 </div>
               </div>
