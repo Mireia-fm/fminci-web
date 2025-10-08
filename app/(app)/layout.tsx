@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic';
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [ready, setReady] = useState(false);
-  const [sidebarVisible, setSidebarVisible] = useState(false); // Cerrado por defecto en móvil
+  const [sidebarVisible, setSidebarVisible] = useState(true); // Abierto por defecto
 
   // Guardia de sesión en cliente
   useEffect(() => {

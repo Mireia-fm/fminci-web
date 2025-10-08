@@ -41,7 +41,7 @@ export default function Sidebar({ isOpen = true, onClose }: SidebarProps) {
 
   return (
     <>
-      {/* Overlay para móvil */}
+      {/* Overlay para móvil - solo cuando el sidebar está abierto */}
       {isOpen && onClose && (
         <div
           className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden"
@@ -54,20 +54,19 @@ export default function Sidebar({ isOpen = true, onClose }: SidebarProps) {
         className={`
           fixed md:static
           inset-y-0 left-0
-          w-60
           flex-col p-5 gap-1
           z-50
-          transition-transform duration-300
-          md:translate-x-0
-          ${isOpen ? 'translate-x-0' : '-translate-x-full'}
-          md:flex
-          ${isOpen ? 'flex' : 'hidden md:flex'}
+          transition-all duration-300
+          ${isOpen ? 'w-60' : 'w-0 md:w-0'}
+          ${isOpen ? 'translate-x-0' : '-translate-x-full md:-translate-x-full'}
+          ${isOpen ? 'flex' : 'hidden'}
         `}
         style={{
           backgroundColor: "var(--fm-bg)",
           color: "var(--fm-text)",
           top: '56px', // Altura del topbar
-          height: 'calc(100vh - 56px)'
+          height: 'calc(100vh - 56px)',
+          overflow: 'hidden'
         }}
       >
         <nav className="flex flex-col">
