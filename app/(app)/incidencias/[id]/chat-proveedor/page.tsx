@@ -2838,10 +2838,6 @@ ${textoRechazo.instruccion}`,
                     <p>{presupuestoActual.importe_total_sin_iva}€</p>
                   </div>
                   <div>
-                    <p className="text-sm font-semibold">Importe total:</p>
-                    <p>{presupuestoActual.importe_total}€</p>
-                  </div>
-                  <div>
                     <p className="text-sm font-semibold">Fecha inicio estimada:</p>
                     <p>{presupuestoActual.fecha_estimada_inicio || '-'}</p>
                   </div>
