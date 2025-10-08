@@ -146,48 +146,52 @@ export default function DashboardCliente() {
             /* Layout cliente: 4 + 2 */
             <div className="relative max-w-4xl mx-auto">
               {/* Primera fila - estados originales */}
-              <div className="flex justify-center gap-6 mb-4 dashboard-cards-mobile flex-wrap">
+              <div className="flex justify-center gap-3 md:gap-6 mb-4 dashboard-cards-mobile flex-wrap">
                 {cards.slice(0, 4).map(c => (
                   <div
                     key={c.key}
                     onClick={() => handleCircleClick(c.key)}
                     className="flex flex-col items-center justify-center rounded-full cursor-pointer hover:scale-105 transition-transform dashboard-card-circle"
                     style={{
-                      width: 190, height: 190, backgroundColor: c.color,
+                      width: 'clamp(120px, 22vw, 190px)',
+                      height: 'clamp(120px, 22vw, 190px)',
+                      backgroundColor: c.color,
                       boxShadow: "0 8px 20px rgba(0,0,0,0.08)",
                     }}
                   >
-                    <div className="text-3xl md:text-5xl font-semibold text-white">{c.n}</div>
-                    <div className="mt-2 text-white/90 text-xs md:text-base text-center px-2">{c.key}</div>
+                    <div className="text-2xl md:text-5xl font-semibold text-white">{c.n}</div>
+                    <div className="mt-1 md:mt-2 text-white/90 text-[10px] md:text-base text-center px-1 md:px-2 leading-tight">{c.key}</div>
                   </div>
                 ))}
               </div>
 
               {/* Segunda fila - estados nuevos centrados exactamente */}
               <div className="flex justify-center">
-                <div className="flex dashboard-cards-mobile flex-wrap justify-center" style={{ gap: '262px' }}>
+                <div className="flex dashboard-cards-mobile flex-wrap justify-center gap-3 md:gap-[262px]">
                   {cards.slice(4, 6).map(c => (
                     <div
                       key={c.key}
                       onClick={() => handleCircleClick(c.key)}
                       className="flex flex-col items-center justify-center rounded-full cursor-pointer hover:scale-105 transition-transform dashboard-card-circle"
                       style={{
-                        width: 190, height: 190, backgroundColor: c.color,
+                        width: 'clamp(120px, 22vw, 190px)',
+                        height: 'clamp(120px, 22vw, 190px)',
+                        backgroundColor: c.color,
                         boxShadow: "0 8px 20px rgba(0,0,0,0.08)",
                       }}
                     >
-                      <div className="text-3xl md:text-5xl font-semibold text-white">{c.n}</div>
-                      <div className="mt-2 text-white/90 text-xs md:text-base text-center px-2">{c.key}</div>
+                      <div className="text-2xl md:text-5xl font-semibold text-white">{c.n}</div>
+                      <div className="mt-1 md:mt-2 text-white/90 text-[10px] md:text-base text-center px-1 md:px-2 leading-tight">{c.key}</div>
                     </div>
                   ))}
                 </div>
               </div>
             </div>
           ) : (
-            /* Layout proveedor: 5 + 5 */
+            /* Layout proveedor: responsive - columnas en móvil, 5+5 en desktop */
             <div className="relative max-w-6xl mx-auto">
-              {/* Primera fila - 5 estados */}
-              <div className="flex justify-center gap-4 mb-4">
+              {/* Desktop: Primera fila - 5 estados */}
+              <div className="hidden md:flex justify-center gap-4 mb-4">
                 {cards.slice(0, 5).map(c => (
                   <div
                     key={c.key}
@@ -198,14 +202,14 @@ export default function DashboardCliente() {
                       boxShadow: "0 8px 20px rgba(0,0,0,0.08)",
                     }}
                   >
-                    <div className="text-2xl md:text-4xl font-semibold text-white">{c.n}</div>
-                    <div className="mt-2 text-white/90 text-xs md:text-sm text-center px-2">{c.key}</div>
+                    <div className="text-4xl font-semibold text-white">{c.n}</div>
+                    <div className="mt-2 text-white/90 text-sm text-center px-2">{c.key}</div>
                   </div>
                 ))}
               </div>
 
-              {/* Segunda fila - 5 estados */}
-              <div className="flex justify-center gap-4">
+              {/* Desktop: Segunda fila - 5 estados */}
+              <div className="hidden md:flex justify-center gap-4">
                 {cards.slice(5, 10).map(c => (
                   <div
                     key={c.key}
@@ -216,8 +220,28 @@ export default function DashboardCliente() {
                       boxShadow: "0 8px 20px rgba(0,0,0,0.08)",
                     }}
                   >
-                    <div className="text-2xl md:text-4xl font-semibold text-white">{c.n}</div>
-                    <div className="mt-2 text-white/90 text-xs md:text-sm text-center px-2">{c.key}</div>
+                    <div className="text-4xl font-semibold text-white">{c.n}</div>
+                    <div className="mt-2 text-white/90 text-sm text-center px-2">{c.key}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Móvil: Grid de 2 columnas con todos los estados */}
+              <div className="grid grid-cols-2 gap-3 md:hidden">
+                {cards.map(c => (
+                  <div
+                    key={c.key}
+                    onClick={() => handleCircleClick(c.key)}
+                    className="flex flex-col items-center justify-center rounded-full cursor-pointer hover:scale-105 transition-transform mx-auto"
+                    style={{
+                      width: 'clamp(120px, 35vw, 150px)',
+                      height: 'clamp(120px, 35vw, 150px)',
+                      backgroundColor: c.color,
+                      boxShadow: "0 8px 20px rgba(0,0,0,0.08)",
+                    }}
+                  >
+                    <div className="text-xl font-semibold text-white">{c.n}</div>
+                    <div className="mt-1 text-white/90 text-[9px] text-center px-1 leading-tight">{c.key}</div>
                   </div>
                 ))}
               </div>

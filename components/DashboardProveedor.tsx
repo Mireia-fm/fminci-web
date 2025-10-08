@@ -233,8 +233,8 @@ export default function DashboardProveedor() {
 
       <section className="px-6 pb-12 pt-16">
         <div className="max-w-6xl mx-auto">
-          {/* Primera fila - 5 contadores */}
-          <div className="flex justify-center gap-4 mb-4">
+          {/* Desktop: Primera fila - 5 contadores */}
+          <div className="hidden md:flex justify-center gap-4 mb-4">
             {cards.slice(0, 5).map(c => (
               <div
                 key={c.key}
@@ -245,14 +245,14 @@ export default function DashboardProveedor() {
                 }}
                 onClick={() => navegarAIncidencias(c.key)}
               >
-                <div className="text-2xl md:text-4xl font-semibold text-white">{c.n}</div>
-                <div className="mt-2 text-white/90 text-xs md:text-sm text-center px-2">{c.key}</div>
+                <div className="text-4xl font-semibold text-white">{c.n}</div>
+                <div className="mt-2 text-white/90 text-sm text-center px-2">{c.key}</div>
               </div>
             ))}
           </div>
 
-          {/* Segunda fila - 5 contadores */}
-          <div className="flex justify-center gap-4">
+          {/* Desktop: Segunda fila - 5 contadores */}
+          <div className="hidden md:flex justify-center gap-4">
             {cards.slice(5, 10).map(c => (
               <div
                 key={c.key}
@@ -263,8 +263,28 @@ export default function DashboardProveedor() {
                 }}
                 onClick={() => navegarAIncidencias(c.key)}
               >
-                <div className="text-2xl md:text-4xl font-semibold text-white">{c.n}</div>
-                <div className="mt-2 text-white/90 text-xs md:text-sm text-center px-2">{c.key}</div>
+                <div className="text-4xl font-semibold text-white">{c.n}</div>
+                <div className="mt-2 text-white/90 text-sm text-center px-2">{c.key}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Móvil: Grid de 2 columnas con todos los estados */}
+          <div className="grid grid-cols-2 gap-3 md:hidden">
+            {cards.map(c => (
+              <div
+                key={c.key}
+                onClick={() => navegarAIncidencias(c.key)}
+                className="flex flex-col items-center justify-center rounded-full cursor-pointer hover:scale-105 transition-transform mx-auto"
+                style={{
+                  width: 'clamp(120px, 35vw, 150px)',
+                  height: 'clamp(120px, 35vw, 150px)',
+                  backgroundColor: c.color,
+                  boxShadow: "0 8px 20px rgba(0,0,0,0.08)",
+                }}
+              >
+                <div className="text-xl font-semibold text-white">{c.n}</div>
+                <div className="mt-1 text-white/90 text-[9px] text-center px-1 leading-tight">{c.key}</div>
               </div>
             ))}
           </div>
