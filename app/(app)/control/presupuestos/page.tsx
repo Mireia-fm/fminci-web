@@ -688,7 +688,7 @@ El proveedor debe enviar una nueva propuesta.`,
                           className="px-4 py-2 text-white rounded text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
                           style={{ backgroundColor: '#d4a574' }}
                         >
-                          {enviando ? 'Procesando su solicitud...' : 'Mandar a revisar'}
+                          {enviando ? 'Procesando su solicitud...' : 'Enviar a revisión'}
                         </button>
                       </>
                     )}
