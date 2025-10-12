@@ -285,6 +285,8 @@ export default function ChatProveedor() {
         .single();
 
       if (incidenciaData) {
+        console.log('🔍 DEBUG - incidenciaData.instituciones:', incidenciaData.instituciones);
+        console.log('🔍 DEBUG - incidenciaData completo:', incidenciaData);
         // Obtener datos del proveedor_casos
         let estadoProveedor = null;
         let prioridadProveedor = null;
