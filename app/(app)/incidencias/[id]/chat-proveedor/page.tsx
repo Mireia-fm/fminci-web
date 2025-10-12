@@ -278,13 +278,22 @@ export default function ChatProveedor() {
           hora,
           imagen_url,
           catalogacion,
-          institucion_id,
-          instituciones(nombre, direccion)
+          institucion_id
         `)
         .eq("id", incidenciaId)
         .single();
 
       if (incidenciaData) {
+        // Cargar dirección del centro usando función RPC (bypasea RLS de forma segura)
+        if (incidenciaData.institucion_id) {
+          const { data: institucionData } = await supabase
+            .rpc("get_institucion_direccion", { institucion_uuid: incidenciaData.institucion_id });
+
+          if (institucionData && institucionData.length > 0) {
+            incidenciaData.instituciones = institucionData;
+          }
+        }
+
         // Obtener datos del proveedor_casos
         let estadoProveedor = null;
         let prioridadProveedor = null;
