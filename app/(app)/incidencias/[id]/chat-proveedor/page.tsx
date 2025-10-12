@@ -290,7 +290,7 @@ export default function ChatProveedor() {
             .rpc("get_institucion_direccion", { institucion_uuid: incidenciaData.institucion_id });
 
           if (institucionData && institucionData.length > 0) {
-            incidenciaData.instituciones = institucionData;
+            (incidenciaData as Incidencia).instituciones = institucionData as { nombre: string; direccion?: string }[];
           }
         }
 
