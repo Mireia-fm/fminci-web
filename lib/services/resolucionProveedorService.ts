@@ -204,6 +204,12 @@ export async function resolverIncidencia(
     const esCorreccionRevision = estadoProveedorAnterior === 'Revisar resolución';
     const debeActualizarEstado = estadoProveedorAnterior !== 'Valorada';
 
+    console.log('🔍 DEBUG RESOLVER - Estados:');
+    console.log('  - Estado anterior proveedor:', estadoProveedorAnterior);
+    console.log('  - Tipo revisión actual:', tipoRevisionActual);
+    console.log('  - Es corrección revisión:', esCorreccionRevision);
+    console.log('  - Debe actualizar estado:', debeActualizarEstado);
+
     if (debeActualizarEstado) {
       // Determinar nuevo estado y tipo_revision
       let nuevoEstadoProveedor = "Resuelta";
@@ -223,7 +229,10 @@ export async function resolverIncidencia(
         }
       }
 
-      await supabase
+      console.log('  - Nuevo estado proveedor:', nuevoEstadoProveedor);
+      console.log('  - Nuevo tipo revisión:', nuevoTipoRevision);
+
+      const { error: errorUpdateProveedor } = await supabase
         .from("proveedor_casos")
         .update({
           estado_proveedor: nuevoEstadoProveedor,
@@ -233,10 +242,20 @@ export async function resolverIncidencia(
         .eq("activo", true)
         .neq("estado_proveedor", "Anulada");
 
-      await supabase
+      if (errorUpdateProveedor) {
+        console.error("❌ Error actualizando estado_proveedor:", errorUpdateProveedor);
+        throw new Error(`Error actualizando estado del proveedor: ${errorUpdateProveedor.message}`);
+      }
+
+      const { error: errorUpdateCliente } = await supabase
         .from("incidencias")
         .update({ estado_cliente: "Resuelta" })
         .eq("id", incidenciaId);
+
+      if (errorUpdateCliente) {
+        console.error("❌ Error actualizando estado_cliente:", errorUpdateCliente);
+        throw new Error(`Error actualizando estado del cliente: ${errorUpdateCliente.message}`);
+      }
     }
 
     // 7. Registrar cambios de estado en el historial
