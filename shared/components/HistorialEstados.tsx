@@ -20,8 +20,7 @@ export default function HistorialEstados({ cambios, titulo }: HistorialEstadosPr
   const cambiosOrdenados = [...cambios].reverse();
 
   return (
-    <div className="px-6 mb-12 main-content-mobile">
-      <div className="rounded-lg shadow-lg" style={{ backgroundColor: PALETA.card }}>
+    <div className="rounded-lg mb-12 shadow-lg" style={{ backgroundColor: PALETA.card }}>
       <div
         className="px-6 py-3 border-b rounded-t-lg responsive-padding"
         style={{
@@ -104,7 +103,6 @@ export default function HistorialEstados({ cambios, titulo }: HistorialEstadosPr
           </div>
         </div>
       </div>
-    </div>
     </div>
   );
 }
