@@ -31,6 +31,7 @@ type FormularioProveedor = {
   imagenes_adicionales?: File[]; // Nuevas imágenes para subir
   es_proveedor_externo?: boolean; // Indica si es un proveedor externo
   cif_proveedor_externo?: string; // CIF del proveedor externo
+  nombre_proveedor_externo?: string; // Nombre del proveedor externo
 };
 
 type Imagen = {
@@ -76,7 +77,8 @@ export default function ModalAsignarProveedor({
     imagenes_excluidas: [],
     documentos_incluidos: [],
     es_proveedor_externo: false,
-    cif_proveedor_externo: ''
+    cif_proveedor_externo: '',
+    nombre_proveedor_externo: ''
   });
   const [imagenes, setImagenes] = useState<Imagen[]>([]);
   const [documentos, setDocumentos] = useState<Documento[]>([]);
@@ -214,7 +216,8 @@ export default function ModalAsignarProveedor({
         imagenes_excluidas: [],
         documentos_incluidos: [],
         es_proveedor_externo: false,
-        cif_proveedor_externo: ''
+        cif_proveedor_externo: '',
+        nombre_proveedor_externo: ''
       }));
     }
   }, [isOpen, incidenciaId, esReasignacion]);
@@ -263,7 +266,8 @@ export default function ModalAsignarProveedor({
       prioridad: '',
       estado_proveedor: 'Abierta',
       es_proveedor_externo: false,
-      cif_proveedor_externo: ''
+      cif_proveedor_externo: '',
+      nombre_proveedor_externo: ''
     });
     onClose();
   };
@@ -309,7 +313,8 @@ export default function ModalAsignarProveedor({
                     ...prev,
                     proveedor_id: value,
                     es_proveedor_externo: esExterno,
-                    cif_proveedor_externo: esExterno ? prev.cif_proveedor_externo : ''
+                    cif_proveedor_externo: esExterno ? prev.cif_proveedor_externo : '',
+                    nombre_proveedor_externo: esExterno ? prev.nombre_proveedor_externo : ''
                   }));
                 }}
                 options={[
@@ -325,34 +330,59 @@ export default function ModalAsignarProveedor({
               />
             </div>
 
-            {/* Campo CIF para Proveedor Externo */}
+            {/* Campos para Proveedor Externo */}
             {formulario.es_proveedor_externo && (
-              <div>
-                <label className="block text-sm font-medium mb-2" style={{ color: PALETA.textoOscuro }}>
-                  CIF del Proveedor Externo *
-                </label>
-                <input
-                  type="text"
-                  value={formulario.cif_proveedor_externo}
-                  onChange={(e) => setFormulario(prev => ({
-                    ...prev,
-                    cif_proveedor_externo: e.target.value.toUpperCase()
-                  }))}
-                  placeholder="Ej: A12345678"
-                  className="w-full rounded border p-3 text-sm outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-                  onFocus={(e) => {
-                    e.target.style.boxShadow = `0 0 0 2px ${PALETA.verdeClaro}80`;
-                  }}
-                  onBlur={(e) => {
-                    e.target.style.boxShadow = '';
-                  }}
-                  maxLength={9}
-                  disabled={estaBloqueado}
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Introduce el CIF del proveedor externo (9 caracteres)
-                </p>
-              </div>
+              <>
+                <div>
+                  <label className="block text-sm font-medium mb-2" style={{ color: PALETA.textoOscuro }}>
+                    Nombre del Proveedor Externo *
+                  </label>
+                  <input
+                    type="text"
+                    value={formulario.nombre_proveedor_externo}
+                    onChange={(e) => setFormulario(prev => ({
+                      ...prev,
+                      nombre_proveedor_externo: e.target.value
+                    }))}
+                    placeholder="Ej: Empresa de Mantenimiento S.L."
+                    className="w-full rounded border p-3 text-sm outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                    onFocus={(e) => {
+                      e.target.style.boxShadow = `0 0 0 2px ${PALETA.verdeClaro}80`;
+                    }}
+                    onBlur={(e) => {
+                      e.target.style.boxShadow = '';
+                    }}
+                    disabled={estaBloqueado}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2" style={{ color: PALETA.textoOscuro }}>
+                    CIF del Proveedor Externo *
+                  </label>
+                  <input
+                    type="text"
+                    value={formulario.cif_proveedor_externo}
+                    onChange={(e) => setFormulario(prev => ({
+                      ...prev,
+                      cif_proveedor_externo: e.target.value.toUpperCase()
+                    }))}
+                    placeholder="Ej: A12345678"
+                    className="w-full rounded border p-3 text-sm outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                    onFocus={(e) => {
+                      e.target.style.boxShadow = `0 0 0 2px ${PALETA.verdeClaro}80`;
+                    }}
+                    onBlur={(e) => {
+                      e.target.style.boxShadow = '';
+                    }}
+                    maxLength={9}
+                    disabled={estaBloqueado}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Introduce el CIF del proveedor externo (9 caracteres)
+                  </p>
+                </div>
+              </>
             )}
 
             {/* Descripción para el Proveedor */}
@@ -608,7 +638,7 @@ export default function ModalAsignarProveedor({
               disabled={
                 !formulario.proveedor_id ||
                 !formulario.prioridad ||
-                (formulario.es_proveedor_externo && !formulario.cif_proveedor_externo) ||
+                (formulario.es_proveedor_externo && (!formulario.nombre_proveedor_externo || !formulario.cif_proveedor_externo)) ||
                 enviando
               }
               className="px-6 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity disabled:opacity-50"
@@ -617,7 +647,7 @@ export default function ModalAsignarProveedor({
                 opacity: (
                   !formulario.proveedor_id ||
                   !formulario.prioridad ||
-                  (formulario.es_proveedor_externo && !formulario.cif_proveedor_externo) ||
+                  (formulario.es_proveedor_externo && (!formulario.nombre_proveedor_externo || !formulario.cif_proveedor_externo)) ||
                   enviando
                 ) ? 0.5 : 1
               }}
