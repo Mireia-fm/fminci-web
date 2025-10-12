@@ -17,18 +17,45 @@ export default function UpdatePassword() {
 
   useEffect(() => {
     // Verificar si hay un token de recuperación en la URL
-    const hashParams = new URLSearchParams(window.location.hash.substring(1));
-    const accessToken = hashParams.get('access_token');
-    const type = hashParams.get('type');
-    const errorDescription = hashParams.get('error_description');
+    const checkRecoveryToken = async () => {
+      // Obtener parámetros del hash de la URL
+      const hash = window.location.hash.substring(1);
+      console.log('Hash completo:', hash);
 
-    if (errorDescription) {
-      setErr('El enlace ha expirado o ya fue utilizado. Si recibió varios emails, use el más reciente.');
-    } else if (accessToken && type === 'recovery') {
-      setValidToken(true);
-    } else {
-      setErr('Enlace inválido o expirado. Por favor, solicita un nuevo enlace de recuperación.');
-    }
+      const hashParams = new URLSearchParams(hash);
+      const accessToken = hashParams.get('access_token');
+      const type = hashParams.get('type');
+      const errorDescription = hashParams.get('error_description');
+
+      console.log('Access token:', accessToken ? 'Presente' : 'No presente');
+      console.log('Type:', type);
+      console.log('Error:', errorDescription);
+
+      if (errorDescription) {
+        setErr('El enlace ha expirado o ya fue utilizado. Si recibió varios emails, use el más reciente.');
+        return;
+      }
+
+      if (accessToken && type === 'recovery') {
+        // Token de recuperación encontrado en la URL - validar con Supabase
+        console.log('Token de recuperación detectado, estableciendo sesión...');
+        setValidToken(true);
+        return;
+      }
+
+      // Si no hay token en la URL, verificar si ya tiene sesión
+      const { data: { session } } = await supabase.auth.getSession();
+      console.log('Sesión actual:', session ? 'Existe' : 'No existe');
+
+      if (session) {
+        // Si tiene sesión, permitir que continúe para cambiar la contraseña
+        setValidToken(true);
+      } else {
+        setErr('Enlace inválido o expirado. Por favor, solicita un nuevo enlace de recuperación.');
+      }
+    };
+
+    checkRecoveryToken();
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {

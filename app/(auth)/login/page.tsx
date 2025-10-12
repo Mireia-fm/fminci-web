@@ -40,19 +40,19 @@ export default function LoginPage() {
   };
 
   const handleReset = async () => {
-    setErr(null); 
+    setErr(null);
     setOk(null);
-    
-    if (!email) { 
-      setErr("Escribe tu email arriba y vuelve a pulsar."); 
-      return; 
+
+    if (!email) {
+      setErr("Escribe tu email arriba y vuelve a pulsar.");
+      return;
     }
-    
+
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-        redirectTo: `${window.location.origin}/update-password`,
+        redirectTo: 'https://www.fminci.com/update-password',
       });
-      
+
       if (error) {
         setErr(error.message);
       } else {
