@@ -529,8 +529,22 @@ export default function NuevaIncidenciaPage() {
                 <input
                   id="file-input-imagen"
                   type="file"
-                  accept="image/*"
-                  onChange={(e) => setImagen(e.target.files?.[0] ?? null)}
+                  accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      // Validar que no sea HEIC
+                      const fileName = file.name.toLowerCase();
+                      if (fileName.endsWith('.heic') || fileName.endsWith('.heif')) {
+                        alert('Los archivos HEIC/HEIF no son compatibles. Por favor, convierte la imagen a JPG o PNG.');
+                        e.target.value = '';
+                        return;
+                      }
+                      setImagen(file);
+                    } else {
+                      setImagen(null);
+                    }
+                  }}
                   className="hidden"
                   disabled={enviando}
                 />
