@@ -1649,6 +1649,14 @@ ${textoRechazo.instruccion}`,
           </div>
         </div>
 
+        {/* Historial de Estados del Proveedor */}
+        <div className="mb-12">
+          <HistorialEstados
+            cambios={historialProveedor}
+            titulo="HISTORIAL DE ESTADOS DEL PROVEEDOR"
+          />
+        </div>
+
         {/* Panel de acciones para Control */}
         {perfil?.rol === "Control" && (
           <div className="mb-12">
@@ -2707,12 +2715,6 @@ ${textoRechazo.instruccion}`,
           </form>
         </div>
       </div>
-
-      {/* Historial de Estados del Proveedor */}
-      <HistorialEstados
-        cambios={historialProveedor}
-        titulo="HISTORIAL DE ESTADOS DEL PROVEEDOR"
-      />
 
       {/* Modales de Proveedor */}
       <ModalCalendarizar

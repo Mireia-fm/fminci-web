@@ -512,6 +512,14 @@ export default function ChatControlCliente() {
           adjuntosPrincipales={incidencia.adjuntos_principales}
         />
 
+        {/* Historial de Estados del Cliente */}
+        <div className="mb-12">
+          <HistorialEstados
+            cambios={historialCliente}
+            titulo="HISTORIAL DE ESTADOS"
+          />
+        </div>
+
         {/* Acciones de Control */}
         {perfil?.rol === 'Control' && (
           <div className="mb-12">
@@ -883,12 +891,6 @@ export default function ChatControlCliente() {
           </form>
         </div>
       </div>
-
-      {/* Historial de Estados del Cliente */}
-      <HistorialEstados
-        cambios={historialCliente}
-        titulo="HISTORIAL DE ESTADOS"
-      />
 
       {/* Modales */}
       {mostrarModalProveedor && (
