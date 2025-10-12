@@ -173,7 +173,7 @@ export default function ChatControlCliente() {
           catalogacion,
           prioridad,
           fecha_creacion,
-          instituciones(nombre),
+          instituciones(nombre, direccion),
           proveedor_casos(estado_proveedor, prioridad, activo)
         `)
         .eq("id", incidenciaId)

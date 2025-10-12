@@ -120,7 +120,6 @@ export default function ChatProveedor() {
   // Estados de proveedor
   const [proveedorCasoId, setProveedorCasoId] = useState<string | null>(null);
   const [fechaAsignacionProveedor, setFechaAsignacionProveedor] = useState<string | null>(null);
-  const [direccionCentro, setDireccionCentro] = useState<string | null>(null);
   const [tieneOfertaAprobada, setTieneOfertaAprobada] = useState(false);
   const [tuvoOfertaAprobada, setTuvoOfertaAprobada] = useState(false);
   const [tieneResolucion, setTieneResolucion] = useState(false);
@@ -253,28 +252,6 @@ export default function ChatProveedor() {
         return "#A9B88C";
       default:
         return PALETA.headerTable;
-    }
-  };
-
-  const cargarDireccionCentro = async (institucionId?: string, nombreCentro?: string) => {
-    try {
-      let query = supabase.from("instituciones").select("direccion");
-
-      if (institucionId) {
-        query = query.eq("id", institucionId);
-      } else if (nombreCentro) {
-        query = query.eq("nombre", nombreCentro);
-      } else {
-        return;
-      }
-
-      const { data, error } = await query.maybeSingle();
-
-      if (!error && data?.direccion) {
-        setDireccionCentro(data.direccion);
-      }
-    } catch (error) {
-      console.error("Error cargando dirección del centro:", error);
     }
   };
 
@@ -437,13 +414,6 @@ export default function ChatProveedor() {
           proveedor_nombre: proveedorNombre ?? undefined,
           adjuntos_principales: adjuntosPrincipales
         });
-
-        // Cargar dirección del centro
-        if (incidenciaData.institucion_id) {
-          await cargarDireccionCentro(incidenciaData.institucion_id);
-        } else if (incidenciaData.centro) {
-          await cargarDireccionCentro(undefined, incidenciaData.centro);
-        }
 
         // Cargar comentarios con adjuntos
         console.log('🔍 DEBUG COMENTARIOS - Inicio carga');
@@ -1523,9 +1493,9 @@ ${textoRechazo.instruccion}`,
                           <td className="py-2" style={{ color: PALETA.textoOscuro }}>
                             <div className="flex items-center gap-2">
                               <span>{incidencia.instituciones?.[0]?.nombre || incidencia.centro || "-"}</span>
-                              {direccionCentro && (
+                              {incidencia.instituciones?.[0]?.direccion && (
                                 <button
-                                  onClick={() => window.open(direccionCentro || '', '_blank')}
+                                  onClick={() => window.open(incidencia.instituciones?.[0]?.direccion || '', '_blank')}
                                   className="px-2 py-1 text-xs rounded text-white hover:opacity-90 transition-opacity"
                                   style={{ backgroundColor: PALETA.bg }}
                                   title="Ir a la dirección"
