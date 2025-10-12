@@ -180,6 +180,14 @@ export default function ChatControlCliente() {
         .single();
 
       if (incidenciaData) {
+        console.log('🔍 DEBUG DIRECCION CONTROL - incidenciaData:', {
+          instituciones: incidenciaData.instituciones,
+          tiene_instituciones: !!incidenciaData.instituciones,
+          es_array: Array.isArray(incidenciaData.instituciones),
+          primer_elemento: incidenciaData.instituciones?.[0],
+          direccion: incidenciaData.instituciones?.[0]?.direccion
+        });
+
         // Cargar adjuntos principales
         const { data: adjuntosData } = await supabase
           .from("adjuntos")
