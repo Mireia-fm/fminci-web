@@ -79,7 +79,8 @@ export default function ModalCalendarizar({
               onChange={(value) => setHorarioVisita(value)}
               options={[
                 { value: "mañana", label: "Horario de mañana" },
-                { value: "tarde", label: "Horario de tarde" }
+                { value: "tarde", label: "Horario de tarde" },
+                { value: "fuera_horario", label: "Fuera de horario" }
               ]}
               placeholder="Seleccione un horario"
               focusColor={PALETA.verdeClaro}

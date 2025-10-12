@@ -6,7 +6,7 @@ export interface CalendarizarVisitaParams {
   incidenciaId: string;
   proveedorCasoId?: string;
   fechaVisita: string;
-  horarioVisita: 'mañana' | 'tarde';
+  horarioVisita: 'mañana' | 'tarde' | 'fuera_horario';
   autorId: string;
 }
 
@@ -65,7 +65,7 @@ export async function calendarizarVisita(
     });
 
     // 2. Crear timestamp para la visita y guardar en tabla de citas
-    const horaVisita = horarioVisita === 'mañana' ? '09:00:00' : '14:00:00';
+    const horaVisita = horarioVisita === 'mañana' ? '09:00:00' : horarioVisita === 'tarde' ? '14:00:00' : '18:00:00';
     const fechaHoraVisita = `${fechaVisita}T${horaVisita}`;
 
     if (casoActual?.proveedor_id) {
@@ -113,7 +113,9 @@ export async function calendarizarVisita(
 
     const horarioTexto = horarioVisita === 'mañana'
       ? 'horario de mañana'
-      : 'horario de tarde';
+      : horarioVisita === 'tarde'
+      ? 'horario de tarde'
+      : 'fuera de horario';
 
     // 4. Agregar comentario visible en ambos chats (con proveedor_caso_id para el chat proveedor)
     const mensajeVisita = `Visita programada para el ${fechaFormateada} en ${horarioTexto}.`;

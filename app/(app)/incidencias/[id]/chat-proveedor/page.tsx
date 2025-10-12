@@ -734,7 +734,7 @@ export default function ChatProveedor() {
         incidenciaId,
         proveedorCasoId: proveedorCasoId || undefined,
         fechaVisita,
-        horarioVisita: horarioVisita as 'mañana' | 'tarde',
+        horarioVisita: horarioVisita as 'mañana' | 'tarde' | 'fuera_horario',
         autorId: perfil.persona_id
       });
 
