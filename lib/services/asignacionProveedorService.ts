@@ -13,6 +13,7 @@ export type FormularioAsignacionProveedor = {
   imagenes_adicionales?: File[];
   es_proveedor_externo?: boolean;
   cif_proveedor_externo?: string;
+  nombre_proveedor_externo?: string;
 };
 
 export async function asignarProveedorCompleto(
@@ -52,10 +53,15 @@ export async function asignarProveedorCompleto(
       proveedorIdFinal = proveedorExistente.id;
     } else {
       // Crear nuevo proveedor externo
+      // Formato: [nombre] - [CIF] - Proveedor externo
+      const nombreCompleto = formulario.nombre_proveedor_externo
+        ? `${formulario.nombre_proveedor_externo} - ${formulario.cif_proveedor_externo} - Proveedor externo`
+        : `${formulario.cif_proveedor_externo} - Proveedor externo`;
+
       const { data: nuevoProveedor, error: errorProveedor } = await supabase
         .from("instituciones")
         .insert({
-          nombre: `Proveedor Externo - ${formulario.cif_proveedor_externo}`,
+          nombre: nombreCompleto,
           tipo: "Proveedor",
           cif: formulario.cif_proveedor_externo,
           activo: true
