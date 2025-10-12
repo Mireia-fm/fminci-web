@@ -284,17 +284,7 @@ export default function ChatProveedor() {
         .eq("id", incidenciaId)
         .single();
 
-      console.log('🔵 incidenciaData existe?', !!incidenciaData);
-
       if (incidenciaData) {
-        console.log('🟢 DENTRO del bloque if (incidenciaData)');
-        console.log('🔍 DEBUG DIRECCION PROVEEDOR - incidenciaData:', {
-          instituciones: incidenciaData.instituciones,
-          tiene_instituciones: !!incidenciaData.instituciones,
-          es_array: Array.isArray(incidenciaData.instituciones),
-          primer_elemento: incidenciaData.instituciones?.[0],
-          direccion: incidenciaData.instituciones?.[0]?.direccion
-        });
         // Obtener datos del proveedor_casos
         let estadoProveedor = null;
         let prioridadProveedor = null;
@@ -1500,9 +1490,16 @@ ${textoRechazo.instruccion}`,
                           <td className="py-2" style={{ color: PALETA.textoOscuro }}>
                             <div className="flex items-center gap-2">
                               <span>{incidencia.instituciones?.[0]?.nombre || incidencia.centro || "-"}</span>
-                              {incidencia.instituciones?.[0]?.direccion && (
+                              {incidencia.instituciones?.[0] && (
                                 <button
-                                  onClick={() => window.open(incidencia.instituciones?.[0]?.direccion || '', '_blank')}
+                                  onClick={() => {
+                                    const direccion = incidencia.instituciones?.[0]?.direccion;
+                                    if (direccion) {
+                                      window.open(direccion, '_blank');
+                                    } else {
+                                      alert('Este centro no tiene dirección registrada');
+                                    }
+                                  }}
                                   className="px-2 py-1 text-xs rounded text-white hover:opacity-90 transition-opacity"
                                   style={{ backgroundColor: PALETA.bg }}
                                   title="Ir a la dirección"

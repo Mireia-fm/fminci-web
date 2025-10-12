@@ -11,7 +11,6 @@ export interface Incidencia {
   prioridad?: string | null;
   instituciones?: {
     nombre: string;
-    direccion?: string | null;
   }[] | null;
 }
 
@@ -70,19 +69,7 @@ export default function DatosTecnicosIncidencia({
                   Centro:
                 </td>
                 <td className="py-2" style={{ color: PALETA.textoOscuro }}>
-                  <div className="flex items-center gap-2">
-                    <span>{incidencia.instituciones?.[0]?.nombre || incidencia.centro || "-"}</span>
-                    {incidencia.instituciones?.[0]?.direccion && (
-                      <button
-                        onClick={() => window.open(incidencia.instituciones?.[0]?.direccion || '', '_blank')}
-                        className="px-2 py-1 text-xs rounded text-white hover:opacity-90 transition-opacity"
-                        style={{ backgroundColor: PALETA.bg }}
-                        title="Ir a la dirección"
-                      >
-                        📍 Ir a la dirección
-                      </button>
-                    )}
-                  </div>
+                  {incidencia.instituciones?.[0]?.nombre || incidencia.centro || "-"}
                 </td>
               </tr>
 
