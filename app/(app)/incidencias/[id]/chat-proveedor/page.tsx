@@ -2398,7 +2398,20 @@ ${textoRechazo.instruccion}`,
                           {botonesDisponibles.valorar && (
                             <button
                               type="button"
-                              onClick={() => {
+                              onClick={async () => {
+                                // Recargar presupuesto aprobado antes de abrir el modal
+                                const { data: ofertaAprobada } = await supabase
+                                  .from("presupuestos")
+                                  .select("*")
+                                  .eq("incidencia_id", incidenciaId)
+                                  .eq("estado", "aprobado")
+                                  .maybeSingle();
+
+                                if (ofertaAprobada) {
+                                  setPresupuestoActual(ofertaAprobada);
+                                  setTieneOfertaAprobada(true);
+                                }
+
                                 // Precargar datos si existe valoración
                                 if (valoracionExistente) {
                                   setImporteSinIva(valoracionExistente.importe_sin_iva.toString());
