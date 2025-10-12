@@ -937,8 +937,7 @@ export default function ChatProveedor() {
           estado_proveedor: "Anulada",
           motivo_anulacion: motivoAnulacion,
           anulado_en: fechaAnulacion.toISOString(),
-          anulado_por: perfil.persona_id,
-          cerrado_en: fechaAnulacion.toISOString()
+          anulado_por: perfil.persona_id
         })
         .eq("incidencia_id", incidenciaId)
         .eq("activo", true);
@@ -1038,9 +1037,15 @@ export default function ChatProveedor() {
       const estadoClienteAnterior = incidenciaActual?.estado_cliente || null;
 
       // Cambiar estados a "Cerrada"
+      const fechaCierre = new Date();
+      const mesCierre = fechaCierre.toLocaleDateString('es-ES', { month: 'long' });
+
       await supabase
         .from("proveedor_casos")
-        .update({ estado_proveedor: "Cerrada" })
+        .update({
+          estado_proveedor: "Cerrada",
+          mes_cierre: mesCierre
+        })
         .eq("incidencia_id", incidenciaId)
         .eq("activo", true)
         .neq("estado_proveedor", "Anulada");
@@ -2489,41 +2494,10 @@ ${textoRechazo.instruccion}`,
                     )}
                     <div className="text-sm whitespace-pre-wrap">{comentario.cuerpo}</div>
 
-                    {/* Mostrar adjuntos */}
-                    {((comentario.imagen_url || comentario.documento_url) || (comentario.adjuntos && comentario.adjuntos.length > 0)) && (
+                    {/* Mostrar adjuntos - Priorizar sistema nuevo (tabla adjuntos) sobre campos legacy */}
+                    {(comentario.adjuntos && comentario.adjuntos.length > 0) ? (
                       <div className="mt-2 space-y-2">
-                        {comentario.imagen_url && (
-                          (() => {
-                            const imageUrl = commentAttachmentUrls[`imagen_${comentario.id}`];
-                            return imageUrl ? (
-                              <img
-                                src={imageUrl}
-                                alt="Imagen adjunta"
-                                className="max-w-32 h-24 object-cover rounded border cursor-pointer hover:scale-105 transition-transform"
-                                onClick={() => window.open(imageUrl, '_blank')}
-                              />
-                            ) : null;
-                          })()
-                        )}
-
-                        {comentario.documento_url && (
-                          (() => {
-                            const documentUrl = commentAttachmentUrls[`documento_${comentario.id}`];
-                            const fileName = comentario.documento_url.split('/').pop() || 'Documento adjunto';
-                            return documentUrl ? (
-                              <a
-                                href={documentUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-2 text-blue-600 hover:underline text-sm bg-blue-50 px-3 py-1 rounded"
-                              >
-                                📎 {fileName}
-                              </a>
-                            ) : null;
-                          })()
-                        )}
-
-                        {comentario.adjuntos && comentario.adjuntos.map((adjunto) => (
+                        {comentario.adjuntos.map((adjunto) => (
                           <div key={adjunto.id}>
                             {adjunto.tipo === 'imagen' && (
                               (() => {
@@ -2556,6 +2530,42 @@ ${textoRechazo.instruccion}`,
                           </div>
                         ))}
                       </div>
+                    ) : (
+                      /* Sistema legacy - solo si no hay adjuntos en la tabla */
+                      (comentario.imagen_url || comentario.documento_url) && (
+                        <div className="mt-2 space-y-2">
+                          {comentario.imagen_url && (
+                            (() => {
+                              const imageUrl = commentAttachmentUrls[`imagen_${comentario.id}`];
+                              return imageUrl ? (
+                                <img
+                                  src={imageUrl}
+                                  alt="Imagen adjunta"
+                                  className="max-w-32 h-24 object-cover rounded border cursor-pointer hover:scale-105 transition-transform"
+                                  onClick={() => window.open(imageUrl, '_blank')}
+                                />
+                              ) : null;
+                            })()
+                          )}
+
+                          {comentario.documento_url && (
+                            (() => {
+                              const documentUrl = commentAttachmentUrls[`documento_${comentario.id}`];
+                              const fileName = comentario.documento_url.split('/').pop() || 'Documento adjunto';
+                              return documentUrl ? (
+                                <a
+                                  href={documentUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-2 text-blue-600 hover:underline text-sm bg-blue-50 px-3 py-1 rounded"
+                                >
+                                  📎 {fileName}
+                                </a>
+                              ) : null;
+                            })()
+                          )}
+                        </div>
+                      )
                     )}
 
                     <div className="text-xs opacity-75 mt-1">

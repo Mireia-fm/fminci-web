@@ -663,52 +663,10 @@ export default function ChatControlCliente() {
                     )}
                     <div className="text-sm">{comentario.cuerpo}</div>
 
-                    {/* Mostrar adjuntos desde campos imagen_url y documento_url */}
-                    {((comentario.imagen_url || comentario.documento_url) || (comentario.adjuntos && comentario.adjuntos.length > 0)) && (
+                    {/* Mostrar adjuntos - Priorizar sistema nuevo (tabla adjuntos) sobre campos legacy */}
+                    {(comentario.adjuntos && comentario.adjuntos.length > 0) ? (
                       <div className="mt-2 space-y-2">
-                        {/* Mostrar imagen_url del comentario */}
-                        {comentario.imagen_url && (
-                          (() => {
-                            const imageUrl = commentAttachmentUrls[`imagen_${comentario.id}`];
-                            return imageUrl ? (
-                              <img
-                                src={imageUrl}
-                                alt="Imagen adjunta al comentario"
-                                className="max-w-32 h-24 object-cover rounded border cursor-pointer hover:scale-105 transition-transform"
-                                onClick={() => window.open(imageUrl, '_blank')}
-                              />
-                            ) : (
-                              <div className="text-sm text-red-600">
-                                Error cargando imagen: {comentario.imagen_url}
-                              </div>
-                            );
-                          })()
-                        )}
-
-                        {/* Mostrar documento_url del comentario */}
-                        {comentario.documento_url && (
-                          (() => {
-                            const documentUrl = commentAttachmentUrls[`documento_${comentario.id}`];
-                            const fileName = comentario.documento_url.split('/').pop() || 'Documento adjunto';
-                            return documentUrl ? (
-                              <a
-                                href={documentUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-2 text-blue-600 hover:underline text-sm bg-blue-50 px-3 py-1 rounded"
-                              >
-                                📎 {fileName}
-                              </a>
-                            ) : (
-                              <div className="text-sm text-red-600">
-                                Error cargando documento: {comentario.documento_url}
-                              </div>
-                            );
-                          })()
-                        )}
-
-                        {/* Mantener compatibilidad con adjuntos legacy */}
-                        {comentario.adjuntos && comentario.adjuntos.map((adjunto) => (
+                        {comentario.adjuntos.map((adjunto) => (
                           <div key={adjunto.id}>
                             {adjunto.tipo === 'imagen' && (
                               (() => {
@@ -741,6 +699,52 @@ export default function ChatControlCliente() {
                           </div>
                         ))}
                       </div>
+                    ) : (
+                      /* Sistema legacy - solo si no hay adjuntos en la tabla */
+                      (comentario.imagen_url || comentario.documento_url) && (
+                        <div className="mt-2 space-y-2">
+                          {/* Mostrar imagen_url del comentario */}
+                          {comentario.imagen_url && (
+                            (() => {
+                              const imageUrl = commentAttachmentUrls[`imagen_${comentario.id}`];
+                              return imageUrl ? (
+                                <img
+                                  src={imageUrl}
+                                  alt="Imagen adjunta al comentario"
+                                  className="max-w-32 h-24 object-cover rounded border cursor-pointer hover:scale-105 transition-transform"
+                                  onClick={() => window.open(imageUrl, '_blank')}
+                                />
+                              ) : (
+                                <div className="text-sm text-red-600">
+                                  Error cargando imagen: {comentario.imagen_url}
+                                </div>
+                              );
+                            })()
+                          )}
+
+                          {/* Mostrar documento_url del comentario */}
+                          {comentario.documento_url && (
+                            (() => {
+                              const documentUrl = commentAttachmentUrls[`documento_${comentario.id}`];
+                              const fileName = comentario.documento_url.split('/').pop() || 'Documento adjunto';
+                              return documentUrl ? (
+                                <a
+                                  href={documentUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-2 text-blue-600 hover:underline text-sm bg-blue-50 px-3 py-1 rounded"
+                                >
+                                  📎 {fileName}
+                                </a>
+                              ) : (
+                                <div className="text-sm text-red-600">
+                                  Error cargando documento: {comentario.documento_url}
+                                </div>
+                              );
+                            })()
+                          )}
+                        </div>
+                      )
                     )}
 
                     <div className="text-xs opacity-75 mt-1">
