@@ -852,6 +852,7 @@ export default function ChatProveedor() {
         importeConIva,
         documentoJustificativo,
         tieneOfertaAprobada,
+        presupuestoActual,
         autorId: perfil.persona_id,
         autorEmail: userEmail || perfil.email,
         valoracionExistenteId: valoracionExistente?.id || null,
