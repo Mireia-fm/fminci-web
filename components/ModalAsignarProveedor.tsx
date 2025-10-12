@@ -335,7 +335,7 @@ export default function ModalAsignarProveedor({
               <>
                 <div>
                   <label className="block text-sm font-medium mb-2" style={{ color: PALETA.textoOscuro }}>
-                    Nombre del Proveedor Externo *
+                    Nombre del Proveedor Externo
                   </label>
                   <input
                     type="text"
@@ -638,7 +638,7 @@ export default function ModalAsignarProveedor({
               disabled={
                 !formulario.proveedor_id ||
                 !formulario.prioridad ||
-                (formulario.es_proveedor_externo && (!formulario.nombre_proveedor_externo || !formulario.cif_proveedor_externo)) ||
+                (formulario.es_proveedor_externo && !formulario.cif_proveedor_externo) ||
                 enviando
               }
               className="px-6 py-2 text-sm text-white rounded hover:opacity-90 transition-opacity disabled:opacity-50"
@@ -647,7 +647,7 @@ export default function ModalAsignarProveedor({
                 opacity: (
                   !formulario.proveedor_id ||
                   !formulario.prioridad ||
-                  (formulario.es_proveedor_externo && (!formulario.nombre_proveedor_externo || !formulario.cif_proveedor_externo)) ||
+                  (formulario.es_proveedor_externo && !formulario.cif_proveedor_externo) ||
                   enviando
                 ) ? 0.5 : 1
               }}
