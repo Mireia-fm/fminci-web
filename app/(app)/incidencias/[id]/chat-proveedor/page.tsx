@@ -852,7 +852,11 @@ export default function ChatProveedor() {
         importeConIva,
         documentoJustificativo,
         tieneOfertaAprobada,
-        presupuestoActual,
+        presupuestoActual: presupuestoActual && presupuestoActual.importe_total_sin_iva !== undefined ? {
+          id: presupuestoActual.id,
+          importe_total_sin_iva: presupuestoActual.importe_total_sin_iva,
+          documento_adjunto_id: presupuestoActual.documento_adjunto_id
+        } : null,
         autorId: perfil.persona_id,
         autorEmail: userEmail || perfil.email,
         valoracionExistenteId: valoracionExistente?.id || null,
