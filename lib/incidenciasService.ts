@@ -42,11 +42,13 @@ const SELECT_INCIDENCIAS_BASE = `
 
 /**
  * Obtiene todas las incidencias del sistema (para usuarios Control o con acceso total)
+ * Solo incluye incidencias activas (excluye cerradas y anuladas)
  */
 export async function obtenerTodasIncidencias(): Promise<Incidencia[]> {
   const { data, error } = await supabase
     .from("incidencias")
     .select(SELECT_INCIDENCIAS_BASE)
+    .eq("activo", true)
     .order("reportado_at_utc", { ascending: false });
 
   if (error) {
@@ -96,6 +98,7 @@ export async function obtenerIncidenciasProveedor(proveedorId: string): Promise<
 
 /**
  * Obtiene incidencias para instituciones específicas
+ * Solo incluye incidencias activas (excluye cerradas y anuladas)
  */
 export async function obtenerIncidenciasPorInstituciones(institucionIds: string[]): Promise<Incidencia[]> {
   if (institucionIds.length === 0) {
@@ -106,6 +109,7 @@ export async function obtenerIncidenciasPorInstituciones(institucionIds: string[
     .from("incidencias")
     .select(SELECT_INCIDENCIAS_BASE)
     .in("institucion_id", institucionIds)
+    .eq("activo", true)
     .order("reportado_at_utc", { ascending: false });
 
   if (error) {
@@ -260,7 +264,8 @@ export async function obtenerConteoPorEstado(
       .from("incidencias")
       .select("estado_cliente, proveedor_casos!inner(proveedor_id)")
       .eq("proveedor_casos.proveedor_id", proveedorId)
-      .eq("proveedor_casos.activo", true);
+      .eq("proveedor_casos.activo", true)
+      .eq("activo", true);
 
     if (error || !data) {
       console.error("Error contando incidencias de proveedor:", error);
@@ -316,7 +321,8 @@ export async function obtenerConteoPorCentro(
   const { data, error } = await supabase
     .from("incidencias")
     .select("id, estado_cliente, institucion_id, instituciones(nombre)")
-    .in("institucion_id", institucionIds);
+    .in("institucion_id", institucionIds)
+    .eq("activo", true);
 
   if (error || !data) {
     console.error("Error cargando incidencias por centro:", error);

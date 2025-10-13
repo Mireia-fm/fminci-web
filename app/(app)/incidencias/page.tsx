@@ -131,7 +131,7 @@ export default function IncidenciasListado() {
       setLoading(true);
 
       if (perfil.rol === "Control") {
-        // Búsqueda específica para Control
+        // Búsqueda específica para Control (incluye cerradas/anuladas para búsquedas directas)
         const { data, error } = await supabase
           .from("incidencias")
           .select(`
