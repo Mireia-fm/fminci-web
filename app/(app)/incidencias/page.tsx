@@ -9,6 +9,7 @@ import NotificacionesProveedor from "@/components/NotificacionesProveedor";
 import { PALETA } from "@/lib/theme";
 import { useAuth } from "@/contexts/AuthContext";
 import { obtenerIncidenciasPorPerfil } from "@/lib/incidenciasService";
+import { useFiltrosIncidencias } from "@/hooks/useFiltrosIncidencias";
 
 type Incidencia = {
   id: string;
@@ -55,8 +56,10 @@ export default function IncidenciasListado() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { perfil, loading: loadingAuth, proveedorId } = useAuth();
+  const { guardarFiltros, obtenerFiltros, obtenerIncidenciaDestacada, limpiarIncidenciaDestacada } = useFiltrosIncidencias();
   const [incidencias, setIncidencias] = useState<Incidencia[]>([]);
   const [loading, setLoading] = useState(true);
+  const [incidenciaDestacada, setIncidenciaDestacada] = useState<string | null>(null);
   const [filtroEstado, setFiltroEstado] = useState("");
   const [filtroCentro, setFiltroCentro] = useState("");
   const [filtroNumero, setFiltroNumero] = useState("");
@@ -85,7 +88,34 @@ export default function IncidenciasListado() {
   const [mostrarFiltroCentro, setMostrarFiltroCentro] = useState(false);
   const [centrosAsignados, setCentrosAsignados] = useState<{id: string, nombre: string}[]>([]);
 
-  // Manejar parámetros URL al cargar
+  // Cargar filtros guardados al iniciar
+  useEffect(() => {
+    const filtrosGuardados = obtenerFiltros();
+
+    // Restaurar filtros desde sessionStorage
+    if (filtrosGuardados.filtroEstado) setFiltroEstado(filtrosGuardados.filtroEstado);
+    if (filtrosGuardados.filtroCentro) setFiltroCentro(filtrosGuardados.filtroCentro);
+    if (filtrosGuardados.filtroNumero) setFiltroNumero(filtrosGuardados.filtroNumero);
+    if (filtrosGuardados.filtroEstadoProveedor) setFiltroEstadoProveedor(filtrosGuardados.filtroEstadoProveedor);
+    if (filtrosGuardados.filtroFecha) setFiltroFecha(filtrosGuardados.filtroFecha);
+    if (filtrosGuardados.filtroCatalogacion) setFiltroCatalogacion(filtrosGuardados.filtroCatalogacion);
+    if (filtrosGuardados.filtroPrioridadCliente) setFiltroPrioridadCliente(filtrosGuardados.filtroPrioridadCliente);
+    if (filtrosGuardados.filtroPrioridadProveedor) setFiltroPrioridadProveedor(filtrosGuardados.filtroPrioridadProveedor);
+    if (filtrosGuardados.filtroProveedor) setFiltroProveedor(filtrosGuardados.filtroProveedor);
+
+    // Restaurar incidencia destacada
+    const incidenciaId = obtenerIncidenciaDestacada();
+    if (incidenciaId) {
+      setIncidenciaDestacada(incidenciaId);
+      // Limpiar después de 5 segundos para que no quede destacada permanentemente
+      setTimeout(() => {
+        setIncidenciaDestacada(null);
+        limpiarIncidenciaDestacada();
+      }, 5000);
+    }
+  }, []);
+
+  // Manejar parámetros URL al cargar (prioridad sobre sessionStorage)
   useEffect(() => {
     const filtroEstadoParam = searchParams.get('filtroEstado');
     if (filtroEstadoParam) {
@@ -102,6 +132,31 @@ export default function IncidenciasListado() {
       setFiltroCentro(filtroCentroParam);
     }
   }, [searchParams]);
+
+  // Guardar filtros cuando cambien
+  useEffect(() => {
+    guardarFiltros({
+      filtroEstado,
+      filtroCentro,
+      filtroNumero,
+      filtroEstadoProveedor,
+      filtroFecha,
+      filtroCatalogacion,
+      filtroPrioridadCliente,
+      filtroPrioridadProveedor,
+      filtroProveedor,
+    });
+  }, [
+    filtroEstado,
+    filtroCentro,
+    filtroNumero,
+    filtroEstadoProveedor,
+    filtroFecha,
+    filtroCatalogacion,
+    filtroPrioridadCliente,
+    filtroPrioridadProveedor,
+    filtroProveedor,
+  ]);
 
   // Cargar incidencias del usuario actual
   useEffect(() => {
@@ -582,6 +637,59 @@ export default function IncidenciasListado() {
     }
   };
 
+  // Manejador de copia para Excel
+  const manejarCopiaTabla = (event: React.ClipboardEvent<HTMLDivElement>) => {
+    const selection = window.getSelection();
+    if (!selection || selection.toString().trim() === '') return;
+
+    try {
+      // Obtener el rango de selección
+      const range = selection.getRangeAt(0);
+      const container = range.commonAncestorContainer;
+
+      // Buscar el contenedor de la tabla
+      let tablaContainer: HTMLElement | null = null;
+      if (container.nodeType === Node.TEXT_NODE) {
+        tablaContainer = (container.parentElement as HTMLElement)?.closest('.incidencias-tabla-wrapper');
+      } else {
+        tablaContainer = (container as HTMLElement)?.closest('.incidencias-tabla-wrapper');
+      }
+
+      if (!tablaContainer) return;
+
+      // Obtener todas las filas dentro del contenedor
+      const filas = Array.from(tablaContainer.querySelectorAll('[class*="grid gap-4 p-4"]'));
+
+      // Filtrar solo las filas que están en la selección
+      const filasSeleccionadas = filas.filter(fila => {
+        return selection.containsNode(fila, true);
+      });
+
+      if (filasSeleccionadas.length === 0) return;
+
+      // Extraer los datos de cada fila
+      const datosFormateados = filasSeleccionadas.map(fila => {
+        const columnas = Array.from(fila.querySelectorAll('div[class*="text-sm"]'));
+        return columnas
+          .map(col => {
+            // Limpiar el texto de cada columna
+            const texto = col.textContent?.trim() || '';
+            // Eliminar saltos de línea y espacios extra
+            return texto.replace(/\s+/g, ' ').trim();
+          })
+          .join('\t'); // Unir columnas con tabulador
+      }).join('\n'); // Unir filas con salto de línea
+
+      if (datosFormateados) {
+        event.preventDefault();
+        event.clipboardData.setData('text/plain', datosFormateados);
+      }
+    } catch (error) {
+      console.error('Error al formatear copia:', error);
+      // Si hay error, dejar que el navegador maneje la copia normalmente
+    }
+  };
+
   const manejarClickIncidencia = async (incidenciaId: string, proveedorCasoId?: string) => {
     if (perfil?.rol === "Control") {
       // Si es Control, verificar si tiene proveedor asignado
@@ -833,7 +941,7 @@ export default function IncidenciasListado() {
             {/* Filtro de prioridad cliente */}
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: PALETA.textoOscuro }}>
-                Prioridad
+                {perfil?.rol === "Control" ? "Prioridad Cliente" : "Prioridad"}
               </label>
               <SearchableSelect
                 value={filtroPrioridadCliente}
@@ -842,7 +950,7 @@ export default function IncidenciasListado() {
                 className="w-full"
                 focusColor={PALETA.bg}
                 options={
-                  perfil?.rol === "Cliente" || perfil?.rol === "Gestor" ? [
+                  perfil?.rol === "Cliente" || perfil?.rol === "Gestor" || perfil?.rol === "Control" ? [
                     { value: "Urgente", label: "Urgente" },
                     { value: "Crítico", label: "Crítico" },
                     { value: "Normal", label: "Normal" }
@@ -920,7 +1028,11 @@ export default function IncidenciasListado() {
         </div>
 
         {/* Tabla de incidencias */}
-        <div className="mb-6 incidencias-tabla-wrapper" style={{ backgroundColor: PALETA.card, borderRadius: "8px" }}>
+        <div
+          className="mb-6 incidencias-tabla-wrapper"
+          style={{ backgroundColor: PALETA.card, borderRadius: "8px" }}
+          onCopy={manejarCopiaTabla}
+        >
           {/* Header de la tabla */}
           <div
             className="grid gap-4 p-4 rounded-t-lg"
@@ -952,12 +1064,24 @@ export default function IncidenciasListado() {
                 </span>
               </div>
             ) : (
-              filasExpandidas.map((fila, index) => (
+              filasExpandidas.map((fila, index) => {
+                const esDestacada = incidenciaDestacada === fila.id;
+                return (
                 <div
                   key={`${fila.id}-${fila.proveedor_caso_seleccionado?.id || 'sin-proveedor'}-${index}`}
                   onClick={() => manejarClickIncidencia(fila.id, fila.proveedor_caso_seleccionado?.id)}
-                  className="grid gap-4 p-4 border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors"
-                  style={{ gridTemplateColumns: perfil?.rol === "Control" ? "0.9fr 0.8fr 1fr 1fr 1.2fr 2fr" : "0.9fr 0.8fr 1fr 1.2fr 2fr" }}
+                  className={`grid gap-4 p-4 border-b cursor-pointer transition-all duration-300 ${
+                    esDestacada
+                      ? 'border-l-4 shadow-md'
+                      : 'border-gray-100 hover:bg-gray-50'
+                  }`}
+                  style={{
+                    gridTemplateColumns: perfil?.rol === "Control" ? "0.9fr 0.8fr 1fr 1fr 1.2fr 2fr" : "0.9fr 0.8fr 1fr 1.2fr 2fr",
+                    ...(esDestacada && {
+                      backgroundColor: '#F5F0E8',
+                      borderLeftColor: PALETA.b5
+                    })
+                  }}
                 >
                   <div className="text-sm flex items-center gap-2">
                     {fila.num_solicitud}
@@ -998,7 +1122,8 @@ export default function IncidenciasListado() {
                     }
                   </div>
                 </div>
-              ))
+              );
+            })
             )}
           </div>
         </div>

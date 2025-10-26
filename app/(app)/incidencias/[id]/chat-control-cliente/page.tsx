@@ -18,6 +18,7 @@ import { useSignedUrls, useComentarioUrls } from "@/shared/hooks/useSignedUrls";
 import { useChatFileUpload } from "@/shared/hooks/useFileUpload";
 import DatosTecnicosIncidencia from "@/shared/components/DatosTecnicosIncidencia";
 import HistorialEstados from "@/shared/components/HistorialEstados";
+import { useFiltrosIncidencias } from "@/hooks/useFiltrosIncidencias";
 import ScrollToBottomButton from "@/components/ScrollToBottomButton";
 
 type Adjunto = {
@@ -76,6 +77,9 @@ export default function ChatControlCliente() {
 
   // AuthContext
   const { perfil, loading: authLoading } = useAuth();
+
+  // Hook de filtros
+  const { guardarIncidenciaDestacada } = useFiltrosIncidencias();
 
   // Estados principales
   const [incidencia, setIncidencia] = useState<Incidencia | null>(null);
@@ -484,7 +488,10 @@ export default function ChatControlCliente() {
       {/* Header */}
       <div className="flex justify-between items-center p-6">
         <button
-          onClick={() => router.push("/incidencias")}
+          onClick={() => {
+            guardarIncidenciaDestacada(incidenciaId);
+            router.push("/incidencias");
+          }}
           className="text-white text-sm hover:underline"
         >
           ← Volver a incidencias

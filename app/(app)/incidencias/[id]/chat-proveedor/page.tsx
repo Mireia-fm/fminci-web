@@ -17,6 +17,7 @@ import { resolverIncidencia as resolverIncidenciaService, valoracionEconomica as
 // Hooks compartidos
 import { useSignedUrls, useComentarioUrls } from "@/shared/hooks/useSignedUrls";
 import { useChatFileUpload } from "@/shared/hooks/useFileUpload";
+import { useFiltrosIncidencias } from "@/hooks/useFiltrosIncidencias";
 
 // Componentes compartidos
 import HistorialEstados from "@/shared/components/HistorialEstados";
@@ -110,6 +111,9 @@ export default function ChatProveedor() {
 
   // AuthContext
   const { perfil, loading: authLoading } = useAuth();
+
+  // Hook de filtros
+  const { guardarIncidenciaDestacada } = useFiltrosIncidencias();
 
   // Estados principales
   const [incidencia, setIncidencia] = useState<Incidencia | null>(null);
@@ -1441,7 +1445,10 @@ ${textoRechazo.instruccion}`,
       {/* Header */}
       <div className="flex justify-between items-center p-6">
         <button
-          onClick={() => router.push("/incidencias")}
+          onClick={() => {
+            guardarIncidenciaDestacada(incidenciaId);
+            router.push("/incidencias");
+          }}
           className="text-white text-sm hover:underline"
         >
           ← Volver a incidencias

@@ -135,12 +135,14 @@ export default function SearchableSelect({
             }
           }}
           placeholder={placeholder}
-          className={`w-full px-3 py-1.5 rounded border border-black text-sm h-8 bg-white pr-8 outline-none ${
+          className={`w-full px-3 py-1.5 rounded border text-sm h-8 bg-white pr-8 outline-none ${
             disabled ? 'opacity-50 cursor-not-allowed' : ''
           }`}
           style={{
             ...(style || {}),
-            '--placeholder-color': placeholderColor
+            '--placeholder-color': placeholderColor,
+            borderColor: value ? focusColor.replace('40', '') : '#000000',
+            boxShadow: value ? `0 0 0 2px ${focusColor}` : ''
           } as React.CSSProperties & { '--placeholder-color': string }}
           onFocus={(e) => {
             if (!disabled) {
@@ -149,8 +151,14 @@ export default function SearchableSelect({
             }
           }}
           onBlur={(e) => {
-            e.target.style.borderColor = '#000000';
-            e.target.style.boxShadow = '';
+            // Si hay un valor seleccionado, mantener el focus ring
+            if (value) {
+              e.target.style.borderColor = focusColor.replace('40', '');
+              e.target.style.boxShadow = `0 0 0 2px ${focusColor}`;
+            } else {
+              e.target.style.borderColor = '#000000';
+              e.target.style.boxShadow = '';
+            }
           }}
           autoComplete="off"
           disabled={disabled}
