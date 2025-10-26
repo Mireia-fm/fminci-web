@@ -9,11 +9,16 @@
     "lint": "eslint",
     "migrate-storage": "node migration-storage.js",
     "move-legacy": "node move-legacy-files.js",
-    "check-storage": "node check-storage.js"
+    "check-storage": "node check-storage.js",
+    "migrate-wix-docs": "tsx migrate-wix-documentos-proveedor.ts",
+    "crear-adjuntos": "tsx crear-adjuntos-migrados.ts",
+    "limpiar-duplicados": "tsx limpiar-duplicados.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.2",
+    "@types/mime-types": "^3.0.1",
     "dotenv": "^17.2.2",
+    "mime-types": "^3.0.1",
     "next": "15.5.2",
     "react": "19.1.0",
     "react-dom": "19.1.0"
@@ -27,6 +32,7 @@
     "eslint": "^9",
     "eslint-config-next": "15.5.2",
     "tailwindcss": "^4",
+    "tsx": "^4.20.6",
     "typescript": "^5"
   }
 }

@@ -457,13 +457,16 @@ Importe total con IVA: ${formulario.importe_con_iva.toFixed(2)}€${
           throw new Error("No se pudo actualizar el estado del cliente: " + errorUpdateCliente.message);
         }
 
-        // Actualizar estado_proveedor a "Cerrada"
+        // Actualizar estado_proveedor a "Cerrada" y mes_cierre
         if (proveedorCasoId) {
+          const fechaCierre = new Date();
+          const mesCierre = fechaCierre.toLocaleDateString('es-ES', { month: 'long' });
           const { error: errorUpdateProveedor } = await supabase
             .from("proveedor_casos")
             .update({
               estado_proveedor: 'Cerrada',
-              actualizado_en: new Date().toISOString()
+              actualizado_en: fechaCierre.toISOString(),
+              mes_cierre: mesCierre
             })
             .eq("id", proveedorCasoId);
 

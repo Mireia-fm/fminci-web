@@ -67,13 +67,22 @@ export default function CalendarioPage() {
       const institucionId = perfil.instituciones?.[0]?.institucion_id;
       const tipoInstitucion = perfil.instituciones?.[0]?.tipo;
 
+      console.log("🔍 Cargando citas para:", {
+        email: perfil.email,
+        rol: perfil.rol,
+        institucionId,
+        tipoInstitucion
+      });
+
       if (institucionId) {
         let citasData: CitaSupabase[] = [];
 
         if (tipoInstitucion === 'Proveedor') {
           setEsProveedor(true);
-          // Vista para proveedores: mostrar las visitas que HA calendarizado
-          const { data } = await supabase
+          console.log("📞 Haciendo consulta para proveedor con ID:", institucionId);
+
+          // Vista para proveedores: cargar citas y luego enrichecer con descripción de proveedor_casos
+          const { data: citasRaw, error: citasError } = await supabase
             .from("citas_proveedores")
             .select(`
               id,
@@ -83,14 +92,48 @@ export default function CalendarioPage() {
               estado,
               centro_nombre,
               num_solicitud,
-              descripcion,
-              proveedor_casos!inner(descripcion_proveedor)
+              descripcion
             `)
             .eq("proveedor_id", institucionId)
             .eq("estado", "programada")
             .order("fecha_visita", { ascending: true });
 
-          citasData = data || [];
+          console.log("📊 Citas raw:", { citasRaw, citasError, count: citasRaw?.length });
+
+          if (citasError) {
+            console.error("❌ Error en consulta de citas:", citasError);
+            citasData = [];
+          } else if (citasRaw && citasRaw.length > 0) {
+            // Obtener las descripciones de proveedor_casos para cada cita
+            const incidenciasIds = citasRaw.map(c => c.incidencia_id);
+
+            const { data: proveedorCasos, error: pcError } = await supabase
+              .from("proveedor_casos")
+              .select("incidencia_id, descripcion_proveedor")
+              .eq("proveedor_id", institucionId)
+              .in("incidencia_id", incidenciasIds);
+
+            console.log("📊 Proveedor casos:", { proveedorCasos, pcError });
+
+            if (pcError) {
+              console.error("❌ Error cargando proveedor_casos:", pcError);
+            }
+
+            // Crear un mapa de incidencia_id -> descripcion_proveedor
+            const descripcionMap = new Map(
+              (proveedorCasos || []).map(pc => [pc.incidencia_id, pc.descripcion_proveedor])
+            );
+
+            // Enrichecer las citas con las descripciones
+            citasData = citasRaw.map(cita => ({
+              ...cita,
+              proveedor_casos: [{
+                descripcion_proveedor: descripcionMap.get(cita.incidencia_id) || cita.descripcion
+              }]
+            }));
+          } else {
+            citasData = [];
+          }
         } else {
           // Vista para clientes/centros/gestores: mostrar las visitas calendarizadas para sus incidencias
 
@@ -167,7 +210,11 @@ export default function CalendarioPage() {
             id: cita.id,
             incidencia_id: cita.incidencia_id,
             fecha: fechaLocal,
-            hora: cita.horario === 'mañana' ? 'Horario de mañana' : 'Horario de tarde',
+            hora: cita.horario === 'mañana'
+              ? 'Horario de mañana'
+              : cita.horario === 'tarde'
+              ? 'Horario de tarde'
+              : 'Fuera de horario',
             proveedor_nombre: cita.proveedor_nombre || 'Proveedor desconocido',
             centro_nombre: cita.centro_nombre || undefined,
             incidencia_num: numSolicitud,
@@ -295,7 +342,9 @@ export default function CalendarioPage() {
 
       const horarioTexto = citaSeleccionada.hora.toLowerCase().includes('mañana')
         ? 'horario de mañana'
-        : 'horario de tarde';
+        : citaSeleccionada.hora.toLowerCase().includes('tarde')
+        ? 'horario de tarde'
+        : 'fuera de horario';
 
       const mensajeCancelacion = `Visita cancelada para el ${fechaFormateada} en ${horarioTexto}.`;
 

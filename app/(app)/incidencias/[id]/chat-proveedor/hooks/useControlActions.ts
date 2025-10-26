@@ -95,8 +95,7 @@ export function useControlActions(
           // NO cambiar activo=false aquí - se hace al reasignar a otro proveedor
           motivo_anulacion: motivoAnulacion,
           anulado_en: fechaAnulacion.toISOString(),
-          anulado_por: perfil.persona_id,
-          cerrado_en: fechaAnulacion.toISOString()
+          anulado_por: perfil.persona_id
         })
         .eq("incidencia_id", incidenciaId)
         .eq("activo", true);
@@ -188,10 +187,16 @@ export function useControlActions(
       const estadoProveedorAnterior = estadosActuales?.estado_proveedor || null;
       const estadoClienteAnterior = incidenciaActual?.estado_cliente || null;
 
-      // 1. Cambiar estado_proveedor a "Cerrada"
+      // 1. Cambiar estado_proveedor a "Cerrada" y mes_cierre
+      const fechaCierre = new Date();
+      const mesCierre = fechaCierre.toLocaleDateString('es-ES', { month: 'long' });
+
       await supabase
         .from("proveedor_casos")
-        .update({ estado_proveedor: "Cerrada" })
+        .update({
+          estado_proveedor: "Cerrada",
+          mes_cierre: mesCierre
+        })
         .eq("incidencia_id", incidenciaId)
         .eq("activo", true)
         .neq("estado_proveedor", "Anulada");
