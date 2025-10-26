@@ -647,7 +647,7 @@ export default function ChatControlCliente() {
                   className={`flex ${
                     comentario.es_sistema
                       ? 'justify-center'
-                      : comentario.autor_email === perfil?.email ? 'justify-end' : 'justify-start'
+                      : comentario.autor_rol === perfil?.rol ? 'justify-end' : 'justify-start'
                   }`}
                 >
                   <div
