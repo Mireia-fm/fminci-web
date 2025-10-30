@@ -16,24 +16,53 @@ export default function LoginPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErr(null); 
-    setOk(null); 
+    setErr(null);
+    setOk(null);
     setLoading(true);
-    
+
     try {
-      const { error } = await supabase.auth.signInWithPassword({ 
-        email: email.trim(), 
-        password 
+      console.log('[LOGIN] Iniciando autenticación para:', email.trim());
+
+      // Verificar que localStorage está disponible
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('test', 'test');
+          localStorage.removeItem('test');
+          console.log('[LOGIN] localStorage disponible');
+        } catch (e) {
+          console.error('[LOGIN] localStorage NO disponible:', e);
+          setErr('Tu navegador tiene el almacenamiento local deshabilitado. Por favor, habilita las cookies y el almacenamiento local.');
+          setLoading(false);
+          return;
+        }
+      }
+
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password
       });
-      
+
       if (error) {
+        console.error('[LOGIN] Error de autenticación:', error);
         setErr(error.message);
       } else {
+        console.log('[LOGIN] Autenticación exitosa, sesión:', data.session ? 'creada' : 'no creada');
+
+        // Verificar que la sesión se guardó
+        const { data: sessionData } = await supabase.auth.getSession();
+        console.log('[LOGIN] Sesión recuperada:', sessionData.session ? 'sí' : 'no');
+
+        if (!sessionData.session) {
+          console.error('[LOGIN] Sesión no se persistió correctamente');
+          setErr('Error al guardar la sesión. Verifica que tu navegador permite cookies y almacenamiento local.');
+          return;
+        }
+
         router.replace("/");
       }
     } catch (error) {
-      console.error('Login error:', error);
-      setErr('Error de conexión. Por favor, verifica tu conexión a internet.');
+      console.error('[LOGIN] Excepción durante login:', error);
+      setErr('Error de conexión. Por favor, verifica tu conexión a internet y que tu navegador permite cookies.');
     } finally {
       setLoading(false);
     }
