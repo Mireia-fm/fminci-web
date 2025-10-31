@@ -12,57 +12,69 @@ export default function LoginPage() {
   const [err, setErr] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [debugLogs, setDebugLogs] = useState<string[]>([]);
   const router = useRouter();
+
+  const addDebugLog = (message: string) => {
+    setDebugLogs(prev => [...prev, `${new Date().toLocaleTimeString()}: ${message}`]);
+    console.log('[LOGIN]', message);
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErr(null);
     setOk(null);
+    setDebugLogs([]);
     setLoading(true);
 
     try {
-      console.log('[LOGIN] Iniciando autenticación para:', email.trim());
+      addDebugLog(`Iniciando login para: ${email.trim()}`);
 
       // Verificar que localStorage está disponible
       if (typeof window !== 'undefined') {
         try {
           localStorage.setItem('test', 'test');
           localStorage.removeItem('test');
-          console.log('[LOGIN] localStorage disponible');
+          addDebugLog('✓ localStorage disponible');
         } catch (e) {
-          console.error('[LOGIN] localStorage NO disponible:', e);
-          setErr('Tu navegador tiene el almacenamiento local deshabilitado. Por favor, habilita las cookies y el almacenamiento local.');
+          addDebugLog('✗ ERROR: localStorage NO disponible');
+          setErr('Tu navegador tiene el almacenamiento local deshabilitado. Por favor, habilita las cookies y el almacenamiento local en la configuración de tu navegador.');
           setLoading(false);
           return;
         }
       }
 
+      addDebugLog('Conectando con servidor...');
       const { data, error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password
       });
 
       if (error) {
-        console.error('[LOGIN] Error de autenticación:', error);
+        addDebugLog(`✗ ERROR de autenticación: ${error.message}`);
         setErr(error.message);
       } else {
-        console.log('[LOGIN] Autenticación exitosa, sesión:', data.session ? 'creada' : 'no creada');
+        addDebugLog(`✓ Autenticación exitosa`);
+        addDebugLog(`Sesión ${data.session ? 'creada correctamente' : 'NO creada'}`);
 
         // Verificar que la sesión se guardó
+        addDebugLog('Verificando persistencia de sesión...');
         const { data: sessionData } = await supabase.auth.getSession();
-        console.log('[LOGIN] Sesión recuperada:', sessionData.session ? 'sí' : 'no');
 
         if (!sessionData.session) {
-          console.error('[LOGIN] Sesión no se persistió correctamente');
-          setErr('Error al guardar la sesión. Verifica que tu navegador permite cookies y almacenamiento local.');
+          addDebugLog('✗ ERROR: La sesión no se guardó en el navegador');
+          setErr('Error al guardar la sesión. Tu navegador está bloqueando el almacenamiento. Por favor, permite cookies y almacenamiento local.');
           return;
         }
 
+        addDebugLog('✓ Sesión guardada correctamente');
+        addDebugLog('Redirigiendo a la aplicación...');
         router.replace("/");
       }
     } catch (error) {
-      console.error('[LOGIN] Excepción durante login:', error);
-      setErr('Error de conexión. Por favor, verifica tu conexión a internet y que tu navegador permite cookies.');
+      const errorMsg = error instanceof Error ? error.message : 'Error desconocido';
+      addDebugLog(`✗ EXCEPCIÓN: ${errorMsg}`);
+      setErr('Error de conexión. Verifica tu conexión a internet y que tu navegador permite cookies.');
     } finally {
       setLoading(false);
     }
@@ -229,6 +241,21 @@ export default function LoginPage() {
                   borderLeftColor: PALETA.bg
                 }}>
                   {ok}
+                </div>
+              )}
+
+              {/* Debug logs visibles en pantalla */}
+              {debugLogs.length > 0 && (
+                <div className="text-xs bg-gray-100 p-3 rounded border border-gray-300 max-h-40 overflow-y-auto">
+                  <div className="font-semibold mb-2 text-gray-700">Información de diagnóstico:</div>
+                  {debugLogs.map((log, index) => (
+                    <div key={index} className="text-gray-600 font-mono mb-1">
+                      {log}
+                    </div>
+                  ))}
+                  <div className="mt-2 text-gray-500 italic text-xs">
+                    Por favor, haz una captura de pantalla de esta información si el problema persiste.
+                  </div>
                 </div>
               )}
 
