@@ -73,6 +73,7 @@ export default function IncidenciasListado() {
   const [incidenciaSeleccionada, setIncidenciaSeleccionada] = useState<string | null>(null);
   const [tieneProveedorAsignado, setTieneProveedorAsignado] = useState(false);
   const [paginaActual, setPaginaActual] = useState(1);
+  const [mostrarTodasLasIncidencias, setMostrarTodasLasIncidencias] = useState(false);
   const incidenciasPorPagina = 20;
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [mostrarModalProveedor, setMostrarModalProveedor] = useState(false);
@@ -584,11 +585,13 @@ export default function IncidenciasListado() {
     return filas;
   };
 
-  // Calcular paginación
+  // Calcular paginación (o mostrar todas si está activado)
   const totalPaginas = Math.ceil(incidenciasFiltradas.length / incidenciasPorPagina);
   const indiceInicio = (paginaActual - 1) * incidenciasPorPagina;
   const indiceFin = indiceInicio + incidenciasPorPagina;
-  const incidenciasPaginadas = incidenciasFiltradas.slice(indiceInicio, indiceFin);
+  const incidenciasPaginadas = mostrarTodasLasIncidencias
+    ? incidenciasFiltradas
+    : incidenciasFiltradas.slice(indiceInicio, indiceFin);
 
   // Expandir las incidencias paginadas para mostrar múltiples proveedor_casos
   const filasExpandidas = expandirIncidenciasConProveedores(incidenciasPaginadas);
@@ -1131,11 +1134,35 @@ export default function IncidenciasListado() {
         {/* Paginación */}
         {incidenciasFiltradas.length > incidenciasPorPagina && (
           <div className="flex items-center justify-between mb-6 px-4 py-3 rounded-lg pagination-mobile" style={{ backgroundColor: PALETA.card }}>
-            <div className="text-sm text-gray-600 pagination-info">
-              Mostrando {indiceInicio + 1}-{Math.min(indiceFin, incidenciasFiltradas.length)} de {incidenciasFiltradas.length} incidencias
+            <div className="flex items-center gap-4">
+              <div className="text-sm text-gray-600 pagination-info">
+                Mostrando {mostrarTodasLasIncidencias ? incidenciasFiltradas.length : `${indiceInicio + 1}-${Math.min(indiceFin, incidenciasFiltradas.length)}`} de {incidenciasFiltradas.length} incidencias
+              </div>
+
+              {/* Botón para mostrar todas (solo para Control) */}
+              {perfil?.rol === "Control" && (
+                <button
+                  onClick={() => {
+                    setMostrarTodasLasIncidencias(!mostrarTodasLasIncidencias);
+                    if (!mostrarTodasLasIncidencias) {
+                      setPaginaActual(1);
+                    }
+                  }}
+                  className="px-3 py-1.5 rounded text-xs font-medium transition-colors"
+                  style={{
+                    backgroundColor: mostrarTodasLasIncidencias ? PALETA.bg : 'white',
+                    color: mostrarTodasLasIncidencias ? 'white' : PALETA.bg,
+                    border: `1px solid ${PALETA.bg}`
+                  }}
+                  title="Útil para exportar todas las incidencias filtradas a Excel"
+                >
+                  {mostrarTodasLasIncidencias ? '📄 Mostrar paginado' : '📋 Mostrar todas'}
+                </button>
+              )}
             </div>
 
-            <div className="flex items-center gap-2 pagination-mobile">
+            {!mostrarTodasLasIncidencias && (
+              <div className="flex items-center gap-2 pagination-mobile">
               <button
                 onClick={paginaAnterior}
                 disabled={paginaActual === 1}
@@ -1195,6 +1222,7 @@ export default function IncidenciasListado() {
                 Siguiente →
               </button>
             </div>
+            )}
           </div>
         )}
 
