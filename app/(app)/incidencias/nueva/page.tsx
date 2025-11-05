@@ -439,6 +439,31 @@ export default function NuevaIncidenciaPage() {
           </div>
         )}
 
+            {/* Mensaje de ayuda si no hay centros disponibles */}
+            {!loading && opcionesCentros.length <= 1 && !centroAsignado && (
+              <div className="mb-4 rounded border border-yellow-300 bg-yellow-50 px-4 py-3 text-sm">
+                <div className="font-semibold text-yellow-800 mb-2">⚠️ No se pudieron cargar los centros</div>
+                <p className="text-yellow-700 mb-3">
+                  Si los desplegables aparecen vacíos, puede ser un problema de caché del navegador.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Limpiar localStorage y sessionStorage
+                    if (typeof window !== 'undefined') {
+                      localStorage.clear();
+                      sessionStorage.clear();
+                      // Recargar la página
+                      window.location.href = '/login';
+                    }
+                  }}
+                  className="px-3 py-1.5 rounded text-xs font-medium bg-yellow-600 text-white hover:bg-yellow-700 transition-colors"
+                >
+                  🔄 Limpiar caché y volver a iniciar sesión
+                </button>
+              </div>
+            )}
+
         <form onSubmit={onSubmit} className="space-y-4">
           {/* Nombre / Email */}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
