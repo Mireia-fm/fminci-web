@@ -1238,7 +1238,7 @@ ${textoRechazo.instruccion}`,
         autor_id: perfil.persona_id,
         autor_email: perfil.email,
         autor_rol: 'Control',
-        cuerpo: `Control ha resuelto esta incidencia manualmente.\n\n**Motivo:** ${formulario.descripcion}\n\n${formulario.observaciones ? `**Observaciones:** ${formulario.observaciones}` : ''}`,
+        cuerpo: `Control ha resuelto esta incidencia manualmente.\n\nMotivo: ${formulario.descripcion}\n\n${formulario.observaciones ? `Observaciones: ${formulario.observaciones}` : ''}`,
         es_sistema: true
       });
 
@@ -1248,7 +1248,7 @@ ${textoRechazo.instruccion}`,
         autor_id: perfil.persona_id,
         autor_email: perfil.email,
         autor_rol: 'Control',
-        cuerpo: `Incidencia resuelta por Control.\n\n**Motivo:** ${formulario.descripcion}`,
+        cuerpo: `Incidencia resuelta por Control.\n\nMotivo: ${formulario.descripcion}`,
         es_sistema: true
       });
 
@@ -1411,7 +1411,7 @@ ${textoRechazo.instruccion}`,
         autor_id: perfil.persona_id,
         autor_email: perfil.email,
         autor_rol: 'Control',
-        cuerpo: `Control ha solicitado revisión del presupuesto.\n**Motivo:** ${motivoRevision}`,
+        cuerpo: `Control ha solicitado revisión del presupuesto.\nMotivo: ${motivoRevision}`,
         es_sistema: true
       });
 

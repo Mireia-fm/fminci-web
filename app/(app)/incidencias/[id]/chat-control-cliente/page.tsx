@@ -369,7 +369,7 @@ export default function ChatControlCliente() {
       autor_id: perfil.persona_id,
       autor_email: perfil.email,
       autor_rol: perfil.rol,
-      cuerpo: `Incidencia puesta en espera.\n**Motivo:** ${motivo}`,
+      cuerpo: `Incidencia puesta en espera.\nMotivo: ${motivo}`,
       es_sistema: true
     });
 
@@ -434,8 +434,8 @@ export default function ChatControlCliente() {
       autor_email: perfil.email,
       autor_rol: perfil.rol,
       cuerpo: esDuplicada
-        ? `Incidencia anulada por Control (DUPLICADA).\n**Motivo:** ${motivo}`
-        : `Incidencia anulada por Control.\n**Motivo:** ${motivo}`,
+        ? `Incidencia anulada por Control (DUPLICADA).\nMotivo: ${motivo}`
+        : `Incidencia anulada por Control.\nMotivo: ${motivo}`,
       es_sistema: true
     });
 
