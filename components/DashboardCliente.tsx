@@ -73,6 +73,12 @@ export default function DashboardCliente() {
   }, [rows, metricasProveedor, vistaActiva]);
 
   const handleCircleClick = (estado: string) => {
+    // Limpiar todos los filtros guardados en sessionStorage
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('incidencias_filtros');
+      sessionStorage.removeItem('incidencias_pagina_actual');
+    }
+
     const params = new URLSearchParams();
 
     if (vistaActiva === 'cliente') {

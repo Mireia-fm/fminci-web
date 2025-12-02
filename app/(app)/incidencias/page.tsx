@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { registrarCambiosEstado } from "@/lib/historialEstados";
@@ -21,6 +21,7 @@ type Incidencia = {
   catalogacion?: string;
   prioridad?: string;
   institucion_id?: string;
+  fecha_actualizacion?: string;
   instituciones?: {
     nombre: string;
   }[] | null;
@@ -56,7 +57,7 @@ export default function IncidenciasListado() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { perfil, loading: loadingAuth, proveedorId } = useAuth();
-  const { guardarFiltros, obtenerFiltros, obtenerIncidenciaDestacada, limpiarIncidenciaDestacada } = useFiltrosIncidencias();
+  const { guardarFiltros, obtenerFiltros, obtenerIncidenciaDestacada, limpiarIncidenciaDestacada, guardarPaginaActual, obtenerPaginaActual, limpiarPaginaActual } = useFiltrosIncidencias();
   const [incidencias, setIncidencias] = useState<Incidencia[]>([]);
   const [loading, setLoading] = useState(true);
   const [incidenciaDestacada, setIncidenciaDestacada] = useState<string | null>(null);
@@ -69,6 +70,7 @@ export default function IncidenciasListado() {
   const [filtroPrioridadCliente, setFiltroPrioridadCliente] = useState("");
   const [filtroPrioridadProveedor, setFiltroPrioridadProveedor] = useState("");
   const [filtroProveedor, setFiltroProveedor] = useState("");
+  const [ordenActualizacion, setOrdenActualizacion] = useState("");
   const [mostrarModal, setMostrarModal] = useState(false);
   const [incidenciaSeleccionada, setIncidenciaSeleccionada] = useState<string | null>(null);
   const [tieneProveedorAsignado, setTieneProveedorAsignado] = useState(false);
@@ -89,6 +91,9 @@ export default function IncidenciasListado() {
   const [mostrarFiltroCentro, setMostrarFiltroCentro] = useState(false);
   const [centrosAsignados, setCentrosAsignados] = useState<{id: string, nombre: string}[]>([]);
 
+  // Ref para evitar guardar la página en el primer render
+  const primeraVez = React.useRef(true);
+
   // Cargar filtros guardados al iniciar
   useEffect(() => {
     const filtrosGuardados = obtenerFiltros();
@@ -103,6 +108,11 @@ export default function IncidenciasListado() {
     if (filtrosGuardados.filtroPrioridadCliente) setFiltroPrioridadCliente(filtrosGuardados.filtroPrioridadCliente);
     if (filtrosGuardados.filtroPrioridadProveedor) setFiltroPrioridadProveedor(filtrosGuardados.filtroPrioridadProveedor);
     if (filtrosGuardados.filtroProveedor) setFiltroProveedor(filtrosGuardados.filtroProveedor);
+    if (filtrosGuardados.ordenActualizacion) setOrdenActualizacion(filtrosGuardados.ordenActualizacion);
+
+    // Restaurar página actual
+    const paginaGuardada = obtenerPaginaActual();
+    setPaginaActual(paginaGuardada);
 
     // Restaurar incidencia destacada
     const incidenciaId = obtenerIncidenciaDestacada();
@@ -146,6 +156,7 @@ export default function IncidenciasListado() {
       filtroPrioridadCliente,
       filtroPrioridadProveedor,
       filtroProveedor,
+      ordenActualizacion,
     });
   }, [
     filtroEstado,
@@ -157,7 +168,17 @@ export default function IncidenciasListado() {
     filtroPrioridadCliente,
     filtroPrioridadProveedor,
     filtroProveedor,
+    ordenActualizacion,
   ]);
+
+  // Guardar página actual cada vez que cambie (excepto en el primer render)
+  useEffect(() => {
+    if (primeraVez.current) {
+      primeraVez.current = false;
+      return;
+    }
+    guardarPaginaActual(paginaActual);
+  }, [paginaActual]);
 
   // Cargar incidencias del usuario actual
   useEffect(() => {
@@ -229,6 +250,12 @@ export default function IncidenciasListado() {
     try {
       // Usar el servicio centralizado
       const data = await obtenerIncidenciasPorPerfil(perfil);
+
+      // Log para verificar enriquecimiento
+      if (data.length > 0) {
+        console.log(`📋 Cargadas ${data.length} incidencias`);
+        console.log(`📊 Ejemplo - ${data[0].num_solicitud}: fecha_actualizacion=${data[0].fecha_actualizacion}, fecha=${data[0].fecha}`);
+      }
 
       setIncidencias(data);
 
@@ -456,6 +483,29 @@ export default function IncidenciasListado() {
 
   // Filtrar incidencias
   const incidenciasFiltradas = incidencias.filter((inc) => {
+    // REGLA: Ocultar incidencias "Anulada" por defecto
+    // EXCEPCIONES:
+    // 1. Si se busca por número de incidencia (filtroNumero tiene valor)
+    // 2. Si se filtra explícitamente por estado "Anulada" (filtroEstado o filtroEstadoProveedor = "Anulada")
+    const buscandoPorNumero = filtroNumero && filtroNumero.length > 0;
+    const filtrandoPorAnulada = filtroEstado === "Anulada" || filtroEstadoProveedor === "Anulada";
+
+    // Si NO se está buscando por número ni filtrando por "Anulada", ocultar incidencias anuladas
+    if (!buscandoPorNumero && !filtrandoPorAnulada) {
+      // Para usuarios Control/Cliente/Gestor: verificar estado_cliente
+      if (perfil?.rol !== "Proveedor" && inc.estado_cliente === "Anulada") {
+        return false;
+      }
+
+      // Para Proveedores: verificar si TODOS sus casos están anulados
+      if (perfil?.rol === "Proveedor") {
+        const todosLoscasosAnulados = inc.proveedor_casos?.every(pc => pc.estado_proveedor === "Anulada");
+        if (todosLoscasosAnulados) {
+          return false;
+        }
+      }
+    }
+
     // Para proveedores: usar filtroEstadoProveedor O filtroEstado (cualquiera que tenga valor)
     // Para otros usuarios: usar solo filtroEstado para estado_cliente
     const estadoAFiltrar = perfil?.rol === "Proveedor" ? (filtroEstadoProveedor || filtroEstado) : filtroEstado;
@@ -563,6 +613,49 @@ export default function IncidenciasListado() {
     console.log("  Incidencias que pasaron el filtro:", incidenciasFiltradas.map(i => i.num_solicitud));
   }
 
+  // Aplicar ordenación si está seleccionada
+  const incidenciasOrdenadas = React.useMemo(() => {
+    if (!ordenActualizacion) return incidenciasFiltradas;
+
+    return [...incidenciasFiltradas].sort((a, b) => {
+      // Para ordenación por actualización
+      if (ordenActualizacion === "actualizacion_reciente" || ordenActualizacion === "actualizacion_antigua" || ordenActualizacion === "recientemente_actualizadas") {
+        const fechaA = a.fecha_actualizacion ? new Date(a.fecha_actualizacion).getTime() : 0;
+        const fechaB = b.fecha_actualizacion ? new Date(b.fecha_actualizacion).getTime() : 0;
+
+        if (ordenActualizacion === "actualizacion_reciente") {
+          return fechaB - fechaA; // Más recientes primero
+        } else if (ordenActualizacion === "actualizacion_antigua") {
+          return fechaA - fechaB; // Menos recientes primero
+        } else if (ordenActualizacion === "recientemente_actualizadas") {
+          // Filtrar y ordenar por actualizaciones en las últimas 48 horas
+          const ahora = new Date().getTime();
+          const hace48Horas = ahora - (48 * 60 * 60 * 1000);
+
+          // Calcular "puntuación" de recencia (cuanto más reciente, mayor puntuación)
+          const puntuacionA = fechaA > hace48Horas ? (fechaA - hace48Horas) : -1;
+          const puntuacionB = fechaB > hace48Horas ? (fechaB - hace48Horas) : -1;
+
+          return puntuacionB - puntuacionA;
+        }
+      }
+
+      // Para ordenación por fecha de creación
+      if (ordenActualizacion === "fecha_reciente" || ordenActualizacion === "fecha_antigua") {
+        const fechaA = a.fecha ? new Date(a.fecha).getTime() : 0;
+        const fechaB = b.fecha ? new Date(b.fecha).getTime() : 0;
+
+        if (ordenActualizacion === "fecha_reciente") {
+          return fechaB - fechaA; // Más recientes primero
+        } else if (ordenActualizacion === "fecha_antigua") {
+          return fechaA - fechaB; // Más antiguas primero
+        }
+      }
+
+      return 0;
+    });
+  }, [incidenciasFiltradas, ordenActualizacion]);
+
   // Expandir incidencias con múltiples proveedor_casos en filas separadas
   const expandirIncidenciasConProveedores = (incidencias: Incidencia[]): FilaIncidencia[] => {
     const filas: FilaIncidencia[] = [];
@@ -586,12 +679,12 @@ export default function IncidenciasListado() {
   };
 
   // Calcular paginación (o mostrar todas si está activado)
-  const totalPaginas = Math.ceil(incidenciasFiltradas.length / incidenciasPorPagina);
+  const totalPaginas = Math.ceil(incidenciasOrdenadas.length / incidenciasPorPagina);
   const indiceInicio = (paginaActual - 1) * incidenciasPorPagina;
   const indiceFin = indiceInicio + incidenciasPorPagina;
   const incidenciasPaginadas = mostrarTodasLasIncidencias
-    ? incidenciasFiltradas
-    : incidenciasFiltradas.slice(indiceInicio, indiceFin);
+    ? incidenciasOrdenadas
+    : incidenciasOrdenadas.slice(indiceInicio, indiceFin);
 
   // Expandir las incidencias paginadas para mostrar múltiples proveedor_casos
   const filasExpandidas = expandirIncidenciasConProveedores(incidenciasPaginadas);
@@ -613,7 +706,9 @@ export default function IncidenciasListado() {
     setFiltroPrioridadCliente("");
     setFiltroPrioridadProveedor("");
     setFiltroProveedor("");
+    setOrdenActualizacion("");
     setPaginaActual(1); // Resetear a la primera página
+    limpiarPaginaActual(); // Limpiar página guardada en sessionStorage
 
     // Limpiar también los parámetros de URL
     if (typeof window !== 'undefined') {
@@ -986,12 +1081,29 @@ export default function IncidenciasListado() {
             )}
             </div>
 
-            {/* Tercera fila de filtros: proveedor */}
-            {perfil?.rol === "Control" && (
+            {/* Tercera fila de filtros: proveedor y ordenación */}
+            {perfil?.rol === "Control" ? (
               <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr 1fr 1fr" }}>
                 <div></div>
                 <div></div>
-                <div></div>
+                <div>
+                  <label className="block text-xs font-medium mb-1" style={{ color: PALETA.textoOscuro }}>
+                    Ordenar por
+                  </label>
+                  <SearchableSelect
+                    value={ordenActualizacion}
+                    onChange={setOrdenActualizacion}
+                    placeholder="Seleccionar"
+                    className="w-full"
+                    focusColor={PALETA.bg}
+                    options={[
+                      { value: "actualizacion_reciente", label: "Actualización más reciente" },
+                      { value: "actualizacion_antigua", label: "Actualización más antigua" },
+                      { value: "fecha_reciente", label: "Fecha más reciente" },
+                      { value: "fecha_antigua", label: "Fecha más antigua" }
+                    ]}
+                  />
+                </div>
                 <div>
                   <label className="block text-xs font-medium mb-1" style={{ color: PALETA.textoOscuro }}>
                     Proveedor
@@ -1006,6 +1118,29 @@ export default function IncidenciasListado() {
                       value: proveedor.id,
                       label: proveedor.nombre
                     }))}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
+                <div></div>
+                <div></div>
+                <div>
+                  <label className="block text-xs font-medium mb-1" style={{ color: PALETA.textoOscuro }}>
+                    Ordenar por
+                  </label>
+                  <SearchableSelect
+                    value={ordenActualizacion}
+                    onChange={setOrdenActualizacion}
+                    placeholder="Seleccionar"
+                    className="w-full"
+                    focusColor={PALETA.bg}
+                    options={[
+                      { value: "actualizacion_reciente", label: "Actualización más reciente" },
+                      { value: "actualizacion_antigua", label: "Actualización más antigua" },
+                      { value: "fecha_reciente", label: "Fecha más reciente" },
+                      { value: "fecha_antigua", label: "Fecha más antigua" }
+                    ]}
                   />
                 </div>
               </div>
@@ -1060,7 +1195,7 @@ export default function IncidenciasListado() {
 
           {/* Contenido de la tabla */}
           <div className="min-h-[300px]">
-            {incidenciasFiltradas.length === 0 ? (
+            {incidenciasOrdenadas.length === 0 ? (
               <div className="flex items-center justify-center h-64">
                 <span className="text-gray-500">
                   {incidencias.length === 0 ? "No tienes incidencias registradas" : "No se encontraron incidencias con los filtros aplicados"}
@@ -1132,11 +1267,11 @@ export default function IncidenciasListado() {
         </div>
 
         {/* Paginación */}
-        {incidenciasFiltradas.length > incidenciasPorPagina && (
+        {incidenciasOrdenadas.length > incidenciasPorPagina && (
           <div className="flex items-center justify-between mb-6 px-4 py-3 rounded-lg pagination-mobile" style={{ backgroundColor: PALETA.card }}>
             <div className="flex items-center gap-4">
               <div className="text-sm text-gray-600 pagination-info">
-                Mostrando {mostrarTodasLasIncidencias ? incidenciasFiltradas.length : `${indiceInicio + 1}-${Math.min(indiceFin, incidenciasFiltradas.length)}`} de {incidenciasFiltradas.length} incidencias
+                Mostrando {mostrarTodasLasIncidencias ? incidenciasOrdenadas.length : `${indiceInicio + 1}-${Math.min(indiceFin, incidenciasOrdenadas.length)}`} de {incidenciasOrdenadas.length} incidencias
               </div>
 
               {/* Botón para mostrar todas (solo para Control) */}

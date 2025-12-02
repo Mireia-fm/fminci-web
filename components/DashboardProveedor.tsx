@@ -144,6 +144,12 @@ export default function DashboardProveedor() {
   }, [rows]);
 
   const navegarAIncidencias = (estado: string) => {
+    // Limpiar todos los filtros guardados en sessionStorage
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('incidencias_filtros');
+      sessionStorage.removeItem('incidencias_pagina_actual');
+    }
+
     router.push(`/incidencias?estado_proveedor=${encodeURIComponent(estado)}`);
   };
 

@@ -12,6 +12,7 @@ export type Incidencia = {
   prioridad?: string;
   institucion_id?: string;
   email?: string;
+  fecha_actualizacion?: string;
   instituciones?: {
     nombre: string;
   }[] | null;
@@ -36,6 +37,7 @@ const SELECT_INCIDENCIAS_BASE = `
   prioridad,
   institucion_id,
   email,
+  fecha_actualizacion,
   instituciones(nombre),
   proveedor_casos(id, estado_proveedor, prioridad, activo, proveedor_id, descripcion_proveedor)
 `;
@@ -75,6 +77,7 @@ export async function obtenerIncidenciasProveedor(proveedorId: string): Promise<
       descripcion,
       catalogacion,
       institucion_id,
+      fecha_actualizacion,
       instituciones(nombre),
       proveedor_casos!inner(
         id,

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 
 const FILTROS_STORAGE_KEY = 'incidencias_filtros';
 const INCIDENCIA_DESTACADA_KEY = 'incidencia_destacada';
+const PAGINA_ACTUAL_KEY = 'incidencias_pagina_actual';
 
 export type FiltrosIncidencias = {
   filtroEstado: string;
@@ -13,6 +14,7 @@ export type FiltrosIncidencias = {
   filtroPrioridadCliente: string;
   filtroPrioridadProveedor: string;
   filtroProveedor: string;
+  ordenActualizacion: string;
 };
 
 export function useFiltrosIncidencias() {
@@ -42,6 +44,7 @@ export function useFiltrosIncidencias() {
         filtroPrioridadCliente: '',
         filtroPrioridadProveedor: '',
         filtroProveedor: '',
+        ordenActualizacion: '',
       };
     }
 
@@ -64,6 +67,7 @@ export function useFiltrosIncidencias() {
       filtroPrioridadCliente: '',
       filtroPrioridadProveedor: '',
       filtroProveedor: '',
+      ordenActualizacion: '',
     };
   };
 
@@ -112,6 +116,41 @@ export function useFiltrosIncidencias() {
     }
   };
 
+  // Guardar página actual
+  const guardarPaginaActual = (pagina: number) => {
+    if (typeof window === 'undefined') return;
+
+    try {
+      sessionStorage.setItem(PAGINA_ACTUAL_KEY, pagina.toString());
+    } catch (error) {
+      console.error('Error guardando página actual:', error);
+    }
+  };
+
+  // Obtener página actual
+  const obtenerPaginaActual = (): number => {
+    if (typeof window === 'undefined') return 1;
+
+    try {
+      const pagina = sessionStorage.getItem(PAGINA_ACTUAL_KEY);
+      return pagina ? parseInt(pagina, 10) : 1;
+    } catch (error) {
+      console.error('Error leyendo página actual:', error);
+      return 1;
+    }
+  };
+
+  // Limpiar página actual
+  const limpiarPaginaActual = () => {
+    if (typeof window === 'undefined') return;
+
+    try {
+      sessionStorage.removeItem(PAGINA_ACTUAL_KEY);
+    } catch (error) {
+      console.error('Error limpiando página actual:', error);
+    }
+  };
+
   return {
     guardarFiltros,
     obtenerFiltros,
@@ -119,5 +158,8 @@ export function useFiltrosIncidencias() {
     guardarIncidenciaDestacada,
     obtenerIncidenciaDestacada,
     limpiarIncidenciaDestacada,
+    guardarPaginaActual,
+    obtenerPaginaActual,
+    limpiarPaginaActual,
   };
 }

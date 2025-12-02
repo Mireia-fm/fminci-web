@@ -27,6 +27,9 @@ type Presupuesto = {
     num_solicitud: string;
     descripcion: string;
     institucion_id: string;
+    instituciones: {
+      nombre: string;
+    };
   };
 };
 
@@ -96,7 +99,7 @@ export default function PresupuestosPage() {
           .select(`
             *,
             instituciones(nombre),
-            incidencias!inner(num_solicitud, descripcion, institucion_id)
+            incidencias!inner(num_solicitud, descripcion, institucion_id, instituciones(nombre))
           `);
 
         // Aplicar filtro de estado si está seleccionado
@@ -623,6 +626,10 @@ El proveedor debe enviar una nueva propuesta.`,
                       <strong>Proveedor:</strong> {presupuesto.instituciones.nombre}
                     </p>
 
+                    <p className="text-sm text-gray-600 mb-2">
+                      <strong>Centro:</strong> {presupuesto.incidencias.instituciones.nombre}
+                    </p>
+
                     <div className="text-sm text-gray-600 mb-2">
                       <strong>Descripción:</strong>
                       <p className="mt-1 break-words overflow-hidden">
@@ -752,6 +759,14 @@ El proveedor debe enviar una nueva propuesta.`,
                         </td>
                       </tr>
                       <tr style={{ backgroundColor: `${PALETA.headerTable}20` }}>
+                        <td className="py-2 font-semibold" style={{ color: PALETA.textoOscuro }}>
+                          Centro:
+                        </td>
+                        <td className="py-2" style={{ color: PALETA.textoOscuro }}>
+                          {presupuestoSeleccionado.incidencias.instituciones.nombre}
+                        </td>
+                      </tr>
+                      <tr>
                         <td className="py-2 font-semibold" style={{ color: PALETA.textoOscuro }}>
                           Estado:
                         </td>
